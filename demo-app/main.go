@@ -1,7 +1,7 @@
 package main
 
 import (
-	"errors"
+	"demo-app/pkg"
 	"io"
 	"net/http"
 )
@@ -11,7 +11,7 @@ func index(w http.ResponseWriter, r *http.Request) {
 }
 
 func noticeError(w http.ResponseWriter, r *http.Request) {
-	err := errors.New("an error has occured")
+	err := pkg.DoSomething()
 	if err != nil {
 		io.WriteString(w, err.Error())
 	} else {
@@ -20,6 +20,7 @@ func noticeError(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	// some comments
 	http.HandleFunc("/", index)
 	http.HandleFunc("/error", noticeError)
 
