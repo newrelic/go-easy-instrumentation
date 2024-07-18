@@ -96,8 +96,7 @@ func (cfg *CLIConfig) CLIPrompts() {
 	}
 
 	// Prompt user to enter the diff file output location
-	localFile, _ := filepath.Rel(wd, cfg.DiffFile)
-	fmt.Printf("Would you like to change the location of the diff file (default: \"%s\")? Y/N: ", localFile)
+	fmt.Printf("Would you like to change the location of the diff file (default: \"%s\")? Y/N: ", cfg.DiffFile)
 	userPrompt = ""
 	fmt.Scanln(&userPrompt)
 	if userPrompt == "Y" || userPrompt == "y" {
