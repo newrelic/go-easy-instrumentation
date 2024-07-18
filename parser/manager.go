@@ -226,7 +226,6 @@ func (d *InstrumentationManager) WriteDiff() {
 }
 
 func (d *InstrumentationManager) AddRequiredModules() {
-	wd, _ := os.Getwd()
 	err := os.Chdir(d.pkg.Dir)
 	if err != nil {
 		log.Fatal(err)
@@ -239,6 +238,7 @@ func (d *InstrumentationManager) AddRequiredModules() {
 		}
 	}
 
+	wd, _ := os.Getwd()
 	err = os.Chdir(wd)
 	if err != nil {
 		log.Fatal(err)
