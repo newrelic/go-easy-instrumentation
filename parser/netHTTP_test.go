@@ -978,3 +978,194 @@ func main() {
 		})
 	}
 }
+
+func TestExternalHttpCall(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "no http do method",
+			code: `
+package main
+
+import "net/http"
+
+func main() {
+	a := &http.Response{}
+}
+`,
+			expect: `package main
+
+import "net/http"
+
+func main() {
+	a := &http.Response{}
+}
+`,
+		},
+		{
+			name: "default client do",
+			code: `
+package main
+
+import "net/http"
+
+func main() {
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	http.DefaultClient.Do(req)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	externalSegment := newrelic.StartExternalSegment(txn, req)
+	http.DefaultClient.Do(req)
+	externalSegment.End()
+}
+`,
+		},
+		{
+			name: "default client do captures http response",
+			code: `
+package main
+
+import "net/http"
+
+func main() {
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	resp, _ := http.DefaultClient.Do(req)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	externalSegment := newrelic.StartExternalSegment(txn, req)
+	resp, _ := http.DefaultClient.Do(req)
+	externalSegment.Response = resp
+	externalSegment.End()
+}
+`,
+		},
+		{
+			name: "custom client do",
+			code: `
+package main
+
+import "net/http"
+
+func main() {
+	client := &http.Client{}
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	client.Do(req)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	client := &http.Client{}
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	req = newrelic.RequestWithTransactionContext(req, txn)
+	client.Do(req)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatefulTracingFunction(t, tt.code, ExternalHttpCall)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestWrapNestedHandleFunction(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "trace nested handle function",
+			code: `
+package main
+
+import (
+	"net/http"
+)
+
+func main() {
+	http.HandleFunc("/", index)
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() { http.HandleFunc(newrelic.WrapHandleFunc(txn.Application(), "/", index)) }
+`,
+		},
+		{
+			name: "trace nested mux handle function",
+			code: `
+package main
+
+import (
+	"net/http"
+)
+
+func main() {
+	mux := http.NewServeMux()
+	mux.Handle("/", index)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	mux := http.NewServeMux()
+	mux.Handle(newrelic.WrapHandleFunc(txn.Application(), "/", index))
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatefulTracingFunction(t, tt.code, WrapNestedHandleFunction)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}

@@ -483,7 +483,7 @@ func getHttpResponseVariable(manager *InstrumentationManager, stmt dst.Stmt) dst
 }
 
 // ExternalHttpCall finds and instruments external net/http calls to the method http.Do.
-// It returns a modified function body, and the number of lines that were added.
+// It returns true if a modification was made
 func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, txnName string) bool {
 	if c.Index() < 0 {
 		return false

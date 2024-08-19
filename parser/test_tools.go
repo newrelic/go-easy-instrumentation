@@ -3,12 +3,16 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"runtime/debug"
 	"testing"
 
+	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
+	"github.com/dave/dst/decorator/resolver/guess"
+	"github.com/dave/dst/dstutil"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -65,4 +69,48 @@ func newTestingInstrumentationManager(t *testing.T, code string) *Instrumentatio
 	manager := NewInstrumentationManager(pkgs, appName, varName, diffFile, testAppDir)
 	manager.SetPackage("parser/tmp")
 	return manager
+}
+
+func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
+	fileName := "app.go"
+	pkgs, err := createTestAppPackage(testAppDir, fileName, code)
+	if err != nil {
+		cleanupTestApp(t, testAppDir)
+		t.Fatal(err)
+	}
+
+	appName := defaultAppName
+	varName := defaultAgentVariableName
+	diffFile := filepath.Join(testAppDir, defaultDiffFileName)
+
+	manager := NewInstrumentationManager(pkgs, appName, varName, diffFile, testAppDir)
+	manager.SetPackage("parser/tmp")
+	return manager
+}
+
+func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction) string {
+	testDir := "tmp"
+	defer cleanupTestApp(t, testDir)
+	manager := restorerTestingInstrumentationManager(t, code, testDir)
+
+	pkg := manager.GetDecoratorPackage()
+	node := pkg.Syntax[0].Decls[1]
+
+	dstutil.Apply(node, nil, func(c *dstutil.Cursor) bool {
+		n := c.Node()
+		switch v := n.(type) {
+		case dst.Stmt:
+			stmtFunc(manager, v, c, "txn")
+		}
+		return true
+	})
+	restorer := decorator.NewRestorerWithImports(testDir, guess.New())
+
+	buf := bytes.NewBuffer([]byte{})
+	err := restorer.Fprint(buf, pkg.Syntax[0])
+	if err != nil {
+		t.Fatalf("Failed to restore the file: %v", err)
+	}
+
+	return buf.String()
 }
