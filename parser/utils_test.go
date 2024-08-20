@@ -16,7 +16,14 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func createTestApp(testAppDir, fileName, contents string) ([]*decorator.Package, error) {
+// createTestApp creates a test app in the given directory with the given file name and contents
+// codegen is expensive, so this will be skipped in short mode
+func createTestApp(t *testing.T, testAppDir, fileName, contents string) ([]*decorator.Package, error) {
+	// integration tests are slow, so we skip them in short mode
+	if testing.Short() {
+		t.Skip("Skipping Stateful Tracing Function Integration Tests in short mode")
+	}
+
 	err := os.Mkdir(testAppDir, 0755)
 	if err != nil {
 		return nil, err
@@ -52,14 +59,10 @@ func panicRecovery(t *testing.T) {
 
 func testInstrumentationManager(t *testing.T, code string) *InstrumentationManager {
 	defer panicRecovery(t)
-	// integration tests are slow, so we skip them in short mode
-	if testing.Short() {
-		t.Skip("Skipping Stateful Tracing Function Integration Tests in short mode")
-	}
 
 	testAppDir := "tmp"
 	fileName := "app.go"
-	pkgs, err := createTestApp(testAppDir, fileName, code)
+	pkgs, err := createTestApp(t, testAppDir, fileName, code)
 	defer cleanTestApp(t, testAppDir)
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +79,7 @@ func testInstrumentationManager(t *testing.T, code string) *InstrumentationManag
 
 func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
 	fileName := "app.go"
-	pkgs, err := createTestApp(testAppDir, fileName, code)
+	pkgs, err := createTestApp(t, testAppDir, fileName, code)
 	if err != nil {
 		cleanTestApp(t, testAppDir)
 		t.Fatal(err)
@@ -92,10 +95,6 @@ func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string
 }
 
 func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction) string {
-	// integration tests are slow, so we skip them in short mode
-	if testing.Short() {
-		t.Skip("Skipping Stateful Tracing Function Integration Tests in short mode")
-	}
 
 	testDir := "tmp"
 	defer cleanTestApp(t, testDir)

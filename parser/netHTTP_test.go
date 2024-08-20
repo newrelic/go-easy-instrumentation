@@ -71,7 +71,7 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
 			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
@@ -202,7 +202,7 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
 			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
@@ -266,7 +266,7 @@ func index(w http.ResponseWriter, r *http.Request, x string) {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
 			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
@@ -377,7 +377,7 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
 			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
@@ -398,7 +398,7 @@ func main() {
 				t.Fatal("lineNum must point to an expression containing a call expression")
 			}
 
-			gotFuncName := GetNetHttpMethod(call, pkgs[0])
+			gotFuncName := getNetHttpMethod(call, pkgs[0])
 
 			if gotFuncName != tt.wantFuncName {
 				t.Errorf("isNetHttpMethodCannotInstrument() = %v, want %v", gotFuncName, tt.wantFuncName)
@@ -477,7 +477,7 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
 			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
@@ -498,7 +498,7 @@ func main() {
 				t.Fatal("lineNum must point to an expression containing a call expression")
 			}
 
-			gotFuncName := GetNetHttpClientVariableName(call, pkgs[0])
+			gotFuncName := getNetHttpClientVariableName(call, pkgs[0])
 
 			if gotFuncName != tt.wantName {
 				t.Errorf("isNetHttpMethodCannotInstrument() = %v, want %v", gotFuncName, tt.wantName)
