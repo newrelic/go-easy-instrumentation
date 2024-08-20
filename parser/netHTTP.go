@@ -11,27 +11,21 @@ import (
 )
 
 const (
-	NetHttp = "net/http"
+	netHttpPath = "net/http"
 
 	// Methods that can be instrumented
-	HttpHandleFunc = "HandleFunc"
-	HttpMuxHandle  = "Handle"
-	HttpNewRequest = "NewRequest"
-	HttpDo         = "Do"
+	httpHandleFunc = "HandleFunc"
+	httpMuxHandle  = "Handle"
+	httpDo         = "Do"
 
 	// methods cannot be instrumented
-	HttpGet      = "Get"
-	HttpPost     = "Post"
-	HttpHead     = "Head"
-	HttpPostForm = "PostForm"
+	httpGet      = "Get"
+	httpPost     = "Post"
+	httpHead     = "Head"
+	httpPostForm = "PostForm"
 
 	// default net/http client variable
-	HttpDefaultClientVariable = "DefaultClient"
-	// default net/http client identifier
-	HttpDefaultClient = "DefaultClient"
-	// http client type
-	HttpClientType = `*net/http.Client`
-	HttpPath       = `net/http`
+	httpDefaultClientVariable = "DefaultClient"
 )
 
 func typeOfIdent(ident *dst.Ident, pkg *decorator.Package) string {
@@ -74,12 +68,12 @@ func GetNetHttpClientVariableName(n *dst.CallExpr, pkg *decorator.Package) strin
 		switch v := Sel.X.(type) {
 		case *dst.SelectorExpr:
 			path := typeOfIdent(v.Sel, pkg)
-			if path == HttpPath {
+			if path == netHttpPath {
 				return v.Sel.Name
 			}
 		case *dst.Ident:
 			path := typeOfIdent(v, pkg)
-			if path == HttpPath {
+			if path == netHttpPath {
 				return v.Name
 			}
 		}
@@ -96,12 +90,12 @@ func GetNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 	switch v := n.Fun.(type) {
 	case *dst.SelectorExpr:
 		path := typeOfIdent(v.Sel, pkg)
-		if path == HttpPath {
+		if path == netHttpPath {
 			return v.Sel.Name
 		}
 	case *dst.Ident:
 		path := typeOfIdent(v, pkg)
-		if path == HttpPath {
+		if path == netHttpPath {
 			return v.Name
 		}
 	}
@@ -115,7 +109,7 @@ func WrapHandleFunc(n dst.Node, manager *InstrumentationManager, c *dstutil.Curs
 	if ok {
 		funcName := GetNetHttpMethod(callExpr, manager.GetDecoratorPackage())
 		switch funcName {
-		case HttpHandleFunc, HttpMuxHandle:
+		case httpHandleFunc, httpMuxHandle:
 			if len(callExpr.Args) == 2 {
 				// Instrument handle funcs
 				oldArgs := callExpr.Args
@@ -278,7 +272,7 @@ func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
 			lit, ok := unary.X.(*dst.CompositeLit)
 			if ok {
 				ident, ok := lit.Type.(*dst.Ident)
-				if ok && ident.Name == "Client" && ident.Path == NetHttp {
+				if ok && ident.Name == "Client" && ident.Path == netHttpPath {
 					return true
 				}
 			}
@@ -324,9 +318,9 @@ func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 			c, ok := n.(*dst.CallExpr)
 			if ok {
 				ident, ok := c.Fun.(*dst.Ident)
-				if ok && ident.Path == NetHttp {
+				if ok && ident.Path == netHttpPath {
 					switch ident.Name {
-					case HttpGet, HttpPost, HttpPostForm, HttpHead:
+					case httpGet, httpPost, httpPostForm, httpHead:
 						returnFuncName = ident.Name
 						cannotInstrument = true
 						return false
@@ -493,7 +487,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 	dst.Inspect(stmt, func(n dst.Node) bool {
 		switch v := n.(type) {
 		case *dst.CallExpr:
-			if GetNetHttpMethod(v, pkg) == HttpDo {
+			if GetNetHttpMethod(v, pkg) == httpDo {
 				call = v
 				return false
 			}
@@ -503,7 +497,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 	if call != nil && c.Index() >= 0 {
 		clientVar := GetNetHttpClientVariableName(call, pkg)
 		requestObject := call.Args[0]
-		if clientVar == HttpDefaultClientVariable {
+		if clientVar == httpDefaultClientVariable {
 			// create external segment to wrap calls made with default client
 			segmentName := "externalSegment"
 			c.InsertBefore(startExternalSegment(requestObject, txnName, segmentName, stmt.Decorations()))
@@ -534,7 +528,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 			callExpr := v
 			funcName := GetNetHttpMethod(callExpr, pkg)
 			switch funcName {
-			case HttpHandleFunc, HttpMuxHandle:
+			case httpHandleFunc, httpMuxHandle:
 				if len(callExpr.Args) == 2 {
 					// Instrument handle funcs
 					oldArgs := callExpr.Args

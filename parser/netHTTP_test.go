@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// Unit Tests
+
 func Test_isNetHttpClient(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -69,8 +71,8 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -200,8 +202,8 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -264,8 +266,8 @@ func index(w http.ResponseWriter, r *http.Request, x string) {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -375,8 +377,8 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -475,8 +477,8 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -669,7 +671,7 @@ func Test_captureHttpResponse(t *testing.T) {
 				segmentVariable: "example",
 				responseVariable: &dst.Ident{
 					Name: "resp",
-					Path: NetHttp,
+					Path: netHttpPath,
 				},
 			},
 			want: &dst.AssignStmt{
@@ -682,7 +684,7 @@ func Test_captureHttpResponse(t *testing.T) {
 				Rhs: []dst.Expr{
 					dst.Clone(&dst.Ident{
 						Name: "resp",
-						Path: NetHttp,
+						Path: netHttpPath,
 					}).(dst.Expr),
 				},
 				Tok: token.ASSIGN,
@@ -714,7 +716,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 			args: args{
 				request: &dst.Ident{
 					Name: "r",
-					Path: NetHttp,
+					Path: netHttpPath,
 				},
 				txnVar: "txn",
 				nodeDecs: &dst.NodeDecs{
@@ -726,7 +728,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 				Tok: token.ASSIGN,
 				Lhs: []dst.Expr{dst.Clone(&dst.Ident{
 					Name: "r",
-					Path: NetHttp,
+					Path: netHttpPath,
 				}).(dst.Expr)},
 				Rhs: []dst.Expr{
 					&dst.CallExpr{
@@ -737,7 +739,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 						Args: []dst.Expr{
 							dst.Clone(&dst.Ident{
 								Name: "r",
-								Path: NetHttp,
+								Path: netHttpPath,
 							}).(dst.Expr),
 							dst.NewIdent("txn"),
 						},
@@ -782,7 +784,7 @@ func Test_startExternalSegment(t *testing.T) {
 		{
 			name: "start_external_segment",
 			args: args{
-				request:    &dst.Ident{Name: "r", Path: NetHttp},
+				request:    &dst.Ident{Name: "r", Path: netHttpPath},
 				txnVar:     "txn",
 				segmentVar: "example",
 				nodeDecs: &dst.NodeDecs{
@@ -803,7 +805,7 @@ func Test_startExternalSegment(t *testing.T) {
 						},
 						Args: []dst.Expr{
 							dst.NewIdent("txn"),
-							dst.Clone(&dst.Ident{Name: "r", Path: NetHttp}).(dst.Expr),
+							dst.Clone(&dst.Ident{Name: "r", Path: netHttpPath}).(dst.Expr),
 						},
 					},
 				},
@@ -939,7 +941,7 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manager := newTestingInstrumentationManager(t, tt.code)
+			manager := testInstrumentationManager(t, tt.code)
 			pkg := manager.GetDecoratorPackage()
 			stmt := pkg.Syntax[0].Decls[1].(*dst.FuncDecl).Body.List[tt.linenum]
 			gotExpr := getHttpResponseVariable(manager, stmt)

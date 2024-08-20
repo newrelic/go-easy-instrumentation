@@ -8,9 +8,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-const (
-	loadMode = packages.LoadSyntax
-)
+const loadMode = packages.LoadSyntax
 
 func createDiffFile(path string) {
 	f, err := os.Create(path)

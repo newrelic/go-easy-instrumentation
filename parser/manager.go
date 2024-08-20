@@ -395,9 +395,6 @@ func tracePackageFunctionCalls(manager *InstrumentationManager) error {
 	return nil
 }
 
-// StatelessInstrumentationFunc is a function that does not need to be aware of the current tracing state of the package to apply instrumentation.
-type StatelessInstrumentationFunc func(n dst.Node, manager *InstrumentationManager, c *dstutil.Cursor)
-
 // apply instrumentation to the package
 func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessInstrumentationFunc) {
 	for pkgName, pkgState := range manager.packages {
@@ -416,5 +413,4 @@ func instrumentPackages(manager *InstrumentationManager, instrumentationFunction
 			}
 		}
 	}
-
 }

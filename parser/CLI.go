@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Default Values
+// Default Config Values
 const (
 	defaultAgentVariableName = "NewRelicAgent"
 	defaultPackageName       = "./..."

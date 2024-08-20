@@ -16,7 +16,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func createTestAppPackage(testAppDir, fileName, contents string) ([]*decorator.Package, error) {
+func createTestApp(testAppDir, fileName, contents string) ([]*decorator.Package, error) {
 	err := os.Mkdir(testAppDir, 0755)
 	if err != nil {
 		return nil, err
@@ -33,11 +33,10 @@ func createTestAppPackage(testAppDir, fileName, contents string) ([]*decorator.P
 	if err != nil {
 		return nil, err
 	}
-
-	return decorator.Load(&packages.Config{Dir: testAppDir, Mode: loadMode})
+	return decorator.Load(&packages.Config{Dir: testAppDir, Mode: packages.LoadSyntax})
 }
 
-func cleanupTestApp(t *testing.T, appDirectoryName string) {
+func cleanTestApp(t *testing.T, appDirectoryName string) {
 	err := os.RemoveAll(appDirectoryName)
 	if err != nil {
 		t.Logf("Failed to cleanup test app directory %s: %v", appDirectoryName, err)
@@ -51,13 +50,17 @@ func panicRecovery(t *testing.T) {
 	}
 }
 
-func newTestingInstrumentationManager(t *testing.T, code string) *InstrumentationManager {
+func testInstrumentationManager(t *testing.T, code string) *InstrumentationManager {
 	defer panicRecovery(t)
+	// integration tests are slow, so we skip them in short mode
+	if testing.Short() {
+		t.Skip("Skipping Stateful Tracing Function Integration Tests in short mode")
+	}
 
 	testAppDir := "tmp"
 	fileName := "app.go"
-	pkgs, err := createTestAppPackage(testAppDir, fileName, code)
-	defer cleanupTestApp(t, testAppDir)
+	pkgs, err := createTestApp(testAppDir, fileName, code)
+	defer cleanTestApp(t, testAppDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,9 +76,9 @@ func newTestingInstrumentationManager(t *testing.T, code string) *Instrumentatio
 
 func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
 	fileName := "app.go"
-	pkgs, err := createTestAppPackage(testAppDir, fileName, code)
+	pkgs, err := createTestApp(testAppDir, fileName, code)
 	if err != nil {
-		cleanupTestApp(t, testAppDir)
+		cleanTestApp(t, testAppDir)
 		t.Fatal(err)
 	}
 
@@ -89,8 +92,13 @@ func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string
 }
 
 func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction) string {
+	// integration tests are slow, so we skip them in short mode
+	if testing.Short() {
+		t.Skip("Skipping Stateful Tracing Function Integration Tests in short mode")
+	}
+
 	testDir := "tmp"
-	defer cleanupTestApp(t, testDir)
+	defer cleanTestApp(t, testDir)
 	manager := restorerTestingInstrumentationManager(t, code, testDir)
 
 	pkg := manager.GetDecoratorPackage()
