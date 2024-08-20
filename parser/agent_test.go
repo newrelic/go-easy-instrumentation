@@ -2,6 +2,7 @@ package main
 
 import (
 	"go/token"
+	"go/types"
 	"reflect"
 	"testing"
 
@@ -313,6 +314,310 @@ func Test_endTransaction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := endTransaction(tt.args.transactionVariableName)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_txnAsParameter(t *testing.T) {
+	type args struct {
+		txnName string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *dst.Field
+	}{
+		{
+			name: "Test txn as parameter",
+			args: args{
+				txnName: "testTxn",
+			},
+			want: &dst.Field{
+				Names: []*dst.Ident{
+					{
+						Name: "testTxn",
+					},
+				},
+				Type: &dst.StarExpr{
+					X: &dst.Ident{
+						Name: "Transaction",
+						Path: newrelicAgentImport,
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := txnAsParameter(tt.args.txnName)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_deferSegment(t *testing.T) {
+	type args struct {
+		segmentName string
+		txnVarName  string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *dst.DeferStmt
+	}{
+		{
+			name: "Test defer segment",
+			args: args{
+				segmentName: "testSegment",
+				txnVarName:  "testTxn",
+			},
+			want: &dst.DeferStmt{
+				Call: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X: &dst.CallExpr{
+							Fun: &dst.SelectorExpr{
+								X: dst.NewIdent("testTxn"),
+								Sel: &dst.Ident{
+									Name: "StartSegment",
+								},
+							},
+							Args: []dst.Expr{
+								&dst.BasicLit{
+									Kind:  token.STRING,
+									Value: `"testSegment"`,
+								},
+							},
+						},
+						Sel: &dst.Ident{
+							Name: "End",
+						},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := deferSegment(tt.args.segmentName, tt.args.txnVarName)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_txnNewGoroutine(t *testing.T) {
+	type args struct {
+		txnVarName string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *dst.CallExpr
+	}{
+		{
+			name: "Test txn new goroutine",
+			args: args{
+				txnVarName: "testTxn",
+			},
+			want: &dst.CallExpr{
+				Fun: &dst.SelectorExpr{
+					X: &dst.Ident{
+						Name: "testTxn",
+					},
+					Sel: &dst.Ident{
+						Name: "NewGoroutine",
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := txnNewGoroutine(tt.args.txnVarName)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_isNamedError(t *testing.T) {
+	type args struct {
+		n *types.Named
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Test is named error",
+			args: args{
+				n: types.NewNamed(types.NewTypeName(0, nil, "error", nil), nil, nil),
+			},
+			want: true,
+		},
+		{
+			name: "Test is not error",
+			args: args{
+				n: types.NewNamed(types.NewTypeName(0, nil, "foo", nil), nil, nil),
+			},
+			want: false,
+		},
+		{
+			name: "Nil Named Error",
+			args: args{
+				n: nil,
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isNamedError(tt.args.n); got != tt.want {
+				t.Errorf("isNamedError() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_isNewRelicMethod(t *testing.T) {
+	type args struct {
+		call *dst.CallExpr
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "Decorated DST New Relic Method",
+			args: args{
+				call: &dst.CallExpr{
+					Fun: &dst.Ident{
+						Name: "txn",
+						Path: newrelicAgentImport,
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "AST Style New Relic Method",
+			args: args{
+				call: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X: &dst.Ident{
+							Name: "newrelic",
+						},
+						Sel: &dst.Ident{
+							Name: "StartTransaction",
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "Non New Relic Method",
+			args: args{
+				call: &dst.CallExpr{
+					Fun: &dst.Ident{
+						Name: "Get",
+						Path: netHttpPath,
+					},
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isNewRelicMethod(tt.args.call); got != tt.want {
+				t.Errorf("isNewRelicMethod() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_generateNoticeError(t *testing.T) {
+	type args struct {
+		errVariableName string
+		txnName         string
+		nodeDecs        *dst.NodeDecs
+	}
+	tests := []struct {
+		name string
+		args args
+		want *dst.ExprStmt
+	}{
+		{
+			name: "generate notice error",
+			args: args{
+				errVariableName: "err",
+				txnName:         "txn",
+				nodeDecs:        nil,
+			},
+			want: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X: &dst.Ident{
+							Name: "txn",
+						},
+						Sel: &dst.Ident{
+							Name: "NoticeError",
+						},
+					},
+					Args: []dst.Expr{
+						&dst.Ident{
+							Name: "err",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "generate notice error",
+			args: args{
+				errVariableName: "err",
+				txnName:         "txn",
+				nodeDecs: &dst.NodeDecs{
+					After: dst.NewLine,
+					End:   dst.Decorations{"// end"},
+				},
+			},
+			want: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X: &dst.Ident{
+							Name: "txn",
+						},
+						Sel: &dst.Ident{
+							Name: "NoticeError",
+						},
+					},
+					Args: []dst.Expr{
+						&dst.Ident{
+							Name: "err",
+						},
+					},
+				},
+				Decs: dst.ExprStmtDecorations{
+					NodeDecs: dst.NodeDecs{
+						After: dst.NewLine,
+						End:   dst.Decorations{"// end"},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := generateNoticeError(tt.args.errVariableName, tt.args.txnName, tt.args.nodeDecs)
+			assert.Equal(t, tt.want, got, "generated notice error expression is not correct")
+			if tt.args.nodeDecs != nil {
+				emptyDecoration := dst.Decorations{}
+				emptyDecoration.Clear()
+				assert.Equal(t, dst.None, tt.args.nodeDecs.After, "passed node decorations `After` should be `None`")
+				assert.Equal(t, emptyDecoration, tt.args.nodeDecs.End, "passed node decorations `End` should be cleared")
+			}
 		})
 	}
 }

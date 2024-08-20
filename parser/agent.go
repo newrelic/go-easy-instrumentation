@@ -225,11 +225,17 @@ func txnNewGoroutine(txnVarName string) *dst.CallExpr {
 }
 
 func isNamedError(n *types.Named) bool {
+	if n == nil {
+		return false
+	}
+
 	o := n.Obj()
 	return o != nil && o.Pkg() == nil && o.Name() == "error"
 }
 
-func errorReturns(v *dst.CallExpr, pkg *decorator.Package) (int, bool) {
+// errorReturnIndex returns the index of the error return value in the function call
+// if no error is returned it will return 0, false
+func errorReturnIndex(v *dst.CallExpr, pkg *decorator.Package) (int, bool) {
 	if pkg == nil {
 		return 0, false
 	}
@@ -262,22 +268,29 @@ func isNewRelicMethod(call *dst.CallExpr) bool {
 		if pkg, ok := sel.X.(*dst.Ident); ok {
 			return pkg.Name == "newrelic"
 		}
+	} else {
+		if ident, ok := call.Fun.(*dst.Ident); ok {
+			return ident.Path == newrelicAgentImport
+		}
 	}
 	return false
 }
 
-func txnNoticeError(errVariableName, txnName string, nodeDecs *dst.NodeDecs) *dst.ExprStmt {
+func generateNoticeError(errVariableName, txnName string, nodeDecs *dst.NodeDecs) *dst.ExprStmt {
+	var decs dst.ExprStmtDecorations
 	// copy all decs below the current statement into this statement
-	decs := dst.ExprStmtDecorations{
-		NodeDecs: dst.NodeDecs{
-			After: nodeDecs.After,
-			End:   nodeDecs.End,
-		},
-	}
+	if nodeDecs != nil {
+		decs = dst.ExprStmtDecorations{
+			NodeDecs: dst.NodeDecs{
+				After: nodeDecs.After,
+				End:   nodeDecs.End,
+			},
+		}
 
-	// remove coppied decs from above node
-	nodeDecs.After = dst.None
-	nodeDecs.End.Clear()
+		// remove coppied decs from above node
+		nodeDecs.After = dst.None
+		nodeDecs.End.Clear()
+	}
 
 	return &dst.ExprStmt{
 		X: &dst.CallExpr{
@@ -303,7 +316,7 @@ func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) string {
 	if len(stmt.Rhs) == 1 {
 		if call, ok := stmt.Rhs[0].(*dst.CallExpr); ok {
 			if !isNewRelicMethod(call) {
-				if errIndex, ok := errorReturns(call, pkg); ok {
+				if errIndex, ok := errorReturnIndex(call, pkg); ok {
 					expr := stmt.Lhs[errIndex]
 					if ident, ok := expr.(*dst.Ident); ok {
 						return ident.Name
@@ -380,7 +393,7 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 	case *dst.AssignStmt:
 		errVar := findErrorVariable(nodeVal, manager.GetDecoratorPackage())
 		if errVar != "" && c.Index() >= 0 {
-			c.InsertAfter(txnNoticeError(errVar, txnName, nodeVal.Decorations()))
+			c.InsertAfter(generateNoticeError(errVar, txnName, nodeVal.Decorations()))
 			return true
 		}
 	}
