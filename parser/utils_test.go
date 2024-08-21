@@ -4,6 +4,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -57,6 +59,20 @@ func panicRecovery(t *testing.T) {
 	}
 }
 
+func pseudo_uuid() (uuid string) {
+
+	b := make([]byte, 16)
+	_, err := rand.Read(b)
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+
+	uuid = fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+
+	return
+}
+
 func testInstrumentationManager(t *testing.T, code string) *InstrumentationManager {
 	defer panicRecovery(t)
 
@@ -90,16 +106,20 @@ func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string
 	diffFile := filepath.Join(testAppDir, defaultDiffFileName)
 
 	manager := NewInstrumentationManager(pkgs, appName, varName, diffFile, testAppDir)
-	manager.SetPackage("parser/tmp")
+	manager.SetPackage(fmt.Sprintf("parser/%s", testAppDir))
 	return manager
 }
 
 func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction) string {
-	testDir := "tmp"
+	testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
 	defer cleanTestApp(t, testDir)
 	manager := restorerTestingInstrumentationManager(t, code, testDir)
 
 	pkg := manager.GetDecoratorPackage()
+	if pkg == nil {
+		cleanTestApp(t, testDir)
+		t.Fatalf("Package was nil: %+v", manager.packages)
+	}
 	node := pkg.Syntax[0].Decls[1]
 
 	dstutil.Apply(node, nil, func(c *dstutil.Cursor) bool {
