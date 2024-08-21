@@ -264,7 +264,8 @@ func errorReturnIndex(v *dst.CallExpr, pkg *decorator.Package) (int, bool) {
 }
 
 func isNewRelicMethod(call *dst.CallExpr) bool {
-	if sel, ok := call.Fun.(*dst.SelectorExpr); ok {
+	sel, ok := call.Fun.(*dst.SelectorExpr)
+	if ok {
 		if pkg, ok := sel.X.(*dst.Ident); ok {
 			return pkg.Name == "newrelic"
 		}
@@ -276,7 +277,7 @@ func isNewRelicMethod(call *dst.CallExpr) bool {
 	return false
 }
 
-func generateNoticeError(errVariableName, txnName string, nodeDecs *dst.NodeDecs) *dst.ExprStmt {
+func generateNoticeError(errExpr dst.Expr, txnName string, nodeDecs *dst.NodeDecs) *dst.ExprStmt {
 	var decs dst.ExprStmtDecorations
 	// copy all decs below the current statement into this statement
 	if nodeDecs != nil {
@@ -302,30 +303,32 @@ func generateNoticeError(errVariableName, txnName string, nodeDecs *dst.NodeDecs
 					Name: "NoticeError",
 				},
 			},
-			Args: []dst.Expr{
-				&dst.Ident{
-					Name: errVariableName,
-				},
-			},
+			Args: []dst.Expr{errExpr},
 		},
 		Decs: decs,
 	}
 }
 
-func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) string {
+func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
 	if len(stmt.Rhs) == 1 {
 		if call, ok := stmt.Rhs[0].(*dst.CallExpr); ok {
 			if !isNewRelicMethod(call) {
-				if errIndex, ok := errorReturnIndex(call, pkg); ok {
+				errIndex, ok := errorReturnIndex(call, pkg)
+				if ok {
 					expr := stmt.Lhs[errIndex]
-					if ident, ok := expr.(*dst.Ident); ok {
-						return ident.Name
+					ident, ok := expr.(*dst.Ident)
+					if ok {
+						// ignored errors are ignored by instrumentation as well
+						if ident.Name == "_" {
+							return nil
+						}
 					}
+					return dst.Clone(expr).(dst.Expr)
 				}
 			}
 		}
 	}
-	return ""
+	return nil
 }
 
 // StatelessTracingFunctions
@@ -391,9 +394,9 @@ func InstrumentMain(mainFunctionNode dst.Node, manager *InstrumentationManager, 
 func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, txnName string) bool {
 	switch nodeVal := stmt.(type) {
 	case *dst.AssignStmt:
-		errVar := findErrorVariable(nodeVal, manager.GetDecoratorPackage())
-		if errVar != "" && c.Index() >= 0 {
-			c.InsertAfter(generateNoticeError(errVar, txnName, nodeVal.Decorations()))
+		errExpr := findErrorVariable(nodeVal, manager.GetDecoratorPackage())
+		if errExpr != nil && c.Index() >= 0 {
+			c.InsertAfter(generateNoticeError(errExpr, txnName, nodeVal.Decorations()))
 			return true
 		}
 	}

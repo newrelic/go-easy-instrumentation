@@ -95,7 +95,6 @@ func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string
 }
 
 func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction) string {
-
 	testDir := "tmp"
 	defer cleanTestApp(t, testDir)
 	manager := restorerTestingInstrumentationManager(t, code, testDir)
