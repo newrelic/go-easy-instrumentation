@@ -113,11 +113,10 @@ func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string
 func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction) string {
 	testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
 	defer cleanTestApp(t, testDir)
-	manager := restorerTestingInstrumentationManager(t, code, testDir)
 
+	manager := restorerTestingInstrumentationManager(t, code, testDir)
 	pkg := manager.GetDecoratorPackage()
 	if pkg == nil {
-		cleanTestApp(t, testDir)
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 	node := pkg.Syntax[0].Decls[1]
