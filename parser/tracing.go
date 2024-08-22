@@ -17,6 +17,7 @@ type tracingState struct {
 
 func TraceMain(agentVariable, txnVariableName string) *tracingState {
 	return &tracingState{
+		assignedTxn:   false,
 		agentVariable: agentVariable,
 		txnVariable:   txnVariableName,
 	}
@@ -31,7 +32,7 @@ func TraceDownstreamFunction(txnVariableName string) *tracingState {
 func (tc *tracingState) CreateTransactionIfNeeded(c *dstutil.Cursor, functionName, txnVariableName string, endImmediately bool) {
 	if tc.agentVariable != "" && c.Index() > 0 {
 		tc.txnVariable = defaultTxnName
-		c.InsertBefore(startTransaction(tc.agentVariable, defaultTxnName, functionName, !tc.assignedTxn))
+		c.InsertBefore(startTransaction(tc.agentVariable, defaultTxnName, functionName, tc.assignedTxn))
 		tc.assignedTxn = true
 		if endImmediately {
 			c.InsertAfter(endTransaction(defaultTxnName))

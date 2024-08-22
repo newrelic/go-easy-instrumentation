@@ -773,6 +773,59 @@ func main() {
 		panic(err)
 	}
 
+	nrTxn := NewRelicAgent.StartTransaction("myFunc")
+	myFunc(nrTxn)
+	nrTxn.End()
+
+	NewRelicAgent.Shutdown(5 * time.Second)
+}
+`,
+		},
+		{
+			name: "re-assigns transaction variable when repeated",
+			code: `package main
+
+import "net/http"
+
+func myFunc() {
+	_, err := http.Get("http://example.com")
+	if err != nil {
+		panic(err)
+	}
+}
+
+func main() {
+	myFunc()
+	myFunc()
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myFunc(nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("myFunc").End()
+	_, err := http.Get("http://example.com")
+	nrTxn.NoticeError(err)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func main() {
+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if err != nil {
+		panic(err)
+	}
+
+	nrTxn := NewRelicAgent.StartTransaction("myFunc")
+	myFunc(nrTxn)
+	nrTxn.End()
 	nrTxn = NewRelicAgent.StartTransaction("myFunc")
 	myFunc(nrTxn)
 	nrTxn.End()
