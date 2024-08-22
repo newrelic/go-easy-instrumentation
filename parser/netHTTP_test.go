@@ -1105,7 +1105,6 @@ func main() {
 }
 
 func TestWrapNestedHandleFunction(t *testing.T) {
-
 	tests := []struct {
 		name   string
 		code   string
@@ -1167,6 +1166,227 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			defer panicRecovery(t)
 			got := testStatefulTracingFunction(t, tt.code, WrapNestedHandleFunction)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestCannotInstrumentHttpMethod(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "http get",
+			code: `package main
+
+import "net/http"
+
+func main() {
+	http.Get("http://example.com")
+}
+`,
+			expect: `package main
+
+import "net/http"
+
+func main() {
+	// the "http.Get()" net/http method can not be instrumented and its outbound traffic can not be traced
+	// please see these examples of code patterns for external http calls that can be instrumented:
+	// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
+	http.Get("http://example.com")
+}
+`,
+		},
+		{
+			name: "http post",
+			code: `package main
+
+import "net/http"
+
+func main() {
+	http.Post("http://example.com")
+}
+`,
+			expect: `package main
+
+import "net/http"
+
+func main() {
+	// the "http.Post()" net/http method can not be instrumented and its outbound traffic can not be traced
+	// please see these examples of code patterns for external http calls that can be instrumented:
+	// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
+	http.Post("http://example.com")
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, CannotInstrumentHttpMethod)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestInstrumentHttpClient(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "basic client definition",
+			code: `package main
+
+import "net/http"
+
+func main() {
+	client := &http.Client{}
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	client := &http.Client{}
+	client.Transport = newrelic.NewRoundTripper(client.Transport)
+}
+`,
+		},
+		{
+			name: "complex client definition",
+			code: `package main
+
+import "net/http"
+
+func main() {
+	type clientInfo struct {
+		client *http.Client
+	}
+	info := clientInfo{}
+	info.client := &http.Client{}
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	type clientInfo struct {
+		client *http.Client
+	}
+	info := clientInfo{}
+	info.client := &http.Client{}
+	info.client.Transport = newrelic.NewRoundTripper(info.client.Transport)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentHttpClient)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestInstrumentHandleFunction(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "do not modify handle funcs without additional tracing",
+			code: `package main
+
+import "net/http"
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import "net/http"
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+		{
+			name: "handle funcs with tracing get transaction pulled out of request object",
+			code: `package main
+
+import "net/http"
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	_, err := http.Get("http://example.com"); if err != nil {
+		panic(err)
+	}
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	nrTxn := newrelic.FromContext(r.Context())
+
+	_, err := http.Get("http://example.com")
+	nrTxn.NoticeError(err)
+	if err != nil {
+		panic(err)
+	}
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentHandleFunction)
 			assert.Equal(t, tt.expect, got)
 		})
 	}

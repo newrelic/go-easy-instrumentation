@@ -335,8 +335,8 @@ func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
 //////////////////////////////////////////////
 
 // InstrumentMain looks for the main method of a program, and uses this as an instrumentation initialization and injection point
+// TODO: Can this be refactored to be part of the Trace Function algorithm?
 func InstrumentMain(mainFunctionNode dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) {
-	txnStarted := false
 	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
 		// only inject go agent into the main.main function
 		if decl.Name.Name == "main" {
@@ -347,38 +347,8 @@ func InstrumentMain(mainFunctionNode dst.Node, manager *InstrumentationManager, 
 			// add go-agent/v3/newrelic to imports
 			manager.AddImport(newrelicAgentImport)
 
-			newMain := dstutil.Apply(decl, func(c *dstutil.Cursor) bool {
-				node := c.Node()
-				switch v := node.(type) {
-				case *dst.ExprStmt:
-					rootPkg := manager.currentPackage
-					txnVarName := defaultTxnName
-					invInfo := manager.GetPackageFunctionInvocation(v)
-					// check if the called function has been instrumented already, if not, instrument it.
-					if manager.ShouldInstrumentFunction(invInfo) {
-						manager.SetPackage(invInfo.packageName)
-						decl := manager.GetDeclaration(invInfo.functionName)
-						_, wasModified := TraceFunction(manager, decl, defaultTxnName)
-						if wasModified {
-							// add transaction to declaration arguments
-							manager.AddTxnArgumentToFunctionDecl(decl, defaultTxnName)
-							manager.AddImport(newrelicAgentImport)
-						}
-						manager.SetPackage(rootPkg)
-					}
-					// pass the called function a transaction if needed
-					// always check c.Index >= 0 to avoid panics when using c.Insert methods
-					if manager.RequiresTransactionArgument(invInfo, txnVarName) && c.Index() >= 0 {
-						c.InsertBefore(startTransaction(manager.agentVariableName, txnVarName, invInfo.functionName, txnStarted))
-						c.InsertAfter(endTransaction(txnVarName))
-						invInfo.call.Args = append(invInfo.call.Args, dst.NewIdent(defaultTxnName))
-						txnStarted = true
-					}
-					WrapHandleFunc(v.X, manager, c)
-				}
+			newMain, _ := TraceFunction(manager, decl, TraceMain(manager.agentVariableName, defaultTxnName))
 
-				return true
-			}, nil)
 			// this will skip the tracing of this function in the outer tree walking algorithm
 			c.Replace(newMain)
 		}

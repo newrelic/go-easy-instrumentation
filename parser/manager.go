@@ -360,7 +360,7 @@ func (m *InstrumentationManager) AddRequiredModules() {
 }
 
 // InstrumentPackages applies instrumentation to all functions in the package.
-func (m *InstrumentationManager) InstrumentPackages(instrumentationFunctions ...StatelessInstrumentationFunc) error {
+func (m *InstrumentationManager) InstrumentPackages(instrumentationFunctions ...StatelessTracingFunction) error {
 	// Create a call graph of all calls made to functions in this package
 	err := tracePackageFunctionCalls(m)
 	if err != nil {
@@ -396,7 +396,7 @@ func tracePackageFunctionCalls(manager *InstrumentationManager) error {
 }
 
 // apply instrumentation to the package
-func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessInstrumentationFunc) {
+func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessTracingFunction) {
 	for pkgName, pkgState := range manager.packages {
 		manager.SetPackage(pkgName)
 		for _, file := range pkgState.pkg.Syntax {

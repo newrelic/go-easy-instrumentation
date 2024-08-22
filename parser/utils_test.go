@@ -139,3 +139,28 @@ func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTra
 
 	return buf.String()
 }
+
+func testStatelessTracingFunction(t *testing.T, code string, tracingFunc StatelessTracingFunction) string {
+	testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
+	defer cleanTestApp(t, testDir)
+
+	manager := restorerTestingInstrumentationManager(t, code, testDir)
+	pkg := manager.GetDecoratorPackage()
+	if pkg == nil {
+		t.Fatalf("Package was nil: %+v", manager.packages)
+	}
+
+	err := manager.InstrumentPackages(tracingFunc)
+	if err != nil {
+		t.Fatalf("Failed to instrument packages: %v", err)
+	}
+
+	restorer := decorator.NewRestorerWithImports(testDir, guess.New())
+	buf := bytes.NewBuffer([]byte{})
+	err = restorer.Fprint(buf, pkg.Syntax[0])
+	if err != nil {
+		t.Fatalf("Failed to restore the file: %v", err)
+	}
+
+	return buf.String()
+}

@@ -217,22 +217,6 @@ func isHttpHandler(decl *dst.FuncDecl, pkg *decorator.Package) bool {
 	return false
 }
 
-// Recognize if a function is a handler func based on its contents, and inject instrumentation.
-// This function discovers entrypoints to tracing for a given transaction and should trace all the way
-// down the call chain of the function it is invoked on.
-func InstrumentHandleFunction(n dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) {
-	fn, isFn := n.(*dst.FuncDecl)
-	if isFn && isHttpHandler(fn, manager.GetDecoratorPackage()) {
-		txnName := "nrTxn"
-		newFn, ok := TraceFunction(manager, fn, txnName)
-		if ok {
-			defineTxnFromCtx(newFn, txnName)
-			c.Replace(newFn)
-			manager.UpdateFunctionDeclaration(newFn)
-		}
-	}
-}
-
 func injectRoundTripper(clientVariable dst.Expr, spacingAfter dst.SpaceType) *dst.AssignStmt {
 	return &dst.AssignStmt{
 		Lhs: []dst.Expr{
@@ -391,6 +375,22 @@ func addTxnToRequestContext(request dst.Expr, txnVar string, nodeDecs *dst.NodeD
 
 // StatelessTracingFunctions
 //////////////////////////////////////////////
+
+// Recognize if a function is a handler func based on its contents, and inject instrumentation.
+// This function discovers entrypoints to tracing for a given transaction and should trace all the way
+// down the call chain of the function it is invoked on.
+func InstrumentHandleFunction(n dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) {
+	fn, isFn := n.(*dst.FuncDecl)
+	if isFn && isHttpHandler(fn, manager.GetDecoratorPackage()) {
+		txnName := defaultTxnName
+		newFn, ok := TraceFunction(manager, fn, TraceDownstreamFunction(txnName))
+		if ok {
+			defineTxnFromCtx(newFn, txnName)
+			c.Replace(newFn)
+			manager.UpdateFunctionDeclaration(newFn)
+		}
+	}
+}
 
 // InstrumentHttpClient automatically injects a newrelic roundtripper into any newly created http client
 // looks for the following pattern: client := &http.Client{}

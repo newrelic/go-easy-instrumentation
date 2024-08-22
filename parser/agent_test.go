@@ -725,3 +725,68 @@ func main() {
 		})
 	}
 }
+
+func TestInstrumentMain(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "go function with tracing",
+			code: `package main
+
+import "net/http"
+
+func myFunc() {
+	_, err := http.Get("http://example.com")
+	if err != nil {
+		panic(err)
+	}
+}
+
+func main() {
+	myFunc()
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myFunc(nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("myFunc").End()
+	_, err := http.Get("http://example.com")
+	nrTxn.NoticeError(err)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func main() {
+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if err != nil {
+		panic(err)
+	}
+
+	nrTxn = NewRelicAgent.StartTransaction("myFunc")
+	myFunc(nrTxn)
+	nrTxn.End()
+
+	NewRelicAgent.Shutdown(5 * time.Second)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentMain)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
