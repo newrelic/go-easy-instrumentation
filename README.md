@@ -3,7 +3,7 @@
 # Go instrumentation tool
 Go is a compiled language with an opaque runtime, making it unable to support automatic instrumentation like other languages. For this reason, the New Relic Go agent is designed as an SDK. Since the Go agent is an SDK, it requires more manual work to set up than agents for languages that support automatic instrumentation.
 
-In an effort to reduce that manual effort, the Go agent team created an easy instrumentation tool for Go that is currently in preview. This tool will do most of the work for you by suggesting changes to your source code that instrument your application with the New Relic Go agent.
+In an effort to make instrumentation easier, the Go agent team created an instrumentation tool that is currently in preview. This tool does most of the work for you by suggesting changes to your source code that instrument your application with the New Relic Go agent.
 
 To get started, check out this four-minute video, or skip down to [How it works](#how-it-works).
 
@@ -17,11 +17,10 @@ This project, its code, and the UX are under heavy development, and should be ex
 
 ## How it works
 
-This tool will not interfere with your application's operation, and it doesn't make any changes to your code directly. Here's what happens:
+This tool doesn't interfere with your application's operation, and it doesn't make any changes to your code directly. Here's what happens when you run the tool:
 
-* It analyzes your source code and identifies opportunities to instrument it.
-* It suggests changes to your code that use the New Relic Go agent SDK to capture telemetry data.
-* You review those sugestions that are inserted in a `.diff` file and decide which changes to apply to your source code.
+* It analyzes your code and suggests changes that allow the Go agent to capture telemetry data. 
+* You review the changes in the .diff file and decide which changes to add to your source code.
 
 As part of the analysis, this tool may invoke `go get` or other Go language toolchain commands which may modify your `go.mod` file, but not your actual source code.
 
