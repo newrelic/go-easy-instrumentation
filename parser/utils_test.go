@@ -125,7 +125,7 @@ func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTra
 		n := c.Node()
 		switch v := n.(type) {
 		case dst.Stmt:
-			stmtFunc(manager, v, c, "txn")
+			stmtFunc(manager, v, c, TraceDownstreamFunction("txn"))
 		}
 		return true
 	})

@@ -361,12 +361,12 @@ func InstrumentMain(mainFunctionNode dst.Node, manager *InstrumentationManager, 
 // NoticeError will check for the presence of an error.Error variable in the body at the index in bodyIndex.
 // If it finds that an error is returned, it will add a line after the assignment statement to capture an error
 // with a newrelic transaction. All transactions are assumed to be named "txn"
-func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, txnName string) bool {
+func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
 	case *dst.AssignStmt:
 		errExpr := findErrorVariable(nodeVal, manager.GetDecoratorPackage())
 		if errExpr != nil && c.Index() >= 0 {
-			c.InsertAfter(generateNoticeError(errExpr, txnName, nodeVal.Decorations()))
+			c.InsertAfter(generateNoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
 			return true
 		}
 	}

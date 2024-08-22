@@ -43,6 +43,10 @@ func (tc *tracingState) GetTransactionVariable() string {
 	return tc.txnVariable
 }
 
+func (tc *tracingState) GetAgentVariable() string {
+	return tc.agentVariable
+}
+
 func (tc *tracingState) TraceDownstreamFunction() *tracingState {
 	return &tracingState{
 		txnVariable: tc.txnVariable,
@@ -115,13 +119,13 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 			}
 			manager.SetPackage(rootPkg)
 			if !downstreamFunctionTraced {
-				ok := NoticeError(manager, v, c, txnVarName)
+				ok := NoticeError(manager, v, c, tracing)
 				if ok {
 					TopLevelFunctionChanged = true
 				}
 			}
 			for _, stmtFunc := range RequiredStatefulTracingFunctions {
-				ok := stmtFunc(manager, v, c, txnVarName)
+				ok := stmtFunc(manager, v, c, tracing)
 				if ok {
 					TopLevelFunctionChanged = true
 				}
