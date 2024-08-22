@@ -47,17 +47,17 @@ The scope of what this tool can instrument in your application is limited to the
 Before you start the installation steps below, make sure you have a version of Go installed that is within the support window for the current [Go programming language lifecycle](https://endoflife.date/go).
 
 1. Clone this repository to a directory on your system. For example:
-        ```sh
-        git clone .../go-agent-pre-instrumentation
-        ```
+    ```sh
+    git clone .../go-agent-pre-instrumentation
+    ```
 2. Go into that directory:
-        ```sh
-        cd go-agent-pre-instrumentation
-        ```
+    ```sh
+    cd go-agent-pre-instrumentation
+    ```
 3. Resolve any third-party dependencies:
-        ```sh
-        go mod tidy
-        ```
+    ```sh
+    go mod tidy
+    ```
 ## Generate instrumentation suggestions
 
 For detailed instructions on how to generate instrumentation suggestions, see our documentation at [docs.newrelic.com](https://docs/apm/agents/go-agent/installation/install-automation-new-relic-go/#generate-suggestions).
