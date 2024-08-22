@@ -1391,3 +1391,228 @@ func main() {
 		})
 	}
 }
+
+func TestDownstreamTracingFromHandleFunction(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "tracing propogated to all downstream calls",
+			code: `package main
+
+import "net/http"
+
+func myHelperFunction(url string) error {
+	_, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	err := myHelperFunction("http://example.com")
+	if err != nil {
+		panic(err)
+	}
+	
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHelperFunction(url string, nrTxn *newrelic.Transaction) error {
+	defer nrTxn.StartSegment("myHelperFunction").End()
+	_, err := http.Get(url)
+	nrTxn.NoticeError(err)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	nrTxn := newrelic.FromContext(r.Context())
+
+	err := myHelperFunction("http://example.com", nrTxn)
+	if err != nil {
+		panic(err)
+	}
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+		{
+			name: "tracing propogated to async downstream calls",
+			code: `package main
+
+import (
+	"net/http"
+	"sync"
+)
+
+func myHelperFunction(url string, wg *sync.WaitGroup){
+	defer wg.Done()
+	_, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go myHelperFunction("http://example.com", wg)
+	}
+	wg.Wait()
+
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+	"sync"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHelperFunction(url string, wg *sync.WaitGroup, nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("async myHelperFunction").End()
+	defer wg.Done()
+	_, err := http.Get(url)
+	nrTxn.NoticeError(err)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	nrTxn := newrelic.FromContext(r.Context())
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go myHelperFunction("http://example.com", wg, nrTxn.NewGoroutine())
+	}
+	wg.Wait()
+
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+		{
+			name: "tracing propogated to async literal downstream calls",
+			code: `package main
+
+import (
+	"net/http"
+	"sync"
+)
+
+func myHelperFunction(url string) {
+	_, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			myHelperFunction("http://example.com")
+		}()
+	}
+	wg.Wait()
+
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+	"sync"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHelperFunction(url string, nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("myHelperFunction").End()
+	_, err := http.Get(url)
+	nrTxn.NoticeError(err)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	nrTxn := newrelic.FromContext(r.Context())
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(nrTxn *newrelic.Transaction) {
+			defer nrTxn.StartSegment("async literal").End()
+			defer wg.Done()
+			myHelperFunction("http://example.com", nrTxn)
+		}(nrTxn.NewGoroutine())
+	}
+	wg.Wait()
+
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentHandleFunction)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
