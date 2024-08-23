@@ -11,6 +11,9 @@ import (
 	"github.com/dave/dst/dstutil"
 )
 
+// Code generation
+//////////////////////////////////////////////
+
 func panicOnError() *dst.IfStmt {
 	return &dst.IfStmt{
 		Cond: &dst.BinaryExpr{
@@ -128,6 +131,8 @@ func shutdownAgent(AgentVariableName string) *dst.ExprStmt {
 	}
 }
 
+// starts a NewRelic transaction
+// if overwireVariable is true, the transaction variable will be overwritten by variable assignment, otherwise it will be defined
 func startTransaction(appVariableName, transactionVariableName, transactionName string, overwriteVariable bool) *dst.AssignStmt {
 	tok := token.DEFINE
 	if overwriteVariable {
@@ -161,57 +166,6 @@ func endTransaction(transactionVariableName string) *dst.ExprStmt {
 				Sel: dst.NewIdent("End"),
 			},
 		},
-	}
-}
-
-// InstrumentMain looks for the main method of a program, and uses this as an instrumentation initialization and injection point
-func InstrumentMain(mainFunctionNode dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) {
-	txnStarted := false
-	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
-		// only inject go agent into the main.main function
-		if decl.Name.Name == "main" {
-			agentDecl := createAgentAST(manager.appName, manager.agentVariableName)
-			decl.Body.List = append(agentDecl, decl.Body.List...)
-			decl.Body.List = append(decl.Body.List, shutdownAgent(manager.agentVariableName))
-
-			// add go-agent/v3/newrelic to imports
-			manager.AddImport(newrelicAgentImport)
-
-			newMain := dstutil.Apply(decl, func(c *dstutil.Cursor) bool {
-				node := c.Node()
-				switch v := node.(type) {
-				case *dst.ExprStmt:
-					rootPkg := manager.currentPackage
-					txnVarName := defaultTxnName
-					invInfo := manager.GetPackageFunctionInvocation(v)
-					// check if the called function has been instrumented already, if not, instrument it.
-					if manager.ShouldInstrumentFunction(invInfo) {
-						manager.SetPackage(invInfo.packageName)
-						decl := manager.GetDeclaration(invInfo.functionName)
-						_, wasModified := TraceFunction(manager, decl, defaultTxnName)
-						if wasModified {
-							// add transaction to declaration arguments
-							manager.AddTxnArgumentToFunctionDecl(decl, defaultTxnName)
-							manager.AddImport(newrelicAgentImport)
-						}
-						manager.SetPackage(rootPkg)
-					}
-					// pass the called function a transaction if needed
-					// always check c.Index >= 0 to avoid panics when using c.Insert methods
-					if manager.RequiresTransactionArgument(invInfo, txnVarName) && c.Index() >= 0 {
-						c.InsertBefore(startTransaction(manager.agentVariableName, txnVarName, invInfo.functionName, txnStarted))
-						c.InsertAfter(endTransaction(txnVarName))
-						invInfo.call.Args = append(invInfo.call.Args, dst.NewIdent(defaultTxnName))
-						txnStarted = true
-					}
-					WrapHandleFunc(v.X, manager, c)
-				}
-
-				return true
-			}, nil)
-			// this will skip the tracing of this function in the outer tree walking algorithm
-			c.Replace(newMain)
-		}
 	}
 }
 
@@ -271,11 +225,17 @@ func txnNewGoroutine(txnVarName string) *dst.CallExpr {
 }
 
 func isNamedError(n *types.Named) bool {
+	if n == nil {
+		return false
+	}
+
 	o := n.Obj()
 	return o != nil && o.Pkg() == nil && o.Name() == "error"
 }
 
-func errorReturns(v *dst.CallExpr, pkg *decorator.Package) (int, bool) {
+// errorReturnIndex returns the index of the error return value in the function call
+// if no error is returned it will return 0, false
+func errorReturnIndex(v *dst.CallExpr, pkg *decorator.Package) (int, bool) {
 	if pkg == nil {
 		return 0, false
 	}
@@ -304,26 +264,34 @@ func errorReturns(v *dst.CallExpr, pkg *decorator.Package) (int, bool) {
 }
 
 func isNewRelicMethod(call *dst.CallExpr) bool {
-	if sel, ok := call.Fun.(*dst.SelectorExpr); ok {
+	sel, ok := call.Fun.(*dst.SelectorExpr)
+	if ok {
 		if pkg, ok := sel.X.(*dst.Ident); ok {
 			return pkg.Name == "newrelic"
+		}
+	} else {
+		if ident, ok := call.Fun.(*dst.Ident); ok {
+			return ident.Path == newrelicAgentImport
 		}
 	}
 	return false
 }
 
-func txnNoticeError(errVariableName, txnName string, nodeDecs *dst.NodeDecs) *dst.ExprStmt {
+func generateNoticeError(errExpr dst.Expr, txnName string, nodeDecs *dst.NodeDecs) *dst.ExprStmt {
+	var decs dst.ExprStmtDecorations
 	// copy all decs below the current statement into this statement
-	decs := dst.ExprStmtDecorations{
-		NodeDecs: dst.NodeDecs{
-			After: nodeDecs.After,
-			End:   nodeDecs.End,
-		},
-	}
+	if nodeDecs != nil {
+		decs = dst.ExprStmtDecorations{
+			NodeDecs: dst.NodeDecs{
+				After: nodeDecs.After,
+				End:   nodeDecs.End,
+			},
+		}
 
-	// remove coppied decs from above node
-	nodeDecs.After = dst.None
-	nodeDecs.End.Clear()
+		// remove coppied decs from above node
+		nodeDecs.After = dst.None
+		nodeDecs.End.Clear()
+	}
 
 	return &dst.ExprStmt{
 		X: &dst.CallExpr{
@@ -335,130 +303,72 @@ func txnNoticeError(errVariableName, txnName string, nodeDecs *dst.NodeDecs) *ds
 					Name: "NoticeError",
 				},
 			},
-			Args: []dst.Expr{
-				&dst.Ident{
-					Name: errVariableName,
-				},
-			},
+			Args: []dst.Expr{errExpr},
 		},
 		Decs: decs,
 	}
 }
 
-func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) string {
+func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
 	if len(stmt.Rhs) == 1 {
 		if call, ok := stmt.Rhs[0].(*dst.CallExpr); ok {
 			if !isNewRelicMethod(call) {
-				if errIndex, ok := errorReturns(call, pkg); ok {
+				errIndex, ok := errorReturnIndex(call, pkg)
+				if ok {
 					expr := stmt.Lhs[errIndex]
-					if ident, ok := expr.(*dst.Ident); ok {
-						return ident.Name
+					ident, ok := expr.(*dst.Ident)
+					if ok {
+						// ignored errors are ignored by instrumentation as well
+						if ident.Name == "_" {
+							return nil
+						}
 					}
+					return dst.Clone(expr).(dst.Expr)
 				}
 			}
 		}
 	}
-	return ""
+	return nil
 }
 
-type StatefulTracingFunction func(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracingName string) bool
+// StatelessTracingFunctions
+//////////////////////////////////////////////
 
-var TracingFunctionsForSupportedPackages = []StatefulTracingFunction{ExternalHttpCall, WrapNestedHandleFunction}
+// InstrumentMain looks for the main method of a program, and uses this as an instrumentation initialization and injection point
+// TODO: Can this be refactored to be part of the Trace Function algorithm?
+func InstrumentMain(mainFunctionNode dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) {
+	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
+		// only inject go agent into the main.main function
+		if decl.Name.Name == "main" {
+			agentDecl := createAgentAST(manager.appName, manager.agentVariableName)
+			decl.Body.List = append(agentDecl, decl.Body.List...)
+			decl.Body.List = append(decl.Body.List, shutdownAgent(manager.agentVariableName))
+
+			// add go-agent/v3/newrelic to imports
+			manager.AddImport(newrelicAgentImport)
+
+			newMain, _ := TraceFunction(manager, decl, TraceMain(manager.agentVariableName, defaultTxnName))
+
+			// this will skip the tracing of this function in the outer tree walking algorithm
+			c.Replace(newMain)
+		}
+	}
+}
+
+// StatefulTracingFunctions
+//////////////////////////////////////////////
 
 // NoticeError will check for the presence of an error.Error variable in the body at the index in bodyIndex.
 // If it finds that an error is returned, it will add a line after the assignment statement to capture an error
 // with a newrelic transaction. All transactions are assumed to be named "txn"
-func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, txnName string) bool {
+func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
 	case *dst.AssignStmt:
-		errVar := findErrorVariable(nodeVal, manager.GetDecoratorPackage())
-		if errVar != "" && c.Index() >= 0 {
-			c.InsertAfter(txnNoticeError(errVar, txnName, nodeVal.Decorations()))
+		errExpr := findErrorVariable(nodeVal, manager.GetDecoratorPackage())
+		if errExpr != nil && c.Index() >= 0 {
+			c.InsertAfter(generateNoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
 			return true
 		}
 	}
 	return false
-}
-
-// TraceFunction adds tracing to a function. This includes error capture, and passing agent metadata to relevant functions and services.
-// Traces all called functions inside the current package as well.
-// This function returns a FuncDecl object pointer that contains the potentially modified version of the FuncDecl object, fn, passed. If
-// the bool field is true, then the function was modified, and requires a transaction most likely.
-func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, txnVarName string) (*dst.FuncDecl, bool) {
-	TopLevelFunctionChanged := false
-	outputNode := dstutil.Apply(fn, nil, func(c *dstutil.Cursor) bool {
-		n := c.Node()
-		switch v := n.(type) {
-		case *dst.GoStmt:
-			switch fun := v.Call.Fun.(type) {
-			case *dst.FuncLit:
-				// Add threaded txn to function arguments and parameters
-				fun.Type.Params.List = append(fun.Type.Params.List, txnAsParameter(txnVarName))
-				v.Call.Args = append(v.Call.Args, txnNewGoroutine(txnVarName))
-				// add go-agent/v3/newrelic to imports
-				manager.AddImport(newrelicAgentImport)
-
-				// create async segment
-				fun.Body.List = append([]dst.Stmt{deferSegment("async literal", txnVarName)}, fun.Body.List...)
-				c.Replace(v)
-				TopLevelFunctionChanged = true
-			default:
-				rootPkg := manager.currentPackage
-				invInfo := manager.GetPackageFunctionInvocation(v.Call)
-				if manager.ShouldInstrumentFunction(invInfo) {
-					manager.SetPackage(invInfo.packageName)
-					decl := manager.GetDeclaration(invInfo.functionName)
-					TraceFunction(manager, decl, txnVarName)
-					manager.AddTxnArgumentToFunctionDecl(decl, txnVarName)
-					manager.AddImport(newrelicAgentImport)
-					decl.Body.List = append([]dst.Stmt{deferSegment(fmt.Sprintf("async %s", invInfo.functionName), txnVarName)}, decl.Body.List...)
-				}
-				if manager.RequiresTransactionArgument(invInfo, txnVarName) {
-					invInfo.call.Args = append(invInfo.call.Args, txnNewGoroutine(txnVarName))
-					c.Replace(v)
-					TopLevelFunctionChanged = true
-				}
-				manager.SetPackage(rootPkg)
-
-			}
-		case dst.Stmt:
-			downstreamFunctionTraced := false
-			rootPkg := manager.currentPackage
-			invInfo := manager.GetPackageFunctionInvocation(v)
-
-			if manager.ShouldInstrumentFunction(invInfo) {
-				manager.SetPackage(invInfo.packageName)
-				decl := manager.GetDeclaration(invInfo.functionName)
-				_, downstreamFunctionTraced = TraceFunction(manager, decl, txnVarName)
-				if downstreamFunctionTraced {
-					manager.AddTxnArgumentToFunctionDecl(decl, txnVarName)
-					manager.AddImport(newrelicAgentImport)
-					decl.Body.List = append([]dst.Stmt{deferSegment(invInfo.functionName, txnVarName)}, decl.Body.List...)
-				}
-			}
-			if manager.RequiresTransactionArgument(invInfo, txnVarName) {
-				invInfo.call.Args = append(invInfo.call.Args, dst.NewIdent(txnVarName))
-				TopLevelFunctionChanged = true
-			}
-			manager.SetPackage(rootPkg)
-			if !downstreamFunctionTraced {
-				ok := NoticeError(manager, v, c, txnVarName)
-				if ok {
-					TopLevelFunctionChanged = true
-				}
-			}
-			for _, stmtFunc := range TracingFunctionsForSupportedPackages {
-				ok := stmtFunc(manager, v, c, txnVarName)
-				if ok {
-					TopLevelFunctionChanged = true
-				}
-			}
-		}
-		return true
-	})
-
-	// update the stored declaration, marking it as traced
-	decl := outputNode.(*dst.FuncDecl)
-	manager.UpdateFunctionDeclaration(decl)
-	return decl, TopLevelFunctionChanged
 }

@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// Unit Tests
+
 func Test_isNetHttpClient(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -69,8 +71,8 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -200,8 +202,8 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -264,8 +266,8 @@ func index(w http.ResponseWriter, r *http.Request, x string) {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -375,8 +377,8 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -396,7 +398,7 @@ func main() {
 				t.Fatal("lineNum must point to an expression containing a call expression")
 			}
 
-			gotFuncName := GetNetHttpMethod(call, pkgs[0])
+			gotFuncName := getNetHttpMethod(call, pkgs[0])
 
 			if gotFuncName != tt.wantFuncName {
 				t.Errorf("isNetHttpMethodCannotInstrument() = %v, want %v", gotFuncName, tt.wantFuncName)
@@ -475,8 +477,8 @@ func main() {
 		t.Run(tt.name, func(t *testing.T) {
 			testAppDir := "tmp"
 			fileName := tt.name + ".go"
-			pkgs, err := createTestAppPackage(testAppDir, fileName, tt.code)
-			defer cleanupTestApp(t, testAppDir)
+			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
+			defer cleanTestApp(t, testAppDir)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -496,7 +498,7 @@ func main() {
 				t.Fatal("lineNum must point to an expression containing a call expression")
 			}
 
-			gotFuncName := GetNetHttpClientVariableName(call, pkgs[0])
+			gotFuncName := getNetHttpClientVariableName(call, pkgs[0])
 
 			if gotFuncName != tt.wantName {
 				t.Errorf("isNetHttpMethodCannotInstrument() = %v, want %v", gotFuncName, tt.wantName)
@@ -669,7 +671,7 @@ func Test_captureHttpResponse(t *testing.T) {
 				segmentVariable: "example",
 				responseVariable: &dst.Ident{
 					Name: "resp",
-					Path: NetHttp,
+					Path: netHttpPath,
 				},
 			},
 			want: &dst.AssignStmt{
@@ -682,7 +684,7 @@ func Test_captureHttpResponse(t *testing.T) {
 				Rhs: []dst.Expr{
 					dst.Clone(&dst.Ident{
 						Name: "resp",
-						Path: NetHttp,
+						Path: netHttpPath,
 					}).(dst.Expr),
 				},
 				Tok: token.ASSIGN,
@@ -714,7 +716,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 			args: args{
 				request: &dst.Ident{
 					Name: "r",
-					Path: NetHttp,
+					Path: netHttpPath,
 				},
 				txnVar: "txn",
 				nodeDecs: &dst.NodeDecs{
@@ -726,7 +728,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 				Tok: token.ASSIGN,
 				Lhs: []dst.Expr{dst.Clone(&dst.Ident{
 					Name: "r",
-					Path: NetHttp,
+					Path: netHttpPath,
 				}).(dst.Expr)},
 				Rhs: []dst.Expr{
 					&dst.CallExpr{
@@ -737,7 +739,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 						Args: []dst.Expr{
 							dst.Clone(&dst.Ident{
 								Name: "r",
-								Path: NetHttp,
+								Path: netHttpPath,
 							}).(dst.Expr),
 							dst.NewIdent("txn"),
 						},
@@ -782,7 +784,7 @@ func Test_startExternalSegment(t *testing.T) {
 		{
 			name: "start_external_segment",
 			args: args{
-				request:    &dst.Ident{Name: "r", Path: NetHttp},
+				request:    &dst.Ident{Name: "r", Path: netHttpPath},
 				txnVar:     "txn",
 				segmentVar: "example",
 				nodeDecs: &dst.NodeDecs{
@@ -803,7 +805,7 @@ func Test_startExternalSegment(t *testing.T) {
 						},
 						Args: []dst.Expr{
 							dst.NewIdent("txn"),
-							dst.Clone(&dst.Ident{Name: "r", Path: NetHttp}).(dst.Expr),
+							dst.Clone(&dst.Ident{Name: "r", Path: netHttpPath}).(dst.Expr),
 						},
 					},
 				},
@@ -939,7 +941,7 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manager := newTestingInstrumentationManager(t, tt.code)
+			manager := testInstrumentationManager(t, tt.code)
 			pkg := manager.GetDecoratorPackage()
 			stmt := pkg.Syntax[0].Decls[1].(*dst.FuncDecl).Body.List[tt.linenum]
 			gotExpr := getHttpResponseVariable(manager, stmt)
@@ -975,6 +977,642 @@ func main() {
 				// catch all
 				assert.Equal(t, tt.wantExpr, gotExpr)
 			}
+		})
+	}
+}
+
+func TestExternalHttpCall(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "no http do method",
+			code: `
+package main
+
+import "net/http"
+
+func main() {
+	a := &http.Response{}
+}
+`,
+			expect: `package main
+
+import "net/http"
+
+func main() {
+	a := &http.Response{}
+}
+`,
+		},
+		{
+			name: "default client do",
+			code: `
+package main
+
+import "net/http"
+
+func main() {
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	http.DefaultClient.Do(req)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	externalSegment := newrelic.StartExternalSegment(txn, req)
+	http.DefaultClient.Do(req)
+	externalSegment.End()
+}
+`,
+		},
+		{
+			name: "default client do captures http response",
+			code: `
+package main
+
+import "net/http"
+
+func main() {
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	resp, _ := http.DefaultClient.Do(req)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	externalSegment := newrelic.StartExternalSegment(txn, req)
+	resp, _ := http.DefaultClient.Do(req)
+	externalSegment.Response = resp
+	externalSegment.End()
+}
+`,
+		},
+		{
+			name: "custom client do",
+			code: `
+package main
+
+import "net/http"
+
+func main() {
+	client := &http.Client{}
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	client.Do(req)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	client := &http.Client{}
+	req, _ := http.NewRequest("GET", "http://example.com", nil)
+	req = newrelic.RequestWithTransactionContext(req, txn)
+	client.Do(req)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatefulTracingFunction(t, tt.code, ExternalHttpCall)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestWrapNestedHandleFunction(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "trace nested handle function",
+			code: `
+package main
+
+import (
+	"net/http"
+)
+
+func main() {
+	http.HandleFunc("/", index)
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() { http.HandleFunc(newrelic.WrapHandleFunc(txn.Application(), "/", index)) }
+`,
+		},
+		{
+			name: "trace nested mux handle function",
+			code: `
+package main
+
+import (
+	"net/http"
+)
+
+func main() {
+	mux := http.NewServeMux()
+	mux.Handle("/", index)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	mux := http.NewServeMux()
+	mux.Handle(newrelic.WrapHandleFunc(txn.Application(), "/", index))
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatefulTracingFunction(t, tt.code, WrapNestedHandleFunction)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestCannotInstrumentHttpMethod(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "http get",
+			code: `package main
+
+import "net/http"
+
+func main() {
+	http.Get("http://example.com")
+}
+`,
+			expect: `package main
+
+import "net/http"
+
+func main() {
+	// the "http.Get()" net/http method can not be instrumented and its outbound traffic can not be traced
+	// please see these examples of code patterns for external http calls that can be instrumented:
+	// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
+	http.Get("http://example.com")
+}
+`,
+		},
+		{
+			name: "http post",
+			code: `package main
+
+import "net/http"
+
+func main() {
+	http.Post("http://example.com")
+}
+`,
+			expect: `package main
+
+import "net/http"
+
+func main() {
+	// the "http.Post()" net/http method can not be instrumented and its outbound traffic can not be traced
+	// please see these examples of code patterns for external http calls that can be instrumented:
+	// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
+	http.Post("http://example.com")
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, CannotInstrumentHttpMethod)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestInstrumentHttpClient(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "basic client definition",
+			code: `package main
+
+import "net/http"
+
+func main() {
+	client := &http.Client{}
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	client := &http.Client{}
+	client.Transport = newrelic.NewRoundTripper(client.Transport)
+}
+`,
+		},
+		{
+			name: "complex client definition",
+			code: `package main
+
+import "net/http"
+
+func main() {
+	type clientInfo struct {
+		client *http.Client
+	}
+	info := clientInfo{}
+	info.client := &http.Client{}
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	type clientInfo struct {
+		client *http.Client
+	}
+	info := clientInfo{}
+	info.client := &http.Client{}
+	info.client.Transport = newrelic.NewRoundTripper(info.client.Transport)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentHttpClient)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestInstrumentHandleFunction(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "do not modify handle funcs without additional tracing",
+			code: `package main
+
+import "net/http"
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import "net/http"
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+		{
+			name: "handle funcs with tracing get transaction pulled out of request object",
+			code: `package main
+
+import "net/http"
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	_, err := http.Get("http://example.com"); if err != nil {
+		panic(err)
+	}
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	nrTxn := newrelic.FromContext(r.Context())
+
+	_, err := http.Get("http://example.com")
+	nrTxn.NoticeError(err)
+	if err != nil {
+		panic(err)
+	}
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentHandleFunction)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestDownstreamTracingFromHandleFunction(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "tracing propogated to all downstream calls",
+			code: `package main
+
+import "net/http"
+
+func myHelperFunction(url string) error {
+	_, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	err := myHelperFunction("http://example.com")
+	if err != nil {
+		panic(err)
+	}
+	
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHelperFunction(url string, nrTxn *newrelic.Transaction) error {
+	defer nrTxn.StartSegment("myHelperFunction").End()
+	_, err := http.Get(url)
+	nrTxn.NoticeError(err)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	nrTxn := newrelic.FromContext(r.Context())
+
+	err := myHelperFunction("http://example.com", nrTxn)
+	if err != nil {
+		panic(err)
+	}
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+		{
+			name: "tracing propogated to async downstream calls",
+			code: `package main
+
+import (
+	"net/http"
+	"sync"
+)
+
+func myHelperFunction(url string, wg *sync.WaitGroup){
+	defer wg.Done()
+	_, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go myHelperFunction("http://example.com", wg)
+	}
+	wg.Wait()
+
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+	"sync"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHelperFunction(url string, wg *sync.WaitGroup, nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("async myHelperFunction").End()
+	defer wg.Done()
+	_, err := http.Get(url)
+	nrTxn.NoticeError(err)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	nrTxn := newrelic.FromContext(r.Context())
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go myHelperFunction("http://example.com", wg, nrTxn.NewGoroutine())
+	}
+	wg.Wait()
+
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+		{
+			name: "tracing propogated to async literal downstream calls",
+			code: `package main
+
+import (
+	"net/http"
+	"sync"
+)
+
+func myHelperFunction(url string) {
+	_, err := http.Get(url)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			myHelperFunction("http://example.com")
+		}()
+	}
+	wg.Wait()
+
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+	"sync"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHelperFunction(url string, nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("myHelperFunction").End()
+	_, err := http.Get(url)
+	nrTxn.NoticeError(err)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	nrTxn := newrelic.FromContext(r.Context())
+
+	var wg sync.WaitGroup
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go func(nrTxn *newrelic.Transaction) {
+			defer nrTxn.StartSegment("async literal").End()
+			defer wg.Done()
+			myHelperFunction("http://example.com", nrTxn)
+		}(nrTxn.NewGoroutine())
+	}
+	wg.Wait()
+
+	w.Write([]byte("hello world"))
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentHandleFunction)
+			assert.Equal(t, tt.expect, got)
 		})
 	}
 }
