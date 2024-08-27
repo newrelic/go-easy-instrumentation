@@ -26,7 +26,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = manager.InstrumentPackages()
+	err = manager.InstrumentApplication()
 	if err != nil {
 		log.Fatal(err)
 	}

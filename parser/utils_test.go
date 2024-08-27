@@ -146,7 +146,7 @@ func testStatelessTracingFunction(t *testing.T, code string, tracingFunc Statele
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 
-	err := manager.InstrumentPackages(tracingFunc)
+	err := manager.InstrumentApplication(tracingFunc)
 	if err != nil {
 		t.Fatalf("Failed to instrument packages: %v", err)
 	}

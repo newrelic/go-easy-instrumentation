@@ -384,9 +384,10 @@ func (m *InstrumentationManager) AddRequiredModules() (err error) {
 	return nil
 }
 
-// InstrumentPackages applies instrumentation to all functions in the package.
-// Specific functions should only be passed for tests, or if you really know what you're doing.
-func (m *InstrumentationManager) InstrumentPackages(instrumentationFunctions ...StatelessTracingFunction) error {
+// InstrumentApplication applies instrumentation in place to the dst files stored in the InstrumentationManager.
+// This will not generate any changes to the actual source code, just the abstract syntax tree generated from it.
+// Note: only pass tracing functions to this method for testing, or if you sincerely know what you are doing.
+func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions ...StatelessTracingFunction) error {
 	// Create a call graph of all calls made to functions in this package
 	err := tracePackageFunctionCalls(m)
 	if err != nil {
