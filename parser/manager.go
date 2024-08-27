@@ -3,6 +3,7 @@ package parser
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"log"
 	"os"
 	"os/exec"
@@ -81,6 +82,12 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	}
 
 	return manager
+}
+
+func (m *InstrumentationManager) CreateDiffFile() error {
+	f, err := os.Create(m.diffFile)
+	f.Close()
+	return err
 }
 
 func (m *InstrumentationManager) setPackage(pkgName string) {
@@ -307,7 +314,7 @@ func (m *InstrumentationManager) getDeclaration(functionName string) *dst.FuncDe
 }
 
 // WriteDiff writes out the changes made to a file to the diff file for this package.
-func (m *InstrumentationManager) WriteDiff() {
+func (m *InstrumentationManager) WriteDiff() error {
 	for _, state := range m.packages {
 		r := decorator.NewRestorerWithImports(state.pkg.Dir, gopackages.New(state.pkg.Dir))
 
@@ -315,7 +322,7 @@ func (m *InstrumentationManager) WriteDiff() {
 			path := state.pkg.Decorator.Filenames[file]
 			originalFile, err := os.ReadFile(path)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			// what this file will be named in the diff file
@@ -323,52 +330,58 @@ func (m *InstrumentationManager) WriteDiff() {
 
 			absAppPath, err := filepath.Abs(m.userAppPath)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 			diffFileName, err = filepath.Rel(absAppPath, path)
 			if err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			modifiedFile := bytes.NewBuffer([]byte{})
 			if err := r.Fprint(modifiedFile, file); err != nil {
-				log.Fatal(err)
+				return err
 			}
 
 			f, err := os.OpenFile(m.diffFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			if err != nil {
-				log.Println(err)
-			}
 			defer f.Close()
+			if err != nil {
+				return err
+			}
+
 			patch := godiffpatch.GeneratePatch(diffFileName, string(originalFile), modifiedFile.String())
 			if _, err := f.WriteString(patch); err != nil {
-				log.Println(err)
+				return err
 			}
 		}
 	}
 	log.Printf("changes written to %s", m.diffFile)
+	return nil
 }
 
-func (m *InstrumentationManager) AddRequiredModules() {
+func (m *InstrumentationManager) AddRequiredModules() (err error) {
 	for _, state := range m.packages {
 		wd, _ := os.Getwd()
+		defer func(returnedError error) {
+			err := os.Chdir(wd)
+			if err != nil {
+				returnedError = fmt.Errorf("Error changing back to working directory: %v; %v", err, returnedError)
+			}
+		}(err)
+
 		err := os.Chdir(state.pkg.Dir)
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		for module := range state.importsAdded {
 			err := exec.Command("go", "get", module).Run()
 			if err != nil {
-				log.Fatalf("Error Getting GO module %s: %v", module, err)
+				return fmt.Errorf("Error Getting GO module %s: %v", module, err)
 			}
 		}
-
-		err = os.Chdir(wd)
-		if err != nil {
-			log.Fatal(err)
-		}
 	}
+
+	return nil
 }
 
 // InstrumentPackages applies instrumentation to all functions in the package.

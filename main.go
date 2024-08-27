@@ -2,29 +2,19 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/dave/dst/decorator"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/newrelic/go-easy-instrumentation/cli"
 	"github.com/newrelic/go-easy-instrumentation/parser"
 )
 
 const loadMode = packages.LoadSyntax
 
-func createDiffFile(path string) {
-	f, err := os.Create(path)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer f.Close()
-}
-
 func main() {
 	log.Default().SetFlags(0)
-	cfg := NewCLIConfig()
-
-	createDiffFile(cfg.DiffFile)
+	cfg := cli.NewCLIConfig()
 
 	pkgs, err := decorator.Load(&packages.Config{Dir: cfg.PackagePath, Mode: loadMode}, cfg.PackageName)
 	if err != nil {
@@ -32,11 +22,22 @@ func main() {
 	}
 
 	manager := parser.NewInstrumentationManager(pkgs, cfg.AppName, cfg.AgentVariableName, cfg.DiffFile, cfg.PackagePath)
+	err = manager.CreateDiffFile()
+	if err != nil {
+		log.Fatal(err)
+	}
 	err = manager.InstrumentPackages()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	manager.AddRequiredModules()
-	manager.WriteDiff()
+	err = manager.AddRequiredModules()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = manager.WriteDiff()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
