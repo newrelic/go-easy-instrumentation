@@ -93,7 +93,7 @@ func (m *InstrumentationManager) addImport(path string) {
 	}
 }
 
-func (m *InstrumentationManager) getImports(fileName string) []string {
+func (m *InstrumentationManager) getImports() []string {
 	i := 0
 	state, ok := m.packages[m.currentPackage]
 	if !ok {
@@ -335,10 +335,12 @@ func (m *InstrumentationManager) WriteDiff() error {
 			}
 
 			f, err := os.OpenFile(m.diffFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-			defer f.Close()
 			if err != nil {
+				f.Close()
 				return err
 			}
+
+			defer f.Close()
 
 			patch := godiffpatch.GeneratePatch(diffFileName, string(originalFile), modifiedFile.String())
 			if _, err := f.WriteString(patch); err != nil {
@@ -350,17 +352,21 @@ func (m *InstrumentationManager) WriteDiff() error {
 	return nil
 }
 
-func (m *InstrumentationManager) AddRequiredModules() (err error) {
+func (m *InstrumentationManager) AddRequiredModules() error {
 	for _, state := range m.packages {
-		wd, _ := os.Getwd()
-		defer func(returnedError error) {
+		wd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get working directory: %v", err)
+		}
+
+		defer func() {
 			err := os.Chdir(wd)
 			if err != nil {
-				returnedError = fmt.Errorf("Error changing back to working directory: %v; %v", err, returnedError)
+				log.Printf("error changing back to working directory: %v", err)
 			}
-		}(err)
+		}()
 
-		err := os.Chdir(state.pkg.Dir)
+		err = os.Chdir(state.pkg.Dir)
 		if err != nil {
 			return err
 		}
@@ -368,7 +374,7 @@ func (m *InstrumentationManager) AddRequiredModules() (err error) {
 		for module := range state.importsAdded {
 			err := exec.Command("go", "get", module).Run()
 			if err != nil {
-				return fmt.Errorf("Error Getting GO module %s: %v", module, err)
+				return fmt.Errorf("error Getting GO module %s: %v", module, err)
 			}
 		}
 	}

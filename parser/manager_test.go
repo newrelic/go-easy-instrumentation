@@ -78,13 +78,10 @@ func Test_GetImports(t *testing.T) {
 		currentPackage    string
 		packages          map[string]*PackageState
 	}
-	type args struct {
-		fileName string
-	}
+
 	tests := []struct {
 		name   string
 		fields fields
-		args   args
 		want   []string
 	}{
 		{
@@ -93,7 +90,6 @@ func Test_GetImports(t *testing.T) {
 				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{"bar": true}}},
 				currentPackage: "foo",
 			},
-			args: args{fileName: "foo"},
 			want: []string{"bar"},
 		},
 		{
@@ -102,7 +98,6 @@ func Test_GetImports(t *testing.T) {
 				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}}},
 				currentPackage: "foo",
 			},
-			args: args{fileName: "foo"},
 			want: []string{},
 		},
 		{
@@ -110,7 +105,6 @@ func Test_GetImports(t *testing.T) {
 			fields: fields{
 				packages: map[string]*PackageState{"foo": {importsAdded: map[string]bool{}}},
 			},
-			args: args{fileName: "foo"},
 			want: []string{},
 		},
 	}
@@ -124,7 +118,7 @@ func Test_GetImports(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			if got := m.getImports(tt.args.fileName); !reflect.DeepEqual(got, tt.want) {
+			if got := m.getImports(); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("InstrumentationManager.GetImports() = %v, want %v", got, tt.want)
 			}
 		})
