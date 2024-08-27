@@ -10,7 +10,9 @@ It exits with a nonzero status if any of the test cases failed. It also prints e
 about failed tests to its standard output.
 
 ## Configuration
-The test cases are defined in the JSON file supplied to `testrunner` as its argument.
+The test cases are defined in the JSON file supplied to `testrunner` as its argument. 
+
+Please create a reference diff file in the test directory named "expect.ref" rather than utilize the cmp field. This helps us reduce tool and filesystem clutter.
 
 This is an object containing a single field:
 
@@ -22,4 +24,4 @@ Each test case is a JSON object with these fields:
 
 `dir` -- The directory (absolute or relative to the `parser` directory) where the instrumented application can be found.
 
-`cmp` -- The name of the reference file which should match the generated diff output.
+`cmp` -- Optional; The name of the reference file which should match the generated diff output. This tool will look for a file named "expect.ref" in the test "dir" by default.
