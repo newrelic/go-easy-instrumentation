@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"fmt"
@@ -351,13 +351,13 @@ func addTxnToRequestContext(request dst.Expr, txnVar string, nodeDecs *dst.NodeD
 // down the call chain of the function it is invoked on.
 func InstrumentHandleFunction(n dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) {
 	fn, isFn := n.(*dst.FuncDecl)
-	if isFn && isHttpHandler(fn, manager.GetDecoratorPackage()) {
+	if isFn && isHttpHandler(fn, manager.getDecoratorPackage()) {
 		txnName := defaultTxnName
 		newFn, ok := TraceFunction(manager, fn, TraceDownstreamFunction(txnName))
 		if ok {
 			defineTxnFromCtx(newFn, txnName)
 			c.Replace(newFn)
-			manager.UpdateFunctionDeclaration(newFn)
+			manager.updateFunctionDeclaration(newFn)
 		}
 	}
 }
@@ -369,7 +369,7 @@ func InstrumentHttpClient(n dst.Node, manager *InstrumentationManager, c *dstuti
 	if ok && isNetHttpClientDefinition(stmt) && c.Index() >= 0 && n.Decorations() != nil {
 		c.InsertAfter(injectRoundTripper(stmt.Lhs[0], n.Decorations().After)) // add roundtripper to transports
 		stmt.Decs.After = dst.None
-		manager.AddImport(newrelicAgentImport)
+		manager.addImport(newrelicAgentImport)
 	}
 }
 
@@ -432,7 +432,7 @@ func CannotInstrumentHttpMethod(n dst.Node, manager *InstrumentationManager, c *
 // getHttpResponseVariable returns the expression that contains an object of `*net/http.Response` type
 func getHttpResponseVariable(manager *InstrumentationManager, stmt dst.Stmt) dst.Expr {
 	var expression dst.Expr
-	pkg := manager.GetDecoratorPackage()
+	pkg := manager.getDecoratorPackage()
 	dst.Inspect(stmt, func(n dst.Node) bool {
 		switch v := n.(type) {
 		case *dst.AssignStmt:
@@ -456,7 +456,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 	if c.Index() < 0 {
 		return false
 	}
-	pkg := manager.GetDecoratorPackage()
+	pkg := manager.getDecoratorPackage()
 	var call *dst.CallExpr
 	dst.Inspect(stmt, func(n dst.Node) bool {
 		switch v := n.(type) {
@@ -477,14 +477,14 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 			c.InsertBefore(startExternalSegment(requestObject, tracing.txnVariable, segmentName, stmt.Decorations()))
 			c.InsertAfter(endExternalSegment(segmentName, stmt.Decorations()))
 			responseVar := getHttpResponseVariable(manager, stmt)
-			manager.AddImport(newrelicAgentImport)
+			manager.addImport(newrelicAgentImport)
 			if responseVar != nil {
 				c.InsertAfter(captureHttpResponse(segmentName, responseVar))
 			}
 			return true
 		} else {
 			c.InsertBefore(addTxnToRequestContext(requestObject, tracing.txnVariable, stmt.Decorations()))
-			manager.AddImport(newrelicAgentImport)
+			manager.addImport(newrelicAgentImport)
 			return true
 		}
 	}
@@ -495,7 +495,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 // that are being traced by a transaction.
 func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	wasModified := false
-	pkg := manager.GetDecoratorPackage()
+	pkg := manager.getDecoratorPackage()
 	dst.Inspect(stmt, func(n dst.Node) bool {
 		switch v := n.(type) {
 		case *dst.CallExpr:
@@ -543,7 +543,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 						}
 					}
 					wasModified = true
-					manager.AddImport(newrelicAgentImport)
+					manager.addImport(newrelicAgentImport)
 					return false
 				}
 			}

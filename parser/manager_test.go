@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"reflect"
@@ -56,7 +56,7 @@ func Test_AddImport(t *testing.T) {
 			}
 
 			defer panicRecovery(t)
-			m.AddImport(tt.args.path)
+			m.addImport(tt.args.path)
 
 			if m.packages["foo"].importsAdded["bar"] != true && tt.expect {
 				t.Errorf("AddImport failed to add import bar to package foo, got: %+v", m.packages["foo"].importsAdded)
@@ -124,7 +124,7 @@ func Test_GetImports(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			if got := m.GetImports(tt.args.fileName); !reflect.DeepEqual(got, tt.want) {
+			if got := m.getImports(tt.args.fileName); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("InstrumentationManager.GetImports() = %v, want %v", got, tt.want)
 			}
 		})
@@ -187,7 +187,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 			defer panicRecovery(t)
-			m.CreateFunctionDeclaration(tt.args.decl)
+			m.createFunctionDeclaration(tt.args.decl)
 
 			if tt.expect {
 				if m.packages["foo"].tracedFuncs["bar"] == nil {
@@ -255,7 +255,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 			}
 
 			defer panicRecovery(t)
-			m.UpdateFunctionDeclaration(tt.args.decl)
+			m.updateFunctionDeclaration(tt.args.decl)
 
 			if tt.updates && reflect.DeepEqual(m.packages["foo"].tracedFuncs["bar"].body, tt.args.decl) == false {
 				t.Errorf("UpdateFunctionDeclaration failed to update function bar to package foo, got: %+v", m.packages["foo"].tracedFuncs)
@@ -344,7 +344,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 			defer panicRecovery(t)
-			got := m.GetPackageFunctionInvocation(tt.args.node)
+			got := m.getPackageFunctionInvocation(tt.args.node)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -451,7 +451,7 @@ func Test_AddTxnArgumentToFunctionDecl(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 			defer panicRecovery(t)
-			m.AddTxnArgumentToFunctionDecl(tt.args.decl, tt.args.txnVarName)
+			m.addTxnArgumentToFunctionDecl(tt.args.decl, tt.args.txnVarName)
 			assert.Equal(t, tt.want, tt.args.decl)
 			assert.Equal(t, tt.wantRequireTxn, m.packages[m.currentPackage].tracedFuncs["bar"].requiresTxn)
 		})
@@ -524,7 +524,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 			defer panicRecovery(t)
-			got := m.ShouldInstrumentFunction(tt.args.inv)
+			got := m.shouldInstrumentFunction(tt.args.inv)
 			if got != tt.want {
 				t.Errorf("InstrumentationManager.ShouldInstrumentFunction() = %v, want %v", got, tt.want)
 			}
@@ -659,7 +659,7 @@ func Test_RequiresTransactionArgument(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 			defer panicRecovery(t)
-			got := m.RequiresTransactionArgument(tt.args.inv, tt.args.txnVariableName)
+			got := m.requiresTransactionArgument(tt.args.inv, tt.args.txnVariableName)
 			if got != tt.want {
 				t.Errorf("InstrumentationManager.RequiresTransactionArgument() = %v, want %v", got, tt.want)
 			}

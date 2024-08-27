@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"fmt"
@@ -946,7 +946,7 @@ func main() {
 			defer cleanTestApp(t, testDir)
 
 			manager := testInstrumentationManager(t, tt.code, testDir)
-			pkg := manager.GetDecoratorPackage()
+			pkg := manager.getDecoratorPackage()
 			stmt := pkg.Syntax[0].Decls[1].(*dst.FuncDecl).Body.List[tt.linenum]
 			gotExpr := getHttpResponseVariable(manager, stmt)
 			switch expect := tt.wantExpr.(type) {

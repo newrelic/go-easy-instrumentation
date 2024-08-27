@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"bytes"
@@ -29,6 +29,11 @@ type tracedFunction struct {
 	body        *dst.FuncDecl
 }
 
+type tracingFunctions struct {
+	stateless []StatelessTracingFunction
+	stateful  []StatefulTracingFunction
+}
+
 // InstrumentationManager maintains state relevant to tracing across all files, packages and functions.
 type InstrumentationManager struct {
 	userAppPath       string // path to the user's application as provided by the user
@@ -36,6 +41,7 @@ type InstrumentationManager struct {
 	appName           string
 	agentVariableName string
 	currentPackage    string
+	tracingFunctions  tracingFunctions
 	packages          map[string]*PackageState // stores stateful information on packages by ID
 }
 
@@ -58,6 +64,12 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		appName:           appName,
 		agentVariableName: agentVariableName,
 		packages:          map[string]*PackageState{},
+		tracingFunctions: tracingFunctions{
+			stateless: []StatelessTracingFunction{
+				InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod,
+			},
+			stateful: []StatefulTracingFunction{},
+		},
 	}
 
 	for _, pkg := range pkgs {
@@ -71,18 +83,18 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	return manager
 }
 
-func (m *InstrumentationManager) SetPackage(pkgName string) {
+func (m *InstrumentationManager) setPackage(pkgName string) {
 	m.currentPackage = pkgName
 }
 
-func (m *InstrumentationManager) AddImport(path string) {
+func (m *InstrumentationManager) addImport(path string) {
 	state, ok := m.packages[m.currentPackage]
 	if ok {
 		state.importsAdded[path] = true
 	}
 }
 
-func (m *InstrumentationManager) GetImports(fileName string) []string {
+func (m *InstrumentationManager) getImports(fileName string) []string {
 	i := 0
 	state, ok := m.packages[m.currentPackage]
 	if !ok {
@@ -99,7 +111,7 @@ func (m *InstrumentationManager) GetImports(fileName string) []string {
 }
 
 // Returns Decorator Package for the current package being instrumented
-func (m *InstrumentationManager) GetDecoratorPackage() *decorator.Package {
+func (m *InstrumentationManager) getDecoratorPackage() *decorator.Package {
 	state, ok := m.packages[m.currentPackage]
 	if !ok {
 		return nil
@@ -109,13 +121,13 @@ func (m *InstrumentationManager) GetDecoratorPackage() *decorator.Package {
 }
 
 // Returns the string name of the current package
-func (m *InstrumentationManager) GetPackageName() string {
+func (m *InstrumentationManager) getPackageName() string {
 	return m.currentPackage
 }
 
 // CreateFunctionDeclaration creates a tracking object for a function declaration that can be used
 // to find tracing locations. This is for initializing and set up only.
-func (m *InstrumentationManager) CreateFunctionDeclaration(decl *dst.FuncDecl) {
+func (m *InstrumentationManager) createFunctionDeclaration(decl *dst.FuncDecl) {
 	state, ok := m.packages[m.currentPackage]
 	if !ok {
 		return
@@ -130,7 +142,7 @@ func (m *InstrumentationManager) CreateFunctionDeclaration(decl *dst.FuncDecl) {
 }
 
 // UpdateFunctionDeclaration replaces the declaration stored for the given function name, and marks it as traced.
-func (m *InstrumentationManager) UpdateFunctionDeclaration(decl *dst.FuncDecl) {
+func (m *InstrumentationManager) updateFunctionDeclaration(decl *dst.FuncDecl) {
 	state, ok := m.packages[m.currentPackage]
 	if ok {
 		t, ok := state.tracedFuncs[decl.Name.Name]
@@ -149,7 +161,7 @@ type invocationInfo struct {
 
 // GetPackageFunctionInvocation returns the name of the function being invoked, and the expression containing the call
 // where that invocation occurs if a function is declared in this package.
-func (m *InstrumentationManager) GetPackageFunctionInvocation(node dst.Node) *invocationInfo {
+func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *invocationInfo {
 	var invInfo *invocationInfo
 
 	dst.Inspect(node, func(n dst.Node) bool {
@@ -162,7 +174,7 @@ func (m *InstrumentationManager) GetPackageFunctionInvocation(node dst.Node) *in
 			if ok {
 				path := functionCallIdent.Path
 				if path == "" {
-					path = m.GetPackageName()
+					path = m.getPackageName()
 				}
 				_, ok := m.packages[path]
 				if ok {
@@ -184,7 +196,7 @@ func (m *InstrumentationManager) GetPackageFunctionInvocation(node dst.Node) *in
 
 // AddTxnArgumentToFuncDecl adds a transaction argument to the declaration of a function. This marks that function as needing a transaction,
 // and can be looked up by name to know that the last argument is a transaction.
-func (m *InstrumentationManager) AddTxnArgumentToFunctionDecl(decl *dst.FuncDecl, txnVarName string) {
+func (m *InstrumentationManager) addTxnArgumentToFunctionDecl(decl *dst.FuncDecl, txnVarName string) {
 	if decl == nil {
 		return
 	}
@@ -222,7 +234,7 @@ func (m *InstrumentationManager) AddTxnArgumentToFunctionDecl(decl *dst.FuncDecl
 }
 
 // IsTracingComplete returns true if a function has all the tracing it needs added to it.
-func (m *InstrumentationManager) ShouldInstrumentFunction(inv *invocationInfo) bool {
+func (m *InstrumentationManager) shouldInstrumentFunction(inv *invocationInfo) bool {
 	if inv == nil {
 		return false
 	}
@@ -268,7 +280,7 @@ func containsTransactionArgument(call *dst.CallExpr, txnName string) bool {
 
 // RequiresTransactionArgument returns true if a modified function needs a transaction as an argument.
 // This can be used to check if transactions should be passed by callers.
-func (m *InstrumentationManager) RequiresTransactionArgument(inv *invocationInfo, txnVariableName string) bool {
+func (m *InstrumentationManager) requiresTransactionArgument(inv *invocationInfo, txnVariableName string) bool {
 	if inv == nil {
 		return false
 	}
@@ -284,7 +296,7 @@ func (m *InstrumentationManager) RequiresTransactionArgument(inv *invocationInfo
 }
 
 // GetDeclaration returns a pointer to the location in the DST tree where a function is declared and defined.
-func (m *InstrumentationManager) GetDeclaration(functionName string) *dst.FuncDecl {
+func (m *InstrumentationManager) getDeclaration(functionName string) *dst.FuncDecl {
 	if m.packages[m.currentPackage] != nil && m.packages[m.currentPackage].tracedFuncs != nil {
 		v, ok := m.packages[m.currentPackage].tracedFuncs[functionName]
 		if ok {
@@ -360,6 +372,7 @@ func (m *InstrumentationManager) AddRequiredModules() {
 }
 
 // InstrumentPackages applies instrumentation to all functions in the package.
+// Specific functions should only be passed for tests, or if you really know what you're doing.
 func (m *InstrumentationManager) InstrumentPackages(instrumentationFunctions ...StatelessTracingFunction) error {
 	// Create a call graph of all calls made to functions in this package
 	err := tracePackageFunctionCalls(m)
@@ -367,7 +380,12 @@ func (m *InstrumentationManager) InstrumentPackages(instrumentationFunctions ...
 		return err
 	}
 
-	instrumentPackages(m, instrumentationFunctions...)
+	tracingFunctions := m.tracingFunctions.stateless
+	if len(instrumentationFunctions) != 0 {
+		tracingFunctions = instrumentationFunctions
+	}
+
+	instrumentPackages(m, tracingFunctions...)
 
 	return nil
 }
@@ -376,11 +394,11 @@ func (m *InstrumentationManager) InstrumentPackages(instrumentationFunctions ...
 func tracePackageFunctionCalls(manager *InstrumentationManager) error {
 	hasMain := false
 	for packageName, pkg := range manager.packages {
-		manager.SetPackage(packageName)
+		manager.setPackage(packageName)
 		for _, file := range pkg.pkg.Syntax {
 			for _, decl := range file.Decls {
 				if fn, isFn := decl.(*dst.FuncDecl); isFn {
-					manager.CreateFunctionDeclaration(fn)
+					manager.createFunctionDeclaration(fn)
 					if fn.Name.Name == "main" {
 						hasMain = true
 					}
@@ -398,7 +416,7 @@ func tracePackageFunctionCalls(manager *InstrumentationManager) error {
 // apply instrumentation to the package
 func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessTracingFunction) {
 	for pkgName, pkgState := range manager.packages {
-		manager.SetPackage(pkgName)
+		manager.setPackage(pkgName)
 		for _, file := range pkgState.pkg.Syntax {
 			for _, decl := range file.Decls {
 				if fn, isFn := decl.(*dst.FuncDecl); isFn {

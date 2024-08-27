@@ -6,6 +6,8 @@ import (
 
 	"github.com/dave/dst/decorator"
 	"golang.org/x/tools/go/packages"
+
+	"github.com/newrelic/go-easy-instrumentation/parser"
 )
 
 const loadMode = packages.LoadSyntax
@@ -29,8 +31,8 @@ func main() {
 		log.Fatal(err)
 	}
 
-	manager := NewInstrumentationManager(pkgs, cfg.AppName, cfg.AgentVariableName, cfg.DiffFile, cfg.PackagePath)
-	err = manager.InstrumentPackages(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod)
+	manager := parser.NewInstrumentationManager(pkgs, cfg.AppName, cfg.AgentVariableName, cfg.DiffFile, cfg.PackagePath)
+	err = manager.InstrumentPackages()
 	if err != nil {
 		log.Fatal(err)
 	}

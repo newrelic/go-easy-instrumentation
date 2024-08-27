@@ -1,6 +1,6 @@
 // Test Utils contains tools and building blocks that can be generically used for unit tests
 
-package main
+package parser
 
 import (
 	"bytes"
@@ -82,9 +82,9 @@ func testInstrumentationManager(t *testing.T, code, testAppDir string) *Instrume
 		t.Fatal(err)
 	}
 
-	appName := defaultAppName
-	varName := defaultAgentVariableName
-	diffFile := filepath.Join(testAppDir, defaultDiffFileName)
+	appName := ""
+	varName := "NewRelicAgent"
+	diffFile := filepath.Join(testAppDir, "new-relic-instrumentation.diff")
 
 	manager := NewInstrumentationManager(pkgs, appName, varName, diffFile, testAppDir)
 	configureTestInstrumentationManager(manager)
@@ -102,7 +102,7 @@ func configureTestInstrumentationManager(manager *InstrumentationManager) error 
 	if len(pkgs) == 0 {
 		return fmt.Errorf("no usable packages found in manager: %+v", manager.packages)
 	}
-	manager.SetPackage(pkgs[0])
+	manager.setPackage(pkgs[0])
 	return nil
 }
 
@@ -111,7 +111,7 @@ func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTra
 	defer cleanTestApp(t, testDir)
 
 	manager := testInstrumentationManager(t, code, testDir)
-	pkg := manager.GetDecoratorPackage()
+	pkg := manager.getDecoratorPackage()
 	if pkg == nil {
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
@@ -141,7 +141,7 @@ func testStatelessTracingFunction(t *testing.T, code string, tracingFunc Statele
 	defer cleanTestApp(t, testDir)
 
 	manager := testInstrumentationManager(t, code, testDir)
-	pkg := manager.GetDecoratorPackage()
+	pkg := manager.getDecoratorPackage()
 	if pkg == nil {
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
