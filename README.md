@@ -47,11 +47,11 @@ Before you start the installation steps below, make sure you have a version of G
 
 1. Clone this repository to a directory on your system. For example:
     ```sh
-    git clone .../go-agent-pre-instrumentation
+    git clone .../go-easy-instrumentation.git
     ```
 2. Go into that directory:
     ```sh
-    cd go-agent-pre-instrumentation
+    cd go-easy-instrumentation
     ```
 3. Resolve any third-party dependencies:
     ```sh
