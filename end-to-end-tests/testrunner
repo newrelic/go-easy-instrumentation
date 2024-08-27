@@ -5,31 +5,40 @@ import subprocess
 import os
 import uuid
 
-DEFAUL_REF_FILE_NAME = "expect.ref"
+DEFAULT_REF_FILE_NAME   = "expect.ref"
+TEST_CASE_FILE_NAME = "end-to-end-tests/testcases.json"
+cleanup = True
 
-if len(sys.argv) != 2:
-    sys.stderr.write(f"Usage: {sys.argv[0]} jsonfile\n")
-    sys.exit(1)
+if len(sys.argv) == 2:
+    if sys.argv[1] == "--no-clean":
+        cleanup = True
 
-with open(sys.argv[1]) as testfile:
+with open(TEST_CASE_FILE_NAME) as testfile:
     tests = json.load(testfile)
 
+dirname = os.path.basename(os.getcwd())
+if dirname != "go-easy-instrumentation":
+    print(f"\33[1;31mERROR\33[0m This script must be run from the 'go-easy-instrumentation' directory, not {dirname}")
+    sys.exit(1)
+
 fails = 0
-referenceFile = None
+
 for testnumber, testcase in enumerate(tests['tests']):
+    referenceFile = None
+
     if 'dir' not in testcase:
         print(f"\33[1;31mERROR\33[0m Testcase #{testnumber} missing 'dir' field")
         fails += 1
         continue
-    elif not os.path.isdir(testcase['dir']):
+    if not os.path.isdir(testcase['dir']):
         print(f"\33[1;31mERROR\33[0m Testcase #{testnumber} 'dir' field %s is an invalid file path", testcase['dir'])
         fails += 1
         continue
 
     if 'cmp' not in testcase:
-        referenceFile = os.path.join(testcase['dir'], DEFAUL_REF_FILE_NAME)
+        referenceFile = os.path.join(testcase['dir'], DEFAULT_REF_FILE_NAME)
         if not os.path.exists(referenceFile):
-            print(f"\33[1;31mERROR\33[0m Testcase #{testnumber} either needs a 'cmp' field or a file in the test 'dir' named {DEFAUL_REF_FILE_NAME}")
+            print(f"\33[1;31mERROR\33[0m Testcase #{testnumber} either needs a 'cmp' field or a file in the test 'dir' named {DEFAULT_REF_FILE_NAME}")
             fails += 1
             continue
     elif not os.path.exists(testcase['cmp']):
@@ -38,23 +47,27 @@ for testnumber, testcase in enumerate(tests['tests']):
         continue
 
     test_id = str(uuid.uuid4())
-    test_diff = os.path.join('/tmp', test_id + '.diff')
+    test_diff = os.path.join('/tmp',f"{test_id}.diff")
     print(f"Running \"{testcase['name']}\" from \"{testcase['dir']}\" as {test_id}...")
-    my_dir = os.getcwd()
+
     proc_args = ['go', 'run', '.', '-diff', test_diff, '-path', testcase['dir']]
     if appname := testcase.get('name'):
         proc_args.extend(['-name', appname])
-    os.chdir('../')
+
     status = subprocess.run(proc_args).returncode
-    os.chdir(my_dir)
     if status:
         print(f"\33[1;31mFAIL\33[0m easy-instrumentation exited with status {status}")
         fails += 1
         continue
 
-    if status := subprocess.run(['diff', '-B', '-b', '--color=always', '-L', 'expected', '-L', 'actual', 
-                                testcase['cmp'], os.path.join('/tmp', test_id + '.diff')]).returncode:
-        print(f"\33[1;31mFAIL\33[0m diff {status}: output not as expected")
+    subprocess.run(['go', 'mod', 'tidy'], cwd=testcase['dir'])
+
+    status = subprocess.run(['diff', '-B', '-b', '--color=always', '-L', 'expected', '-L', 'actual', referenceFile, test_diff]).returncode
+    if cleanup:
+        os.remove(test_diff)
+    
+    if status:   
+        print(f"\33[ 1;31mFAIL\33[0m diff {status}: output not as expected")
         fails += 1
         continue
 

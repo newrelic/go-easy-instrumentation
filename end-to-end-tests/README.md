@@ -4,10 +4,12 @@ runtime parameters, checking the diff file output against a known-good case.
 
 To invoke it, run
 ```
-$ ./testrunner testcases.json
+$ ./testrunner
 ```
 It exits with a nonzero status if any of the test cases failed. It also prints error information
 about failed tests to its standard output.
+
+If running in CI, pass `--no-clean` to not clean up the test files. This is fine in CI since the filesystem is ephemeral.
 
 ## Configuration
 The test cases are defined in the JSON file supplied to `testrunner` as its argument. 
@@ -22,6 +24,6 @@ Each test case is a JSON object with these fields:
 
 `name` -- If present, override the default application name in the instrumented application
 
-`dir` -- The directory (absolute or relative to the `parser` directory) where the instrumented application can be found.
+`dir` -- The directory relative to the root of go-easy-instrumentation.
 
 `cmp` -- Optional; The name of the reference file which should match the generated diff output. This tool will look for a file named "expect.ref" in the test "dir" by default.
