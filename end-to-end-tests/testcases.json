@@ -2,10 +2,10 @@
 	"tests": [
 	{
 		"name": "http web app",
-		"dir": "../end-to-end-tests/http-app"
+		"dir": "end-to-end-tests/http-app"
 	},
 	{
 		"name": "http-mux web app",
-		"dir": "../end-to-end-tests/http-mux-app"
+		"dir": "end-to-end-tests/http-mux-app"
 	}
 ]}
