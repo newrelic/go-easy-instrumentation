@@ -16,10 +16,6 @@ import (
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
 )
 
-const (
-	defaultTxnName = "nrTxn"
-)
-
 // tracedFunction contains relevant information about a function within the current package, and
 // its tracing status.
 //
@@ -52,10 +48,6 @@ type PackageState struct {
 	tracedFuncs  map[string]*tracedFunction // maintains state of tracing for functions within the package
 	importsAdded map[string]bool            // tracks imports added to the package
 }
-
-const (
-	newrelicAgentImport string = "github.com/newrelic/go-agent/v3/newrelic"
-)
 
 // NewInstrumentationManager initializes an InstrumentationManager cache for a given package.
 func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariableName, diffFile, userAppPath string) *InstrumentationManager {
