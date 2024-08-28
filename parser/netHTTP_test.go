@@ -1,6 +1,7 @@
-package main
+package parser
 
 import (
+	"fmt"
 	"go/token"
 	"reflect"
 	"testing"
@@ -941,8 +942,11 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			manager := testInstrumentationManager(t, tt.code)
-			pkg := manager.GetDecoratorPackage()
+			testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
+			defer cleanTestApp(t, testDir)
+
+			manager := testInstrumentationManager(t, tt.code, testDir)
+			pkg := manager.getDecoratorPackage()
 			stmt := pkg.Syntax[0].Decls[1].(*dst.FuncDecl).Body.List[tt.linenum]
 			gotExpr := getHttpResponseVariable(manager, stmt)
 			switch expect := tt.wantExpr.(type) {

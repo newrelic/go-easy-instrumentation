@@ -1,4 +1,4 @@
-package main
+package cli
 
 import (
 	"flag"
@@ -62,6 +62,6 @@ func (cfg *CLIConfig) Validate() {
 	}
 	_, err := os.Stat(cfg.PackagePath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("path \"%s\" is invalid: %v", cfg.PackagePath, err)
 	}
 }

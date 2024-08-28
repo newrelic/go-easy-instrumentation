@@ -1,4 +1,4 @@
-module parser
+module github.com/newrelic/go-easy-instrumentation
 
 go 1.22.1
 

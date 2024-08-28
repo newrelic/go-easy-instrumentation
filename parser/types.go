@@ -1,8 +1,15 @@
-package main
+package parser
 
 import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
+)
+
+const (
+	// the default name for transaction variables
+	defaultTxnName = "nrTxn"
+	// the import path for the newrelic package
+	newrelicAgentImport string = "github.com/newrelic/go-agent/v3/newrelic"
 )
 
 // StatefulTracingFunctions are functions that require knowledge of the current tracing state of the package to apply instrumentation.

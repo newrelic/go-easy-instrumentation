@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"fmt"
@@ -77,7 +77,7 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 					fun.Type.Params.List = append(fun.Type.Params.List, txnAsParameter(txnVarName))
 					v.Call.Args = append(v.Call.Args, txnNewGoroutine(txnVarName))
 					// add go-agent/v3/newrelic to imports
-					manager.AddImport(newrelicAgentImport)
+					manager.addImport(newrelicAgentImport)
 
 					// create async segment
 					fun.Body.List = append([]dst.Stmt{deferSegment("async literal", txnVarName)}, fun.Body.List...)
@@ -85,46 +85,46 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 					TopLevelFunctionChanged = true
 				default:
 					rootPkg := manager.currentPackage
-					invInfo := manager.GetPackageFunctionInvocation(v.Call)
-					if manager.ShouldInstrumentFunction(invInfo) {
-						manager.SetPackage(invInfo.packageName)
-						decl := manager.GetDeclaration(invInfo.functionName)
+					invInfo := manager.getPackageFunctionInvocation(v.Call)
+					if manager.shouldInstrumentFunction(invInfo) {
+						manager.setPackage(invInfo.packageName)
+						decl := manager.getDeclaration(invInfo.functionName)
 						TraceFunction(manager, decl, tracing.TraceDownstreamFunction())
-						manager.AddTxnArgumentToFunctionDecl(decl, txnVarName)
-						manager.AddImport(newrelicAgentImport)
+						manager.addTxnArgumentToFunctionDecl(decl, txnVarName)
+						manager.addImport(newrelicAgentImport)
 						decl.Body.List = append([]dst.Stmt{deferSegment(fmt.Sprintf("async %s", invInfo.functionName), txnVarName)}, decl.Body.List...)
 					}
-					if manager.RequiresTransactionArgument(invInfo, txnVarName) {
+					if manager.requiresTransactionArgument(invInfo, txnVarName) {
 						invInfo.call.Args = append(invInfo.call.Args, txnNewGoroutine(txnVarName))
 						c.Replace(v)
 						TopLevelFunctionChanged = true
 					}
-					manager.SetPackage(rootPkg)
+					manager.setPackage(rootPkg)
 				}
 			}
 		case dst.Stmt:
 			downstreamFunctionTraced := false
 			rootPkg := manager.currentPackage
-			invInfo := manager.GetPackageFunctionInvocation(v)
+			invInfo := manager.getPackageFunctionInvocation(v)
 			txnVarName := tracing.GetTransactionVariable()
-			if manager.ShouldInstrumentFunction(invInfo) {
-				manager.SetPackage(invInfo.packageName)
-				decl := manager.GetDeclaration(invInfo.functionName)
+			if manager.shouldInstrumentFunction(invInfo) {
+				manager.setPackage(invInfo.packageName)
+				decl := manager.getDeclaration(invInfo.functionName)
 				_, downstreamFunctionTraced = TraceFunction(manager, decl, tracing.TraceDownstreamFunction())
 				if downstreamFunctionTraced {
-					manager.AddTxnArgumentToFunctionDecl(decl, txnVarName)
-					manager.AddImport(newrelicAgentImport)
+					manager.addTxnArgumentToFunctionDecl(decl, txnVarName)
+					manager.addImport(newrelicAgentImport)
 					if tracing.agentVariable == "" {
 						decl.Body.List = append([]dst.Stmt{deferSegment(invInfo.functionName, txnVarName)}, decl.Body.List...)
 					}
 				}
 			}
-			if manager.RequiresTransactionArgument(invInfo, txnVarName) {
+			if manager.requiresTransactionArgument(invInfo, txnVarName) {
 				tracing.CreateTransactionIfNeeded(c, invInfo.functionName, txnVarName, true)
 				invInfo.call.Args = append(invInfo.call.Args, dst.NewIdent(txnVarName))
 				TopLevelFunctionChanged = true
 			}
-			manager.SetPackage(rootPkg)
+			manager.setPackage(rootPkg)
 			if !downstreamFunctionTraced {
 				ok := NoticeError(manager, v, c, tracing)
 				if ok {
@@ -143,6 +143,6 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 
 	// update the stored declaration, marking it as traced
 	decl := outputNode.(*dst.FuncDecl)
-	manager.UpdateFunctionDeclaration(decl)
+	manager.updateFunctionDeclaration(decl)
 	return decl, TopLevelFunctionChanged
 }

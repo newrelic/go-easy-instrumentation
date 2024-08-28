@@ -2,12 +2,10 @@
 	"tests": [
 	{
 		"name": "http web app",
-		"dir": "../end-to-end-tests/http-app",
-		"cmp": "http-app.ref"
+		"dir": "end-to-end-tests/http-app"
 	},
 	{
 		"name": "http-mux web app",
-		"dir": "../end-to-end-tests/http-mux-app",
-		"cmp": "http-mux.ref"
+		"dir": "end-to-end-tests/http-mux-app"
 	}
 ]}

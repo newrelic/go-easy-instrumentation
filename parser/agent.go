@@ -1,4 +1,4 @@
-package main
+package parser
 
 import (
 	"fmt"
@@ -345,7 +345,7 @@ func InstrumentMain(mainFunctionNode dst.Node, manager *InstrumentationManager, 
 			decl.Body.List = append(decl.Body.List, shutdownAgent(manager.agentVariableName))
 
 			// add go-agent/v3/newrelic to imports
-			manager.AddImport(newrelicAgentImport)
+			manager.addImport(newrelicAgentImport)
 
 			newMain, _ := TraceFunction(manager, decl, TraceMain(manager.agentVariableName, defaultTxnName))
 
@@ -364,7 +364,7 @@ func InstrumentMain(mainFunctionNode dst.Node, manager *InstrumentationManager, 
 func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
 	case *dst.AssignStmt:
-		errExpr := findErrorVariable(nodeVal, manager.GetDecoratorPackage())
+		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
 		if errExpr != nil && c.Index() >= 0 {
 			c.InsertAfter(generateNoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
 			return true

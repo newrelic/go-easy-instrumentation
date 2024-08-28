@@ -1,0 +1,14 @@
+coverage:
+  range: 60..80
+  round: nearest
+  precision: 2
+
+ignore:
+  - end-to-end-tests/**
+
+component_management:
+  individual_components:
+    - component_id: parser
+      name: Parser
+      paths: 
+        - parser/**

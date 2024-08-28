@@ -1,6 +1,6 @@
 // Test Utils contains tools and building blocks that can be generically used for unit tests
 
-package main
+package parser
 
 import (
 	"bytes"
@@ -73,27 +73,8 @@ func pseudo_uuid() (uuid string) {
 	return
 }
 
-func testInstrumentationManager(t *testing.T, code string) *InstrumentationManager {
+func testInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
 	defer panicRecovery(t)
-
-	testAppDir := "tmp"
-	fileName := "app.go"
-	pkgs, err := createTestApp(t, testAppDir, fileName, code)
-	defer cleanTestApp(t, testAppDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	appName := defaultAppName
-	varName := defaultAgentVariableName
-	diffFile := filepath.Join(testAppDir, defaultDiffFileName)
-
-	manager := NewInstrumentationManager(pkgs, appName, varName, diffFile, testAppDir)
-	manager.SetPackage("parser/tmp")
-	return manager
-}
-
-func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
 	fileName := "app.go"
 	pkgs, err := createTestApp(t, testAppDir, fileName, code)
 	if err != nil {
@@ -101,21 +82,36 @@ func restorerTestingInstrumentationManager(t *testing.T, code, testAppDir string
 		t.Fatal(err)
 	}
 
-	appName := defaultAppName
-	varName := defaultAgentVariableName
-	diffFile := filepath.Join(testAppDir, defaultDiffFileName)
+	appName := ""
+	varName := "NewRelicAgent"
+	diffFile := filepath.Join(testAppDir, "new-relic-instrumentation.diff")
 
 	manager := NewInstrumentationManager(pkgs, appName, varName, diffFile, testAppDir)
-	manager.SetPackage(fmt.Sprintf("parser/%s", testAppDir))
+	configureTestInstrumentationManager(manager)
 	return manager
+}
+
+func configureTestInstrumentationManager(manager *InstrumentationManager) error {
+	pkgs := []string{}
+	for pkg := range manager.packages {
+		if pkg != "" {
+			pkgs = append(pkgs, pkg)
+		}
+	}
+
+	if len(pkgs) == 0 {
+		return fmt.Errorf("no usable packages found in manager: %+v", manager.packages)
+	}
+	manager.setPackage(pkgs[0])
+	return nil
 }
 
 func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction) string {
 	testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
 	defer cleanTestApp(t, testDir)
 
-	manager := restorerTestingInstrumentationManager(t, code, testDir)
-	pkg := manager.GetDecoratorPackage()
+	manager := testInstrumentationManager(t, code, testDir)
+	pkg := manager.getDecoratorPackage()
 	if pkg == nil {
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
@@ -144,13 +140,13 @@ func testStatelessTracingFunction(t *testing.T, code string, tracingFunc Statele
 	testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
 	defer cleanTestApp(t, testDir)
 
-	manager := restorerTestingInstrumentationManager(t, code, testDir)
-	pkg := manager.GetDecoratorPackage()
+	manager := testInstrumentationManager(t, code, testDir)
+	pkg := manager.getDecoratorPackage()
 	if pkg == nil {
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 
-	err := manager.InstrumentPackages(tracingFunc)
+	err := manager.InstrumentApplication(tracingFunc)
 	if err != nil {
 		t.Fatalf("Failed to instrument packages: %v", err)
 	}
