@@ -1,6 +1,6 @@
 module github.com/newrelic/go-easy-instrumentation
 
-go 1.22.1
+go 1.23
 
 require (
 	github.com/dave/dst v0.27.3
