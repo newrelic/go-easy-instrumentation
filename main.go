@@ -25,7 +25,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	manager.LoadStatefulTracingFunctions()
+	err = manager.DetectDependencyIntegrations()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	err = manager.InstrumentApplication()
 	if err != nil {
 		log.Fatal(err)

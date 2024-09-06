@@ -74,11 +74,17 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	return manager
 }
 
-func (m *InstrumentationManager) LoadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
+func (m *InstrumentationManager) DetectDependencyIntegrations() error {
+	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod)
+	m.loadStatefulTracingFunctions(ExternalHttpCall, WrapNestedHandleFunction)
+	return nil
+}
+
+func (m *InstrumentationManager) loadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
 	m.tracingFunctions.stateful = append(m.tracingFunctions.stateful, functions...)
 }
 
-func (m *InstrumentationManager) LoadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
+func (m *InstrumentationManager) loadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
 	m.tracingFunctions.stateless = append(m.tracingFunctions.stateless, functions...)
 }
 
