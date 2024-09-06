@@ -8,8 +8,6 @@ import (
 const (
 	// the default name for transaction variables
 	defaultTxnName = "nrTxn"
-	// the import path for the newrelic package
-	newrelicAgentImport string = "github.com/newrelic/go-agent/v3/newrelic"
 )
 
 // StatefulTracingFunctions are functions that require knowledge of the current tracing state of the package to apply instrumentation.
@@ -22,4 +20,4 @@ type StatefulTracingFunction func(manager *InstrumentationManager, stmt dst.Stmt
 // StatelessTracingFunction is a function that does not need to be aware of the current tracing state of the package to apply instrumentation.
 // These functions are passed the current node, the InstrumentationManager, and a cursor to the current node.
 // These functions are invoked on every node in the DST tree no matter what.
-type StatelessTracingFunction func(n dst.Node, manager *InstrumentationManager, c *dstutil.Cursor)
+type StatelessTracingFunction func(manager *InstrumentationManager, c *dstutil.Cursor)

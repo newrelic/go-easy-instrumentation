@@ -1,5 +1,3 @@
-// Test Utils contains tools and building blocks that can be generically used for unit tests
-
 package parser
 
 import (

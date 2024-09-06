@@ -33,10 +33,10 @@ type tracingFunctions struct {
 
 // InstrumentationManager maintains state relevant to tracing across all files, packages and functions.
 type InstrumentationManager struct {
-	userAppPath       string // path to the user's application as provided by the user
-	diffFile          string
 	appName           string
 	agentVariableName string
+	userAppPath       string // path to the user's application as provided by the user
+	diffFile          string
 	currentPackage    string
 	tracingFunctions  tracingFunctions
 	packages          map[string]*PackageState // stores stateful information on packages by ID
@@ -58,10 +58,8 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		agentVariableName: agentVariableName,
 		packages:          map[string]*PackageState{},
 		tracingFunctions: tracingFunctions{
-			stateless: []StatelessTracingFunction{
-				InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod,
-			},
-			stateful: []StatefulTracingFunction{},
+			stateless: []StatelessTracingFunction{},
+			stateful:  []StatefulTracingFunction{},
 		},
 	}
 
@@ -74,6 +72,14 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	}
 
 	return manager
+}
+
+func (m *InstrumentationManager) LoadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
+	m.tracingFunctions.stateful = append(m.tracingFunctions.stateful, functions...)
+}
+
+func (m *InstrumentationManager) LoadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
+	m.tracingFunctions.stateless = append(m.tracingFunctions.stateless, functions...)
 }
 
 func (m *InstrumentationManager) CreateDiffFile() error {
@@ -120,7 +126,7 @@ func (m *InstrumentationManager) getDecoratorPackage() *decorator.Package {
 }
 
 // Returns the string name of the current package
-func (m *InstrumentationManager) getPackageName() string {
+func (m *InstrumentationManager) GetPackageName() string {
 	return m.currentPackage
 }
 
@@ -173,7 +179,7 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *in
 			if ok {
 				path := functionCallIdent.Path
 				if path == "" {
-					path = m.getPackageName()
+					path = m.GetPackageName()
 				}
 				_, ok := m.packages[path]
 				if ok {
@@ -433,9 +439,8 @@ func instrumentPackages(manager *InstrumentationManager, instrumentationFunction
 			for _, decl := range file.Decls {
 				if fn, isFn := decl.(*dst.FuncDecl); isFn {
 					dstutil.Apply(fn, nil, func(c *dstutil.Cursor) bool {
-						n := c.Node()
 						for _, instFunc := range instrumentationFunctions {
-							instFunc(n, manager, c)
+							instFunc(manager, c)
 						}
 						return true
 					})

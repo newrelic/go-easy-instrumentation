@@ -24,6 +24,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	manager.LoadStatefulTracingFunctions()
 	err = manager.InstrumentApplication()
 	if err != nil {
 		log.Fatal(err)

@@ -8,11 +8,10 @@ import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/parser/codegen"
 )
 
 const (
-	netHttpPath = "net/http"
-
 	// Methods that can be instrumented
 	httpHandleFunc = "HandleFunc"
 	httpMuxHandle  = "Handle"
@@ -68,12 +67,12 @@ func getNetHttpClientVariableName(n *dst.CallExpr, pkg *decorator.Package) strin
 		switch v := Sel.X.(type) {
 		case *dst.SelectorExpr:
 			path := typeOfIdent(v.Sel, pkg)
-			if path == netHttpPath {
+			if path == codegen.HttpImportPath {
 				return v.Sel.Name
 			}
 		case *dst.Ident:
 			path := typeOfIdent(v, pkg)
-			if path == netHttpPath {
+			if path == codegen.HttpImportPath {
 				return v.Name
 			}
 		}
@@ -90,12 +89,12 @@ func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 	switch v := n.Fun.(type) {
 	case *dst.SelectorExpr:
 		path := typeOfIdent(v.Sel, pkg)
-		if path == netHttpPath {
+		if path == codegen.HttpImportPath {
 			return v.Sel.Name
 		}
 	case *dst.Ident:
 		path := typeOfIdent(v, pkg)
-		if path == netHttpPath {
+		if path == codegen.HttpImportPath {
 			return v.Name
 		}
 	}
@@ -103,46 +102,10 @@ func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 	return ""
 }
 
-func txnFromContext(txnVariable string) *dst.AssignStmt {
-	return &dst.AssignStmt{
-		Decs: dst.AssignStmtDecorations{
-			NodeDecs: dst.NodeDecs{
-				After: dst.EmptyLine,
-			},
-		},
-		Lhs: []dst.Expr{
-			&dst.Ident{
-				Name: txnVariable,
-			},
-		},
-		Tok: token.DEFINE,
-		Rhs: []dst.Expr{
-			&dst.CallExpr{
-				Fun: &dst.Ident{
-					Name: "FromContext",
-					Path: newrelicAgentImport,
-				},
-				Args: []dst.Expr{
-					&dst.CallExpr{
-						Fun: &dst.SelectorExpr{
-							X: &dst.Ident{
-								Name: "r",
-							},
-							Sel: &dst.Ident{
-								Name: "Context",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
-}
-
 // txnFromCtx injects a line of code that extracts a transaction from the context into the body of a function
 func defineTxnFromCtx(fn *dst.FuncDecl, txnVariable string) {
 	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
-	stmts[0] = txnFromContext(txnVariable)
+	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext())
 	for i, stmt := range fn.Body.List {
 		stmts[i+1] = stmt
 	}
@@ -187,37 +150,6 @@ func isHttpHandler(decl *dst.FuncDecl, pkg *decorator.Package) bool {
 	return false
 }
 
-func injectRoundTripper(clientVariable dst.Expr, spacingAfter dst.SpaceType) *dst.AssignStmt {
-	return &dst.AssignStmt{
-		Lhs: []dst.Expr{
-			&dst.SelectorExpr{
-				X:   dst.Clone(clientVariable).(dst.Expr),
-				Sel: dst.NewIdent("Transport"),
-			},
-		},
-		Tok: token.ASSIGN,
-		Rhs: []dst.Expr{
-			&dst.CallExpr{
-				Fun: &dst.Ident{
-					Name: "NewRoundTripper",
-					Path: newrelicAgentImport,
-				},
-				Args: []dst.Expr{
-					&dst.SelectorExpr{
-						X:   dst.Clone(clientVariable).(dst.Expr),
-						Sel: dst.NewIdent("Transport"),
-					},
-				},
-			},
-		},
-		Decs: dst.AssignStmtDecorations{
-			NodeDecs: dst.NodeDecs{
-				After: spacingAfter,
-			},
-		},
-	}
-}
-
 // more unit test friendly helper function
 func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
 	if len(stmt.Rhs) == 1 && len(stmt.Lhs) == 1 && stmt.Tok == token.DEFINE {
@@ -226,7 +158,7 @@ func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
 			lit, ok := unary.X.(*dst.CompositeLit)
 			if ok {
 				ident, ok := lit.Type.(*dst.Ident)
-				if ok && ident.Name == "Client" && ident.Path == netHttpPath {
+				if ok && ident.Name == "Client" && ident.Path == codegen.HttpImportPath {
 					return true
 				}
 			}
@@ -235,121 +167,14 @@ func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
 	return false
 }
 
-func startExternalSegment(request dst.Expr, txnVar, segmentVar string, nodeDecs *dst.NodeDecs) *dst.AssignStmt {
-	// copy all preceeding decorations from the previous node
-	decs := dst.AssignStmtDecorations{}
-	if nodeDecs != nil {
-		decs.NodeDecs = dst.NodeDecs{
-			Before: nodeDecs.Before,
-			Start:  nodeDecs.Start,
-		}
-
-		// Clear the decs from the previous node since they are being moved up
-		nodeDecs.Before = dst.None
-		nodeDecs.Start.Clear()
-	}
-
-	return &dst.AssignStmt{
-		Tok: token.DEFINE,
-		Lhs: []dst.Expr{
-			dst.NewIdent(segmentVar),
-		},
-		Rhs: []dst.Expr{
-			&dst.CallExpr{
-				Fun: &dst.Ident{
-					Name: "StartExternalSegment",
-					Path: newrelicAgentImport,
-				},
-				Args: []dst.Expr{
-					dst.NewIdent(txnVar),
-					dst.Clone(request).(dst.Expr),
-				},
-			},
-		},
-		Decs: decs,
-	}
-}
-
-func captureHttpResponse(segmentVariable string, responseVariable dst.Expr) *dst.AssignStmt {
-	return &dst.AssignStmt{
-		Lhs: []dst.Expr{
-			&dst.SelectorExpr{
-				X:   dst.NewIdent(segmentVariable),
-				Sel: dst.NewIdent("Response"),
-			},
-		},
-		Rhs: []dst.Expr{
-			dst.Clone(responseVariable).(dst.Expr),
-		},
-		Tok: token.ASSIGN,
-	}
-}
-
-func endExternalSegment(segmentName string, nodeDecs *dst.NodeDecs) *dst.ExprStmt {
-	decs := dst.ExprStmtDecorations{}
-	if nodeDecs != nil {
-		decs.NodeDecs = dst.NodeDecs{
-			After: nodeDecs.After,
-			End:   nodeDecs.End,
-		}
-
-		nodeDecs.After = dst.None
-		nodeDecs.End.Clear()
-	}
-
-	return &dst.ExprStmt{
-		X: &dst.CallExpr{
-			Fun: &dst.SelectorExpr{
-				X:   dst.NewIdent(segmentName),
-				Sel: dst.NewIdent("End"),
-			},
-		},
-		Decs: decs,
-	}
-}
-
-// adds a transaction to the HTTP request context object by creating a line of code that injects it
-// equal to calling: newrelic.RequestWithTransactionContext()
-func addTxnToRequestContext(request dst.Expr, txnVar string, nodeDecs *dst.NodeDecs) *dst.AssignStmt {
-	// Copy all decs above prior statement into this one
-	decs := dst.AssignStmtDecorations{}
-	if nodeDecs != nil {
-		decs.NodeDecs = dst.NodeDecs{
-			Before: nodeDecs.Before,
-			Start:  nodeDecs.Start,
-		}
-
-		// Clear the decs from the previous node since they are being moved up
-		nodeDecs.Before = dst.None
-		nodeDecs.Start.Clear()
-	}
-
-	return &dst.AssignStmt{
-		Tok: token.ASSIGN,
-		Lhs: []dst.Expr{dst.Clone(request).(dst.Expr)},
-		Rhs: []dst.Expr{
-			&dst.CallExpr{
-				Fun: &dst.Ident{
-					Name: "RequestWithTransactionContext",
-					Path: newrelicAgentImport,
-				},
-				Args: []dst.Expr{
-					dst.Clone(request).(dst.Expr),
-					dst.NewIdent(txnVar),
-				},
-			},
-		},
-		Decs: decs,
-	}
-}
-
 // StatelessTracingFunctions
 //////////////////////////////////////////////
 
 // Recognize if a function is a handler func based on its contents, and inject instrumentation.
 // This function discovers entrypoints to tracing for a given transaction and should trace all the way
 // down the call chain of the function it is invoked on.
-func InstrumentHandleFunction(n dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) {
+func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
+	n := c.Node()
 	fn, isFn := n.(*dst.FuncDecl)
 	if isFn && isHttpHandler(fn, manager.getDecoratorPackage()) {
 		txnName := defaultTxnName
@@ -364,12 +189,13 @@ func InstrumentHandleFunction(n dst.Node, manager *InstrumentationManager, c *ds
 
 // InstrumentHttpClient automatically injects a newrelic roundtripper into any newly created http client
 // looks for the following pattern: client := &http.Client{}
-func InstrumentHttpClient(n dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) {
+func InstrumentHttpClient(manager *InstrumentationManager, c *dstutil.Cursor) {
+	n := c.Node()
 	stmt, ok := n.(*dst.AssignStmt)
 	if ok && isNetHttpClientDefinition(stmt) && c.Index() >= 0 && n.Decorations() != nil {
-		c.InsertAfter(injectRoundTripper(stmt.Lhs[0], n.Decorations().After)) // add roundtripper to transports
+		c.InsertAfter(codegen.RoundTripper(stmt.Lhs[0], n.Decorations().After)) // add roundtripper to transports
 		stmt.Decs.After = dst.None
-		manager.addImport(newrelicAgentImport)
+		manager.addImport(codegen.NewRelicAgentImportPath)
 	}
 }
 
@@ -399,7 +225,7 @@ func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 			c, ok := n.(*dst.CallExpr)
 			if ok {
 				ident, ok := c.Fun.(*dst.Ident)
-				if ok && ident.Path == netHttpPath {
+				if ok && ident.Path == codegen.HttpImportPath {
 					switch ident.Name {
 					case httpGet, httpPost, httpPostForm, httpHead:
 						returnFuncName = ident.Name
@@ -417,7 +243,8 @@ func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 
 // CannotInstrumentHttpMethod is a function that discovers methods of net/http. If that function can not be penetrated by
 // instrumentation, it leaves a comment header warning the customer. This function needs no tracing context to work.
-func CannotInstrumentHttpMethod(n dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) {
+func CannotInstrumentHttpMethod(manager *InstrumentationManager, c *dstutil.Cursor) {
+	n := c.Node()
 	funcName, ok := isNetHttpMethodCannotInstrument(n)
 	if ok {
 		if decl := n.Decorations(); decl != nil {
@@ -474,17 +301,17 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 		if clientVar == httpDefaultClientVariable {
 			// create external segment to wrap calls made with default client
 			segmentName := "externalSegment"
-			c.InsertBefore(startExternalSegment(requestObject, tracing.txnVariable, segmentName, stmt.Decorations()))
-			c.InsertAfter(endExternalSegment(segmentName, stmt.Decorations()))
+			c.InsertBefore(codegen.StartExternalSegment(requestObject, tracing.txnVariable, segmentName, stmt.Decorations()))
+			c.InsertAfter(codegen.EndExternalSegment(segmentName, stmt.Decorations()))
 			responseVar := getHttpResponseVariable(manager, stmt)
-			manager.addImport(newrelicAgentImport)
+			manager.addImport(codegen.NewRelicAgentImportPath)
 			if responseVar != nil {
-				c.InsertAfter(captureHttpResponse(segmentName, responseVar))
+				c.InsertAfter(codegen.CaptureHttpResponse(segmentName, responseVar))
 			}
 			return true
 		} else {
-			c.InsertBefore(addTxnToRequestContext(requestObject, tracing.txnVariable, stmt.Decorations()))
-			manager.addImport(newrelicAgentImport)
+			c.InsertBefore(codegen.WrapRequestContext(requestObject, tracing.txnVariable, stmt.Decorations()))
+			manager.addImport(codegen.NewRelicAgentImportPath)
 			return true
 		}
 	}
@@ -511,7 +338,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 							&dst.CallExpr{
 								Fun: &dst.Ident{
 									Name: "WrapHandleFunc",
-									Path: newrelicAgentImport,
+									Path: codegen.NewRelicAgentImportPath,
 								},
 								Args: []dst.Expr{
 									&dst.Ident{
@@ -527,7 +354,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 							&dst.CallExpr{
 								Fun: &dst.Ident{
 									Name: "WrapHandleFunc",
-									Path: newrelicAgentImport,
+									Path: codegen.NewRelicAgentImportPath,
 								},
 								Args: []dst.Expr{
 									&dst.CallExpr{
@@ -543,7 +370,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 						}
 					}
 					wasModified = true
-					manager.addImport(newrelicAgentImport)
+					manager.addImport(codegen.NewRelicAgentImportPath)
 					return false
 				}
 			}

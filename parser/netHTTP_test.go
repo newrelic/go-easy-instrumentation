@@ -2,11 +2,11 @@ package parser
 
 import (
 	"fmt"
-	"go/token"
 	"reflect"
 	"testing"
 
 	"github.com/dave/dst"
+	"github.com/newrelic/go-easy-instrumentation/parser/codegen"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -508,61 +508,6 @@ func main() {
 	}
 }
 
-func Test_injectRoundTripper(t *testing.T) {
-	type args struct {
-		clientVariable dst.Expr
-		spacingAfter   dst.SpaceType
-	}
-	tests := []struct {
-		name string
-		args args
-		want *dst.AssignStmt
-	}{
-		{
-			name: "inject_roundtripper",
-			args: args{
-				clientVariable: &dst.Ident{Name: "client"},
-				spacingAfter:   dst.NewLine,
-			},
-			want: &dst.AssignStmt{
-				Lhs: []dst.Expr{
-					&dst.SelectorExpr{
-						X:   dst.Clone(&dst.Ident{Name: "client"}).(dst.Expr),
-						Sel: dst.NewIdent("Transport"),
-					},
-				},
-				Tok: token.ASSIGN,
-				Rhs: []dst.Expr{
-					&dst.CallExpr{
-						Fun: &dst.Ident{
-							Name: "NewRoundTripper",
-							Path: newrelicAgentImport,
-						},
-						Args: []dst.Expr{
-							&dst.SelectorExpr{
-								X:   dst.Clone(&dst.Ident{Name: "client"}).(dst.Expr),
-								Sel: dst.NewIdent("Transport"),
-							},
-						},
-					},
-				},
-				Decs: dst.AssignStmtDecorations{
-					NodeDecs: dst.NodeDecs{
-						After: dst.NewLine,
-					},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := injectRoundTripper(tt.args.clientVariable, tt.args.spacingAfter); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("injectRoundTripper() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func Test_cannotTraceOutboundHttp(t *testing.T) {
 	type args struct {
 		method string
@@ -605,236 +550,7 @@ func Test_cannotTraceOutboundHttp(t *testing.T) {
 	}
 }
 
-func Test_endExternalSegment(t *testing.T) {
-	type args struct {
-		segmentName string
-		nodeDecs    *dst.NodeDecs
-	}
-	tests := []struct {
-		name string
-		args args
-		want *dst.ExprStmt
-	}{
-		{
-			name: "end_external_segment",
-			args: args{
-				segmentName: "example",
-				nodeDecs: &dst.NodeDecs{
-					After: dst.NewLine,
-					End:   []string{"// this is a comment", "// this is also a comment"},
-				},
-			},
-			want: &dst.ExprStmt{
-				X: &dst.CallExpr{
-					Fun: &dst.SelectorExpr{
-						X:   dst.NewIdent("example"),
-						Sel: dst.NewIdent("End"),
-					},
-				},
-				Decs: dst.ExprStmtDecorations{
-					NodeDecs: dst.NodeDecs{
-						After: dst.NewLine,
-						End:   []string{"// this is a comment", "// this is also a comment"},
-					},
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := endExternalSegment(tt.args.segmentName, tt.args.nodeDecs); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("endExternalSegment() = %v, want %v", got, tt.want)
-			}
-			if len(tt.args.nodeDecs.End) != 0 {
-				t.Errorf("endExternalSegment() should clear the End decorations slice but did NOT")
-			}
-			if tt.args.nodeDecs.After != dst.None {
-				t.Errorf("endExternalSegment() should set the After decorations slice to \"None\" but it was %s", tt.args.nodeDecs.After.String())
-			}
-		})
-	}
-}
-
-func Test_captureHttpResponse(t *testing.T) {
-	type args struct {
-		segmentVariable  string
-		responseVariable dst.Expr
-	}
-	tests := []struct {
-		name string
-		args args
-		want *dst.AssignStmt
-	}{
-		{
-			name: "capture_http_response",
-			args: args{
-				segmentVariable: "example",
-				responseVariable: &dst.Ident{
-					Name: "resp",
-					Path: netHttpPath,
-				},
-			},
-			want: &dst.AssignStmt{
-				Lhs: []dst.Expr{
-					&dst.SelectorExpr{
-						X:   dst.NewIdent("example"),
-						Sel: dst.NewIdent("Response"),
-					},
-				},
-				Rhs: []dst.Expr{
-					dst.Clone(&dst.Ident{
-						Name: "resp",
-						Path: netHttpPath,
-					}).(dst.Expr),
-				},
-				Tok: token.ASSIGN,
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := captureHttpResponse(tt.args.segmentVariable, tt.args.responseVariable); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("captureHttpResponse() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_addTxnToRequestContext(t *testing.T) {
-	type args struct {
-		request  dst.Expr
-		txnVar   string
-		nodeDecs *dst.NodeDecs
-	}
-	tests := []struct {
-		name string
-		args args
-		want *dst.AssignStmt
-	}{
-		{
-			name: "add_txn_to_request_context",
-			args: args{
-				request: &dst.Ident{
-					Name: "r",
-					Path: netHttpPath,
-				},
-				txnVar: "txn",
-				nodeDecs: &dst.NodeDecs{
-					Before: dst.NewLine,
-					Start:  []string{"// this is a comment"},
-				},
-			},
-			want: &dst.AssignStmt{
-				Tok: token.ASSIGN,
-				Lhs: []dst.Expr{dst.Clone(&dst.Ident{
-					Name: "r",
-					Path: netHttpPath,
-				}).(dst.Expr)},
-				Rhs: []dst.Expr{
-					&dst.CallExpr{
-						Fun: &dst.Ident{
-							Name: "RequestWithTransactionContext",
-							Path: newrelicAgentImport,
-						},
-						Args: []dst.Expr{
-							dst.Clone(&dst.Ident{
-								Name: "r",
-								Path: netHttpPath,
-							}).(dst.Expr),
-							dst.NewIdent("txn"),
-						},
-					},
-				},
-				Decs: dst.AssignStmtDecorations{
-					NodeDecs: dst.NodeDecs{
-						Before: dst.NewLine,
-						Start:  []string{"// this is a comment"},
-					},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := addTxnToRequestContext(tt.args.request, tt.args.txnVar, tt.args.nodeDecs); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("addTxnToRequestContext() = %v, want %v", got, tt.want)
-			}
-			if len(tt.args.nodeDecs.Start) != 0 {
-				t.Errorf("should clear the End decorations slice but did NOT")
-			}
-			if tt.args.nodeDecs.Before != dst.None {
-				t.Errorf("should set the Before decorations slice to \"None\" but it was %s", tt.args.nodeDecs.Before.String())
-			}
-		})
-	}
-}
-
-func Test_startExternalSegment(t *testing.T) {
-	type args struct {
-		request    dst.Expr
-		txnVar     string
-		segmentVar string
-		nodeDecs   *dst.NodeDecs
-	}
-	tests := []struct {
-		name string
-		args args
-		want *dst.AssignStmt
-	}{
-		{
-			name: "start_external_segment",
-			args: args{
-				request:    &dst.Ident{Name: "r", Path: netHttpPath},
-				txnVar:     "txn",
-				segmentVar: "example",
-				nodeDecs: &dst.NodeDecs{
-					Before: dst.NewLine,
-					Start:  []string{"// this is a comment"},
-				},
-			},
-			want: &dst.AssignStmt{
-				Tok: token.DEFINE,
-				Lhs: []dst.Expr{
-					dst.NewIdent("example"),
-				},
-				Rhs: []dst.Expr{
-					&dst.CallExpr{
-						Fun: &dst.Ident{
-							Name: "StartExternalSegment",
-							Path: newrelicAgentImport,
-						},
-						Args: []dst.Expr{
-							dst.NewIdent("txn"),
-							dst.Clone(&dst.Ident{Name: "r", Path: netHttpPath}).(dst.Expr),
-						},
-					},
-				},
-				Decs: dst.AssignStmtDecorations{
-					NodeDecs: dst.NodeDecs{
-						Before: dst.NewLine,
-						Start:  []string{"// this is a comment"},
-					},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := startExternalSegment(tt.args.request, tt.args.txnVar, tt.args.segmentVar, tt.args.nodeDecs); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("startExternalSegment() = %v, want %v", got, tt.want)
-			}
-			if len(tt.args.nodeDecs.Start) != 0 {
-				t.Errorf("should clear the End decorations slice but did NOT")
-			}
-			if tt.args.nodeDecs.Before != dst.None {
-				t.Errorf("should set the Before decorations slice to \"None\" but it was %s", tt.args.nodeDecs.Before.String())
-			}
-		})
-	}
-}
-
-func Test_defineTxnFromCtx(t *testing.T) {
+func Test_TxnFromCtx(t *testing.T) {
 	type args struct {
 		fn          *dst.FuncDecl
 		txnVariable string
@@ -870,7 +586,7 @@ func Test_defineTxnFromCtx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			expectStmt := txnFromContext(tt.args.txnVariable)
+			expectStmt := codegen.TxnFromContext(tt.args.txnVariable, codegen.HttpRequestContext())
 			defineTxnFromCtx(tt.args.fn, tt.args.txnVariable)
 			if !reflect.DeepEqual(tt.args.fn.Body.List[0], expectStmt) {
 				t.Errorf("expected the function body to contain the statement %v but got %v", expectStmt, tt.args.fn.Body.List[0])
