@@ -104,7 +104,7 @@ func configureTestInstrumentationManager(manager *InstrumentationManager) error 
 	return nil
 }
 
-func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction) string {
+func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction, downstream bool) string {
 	testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
 	defer cleanTestApp(t, testDir)
 
@@ -114,12 +114,16 @@ func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTra
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 	node := pkg.Syntax[0].Decls[1]
+	tracingState := TraceMain("app", "txn")
+	if downstream {
+		tracingState = TraceDownstreamFunction("txn")
+	}
 
 	dstutil.Apply(node, nil, func(c *dstutil.Cursor) bool {
 		n := c.Node()
 		switch v := n.(type) {
 		case dst.Stmt:
-			stmtFunc(manager, v, c, TraceDownstreamFunction("txn"))
+			stmtFunc(manager, v, c, tracingState)
 		}
 		return true
 	})

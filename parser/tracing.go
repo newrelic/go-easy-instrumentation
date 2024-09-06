@@ -8,8 +8,6 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/parser/codegen"
 )
 
-var RequiredStatefulTracingFunctions = []StatefulTracingFunction{ExternalHttpCall, WrapNestedHandleFunction}
-
 type tracingState struct {
 	definedTxn    bool
 	agentVariable string
@@ -132,7 +130,7 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 					TopLevelFunctionChanged = true
 				}
 			}
-			for _, stmtFunc := range RequiredStatefulTracingFunctions {
+			for _, stmtFunc := range manager.tracingFunctions.stateful {
 				ok := stmtFunc(manager, v, c, tracing)
 				if ok {
 					TopLevelFunctionChanged = true

@@ -818,7 +818,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer panicRecovery(t)
-			got := testStatefulTracingFunction(t, tt.code, ExternalHttpCall)
+			got := testStatefulTracingFunction(t, tt.code, ExternalHttpCall, true)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
@@ -885,7 +885,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer panicRecovery(t)
-			got := testStatefulTracingFunction(t, tt.code, WrapNestedHandleFunction)
+			got := testStatefulTracingFunction(t, tt.code, WrapNestedHandleFunction, true)
 			assert.Equal(t, tt.expect, got)
 		})
 	}

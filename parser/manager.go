@@ -74,9 +74,10 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	return manager
 }
 
+// DetectDependencyIntegrations
 func (m *InstrumentationManager) DetectDependencyIntegrations() error {
-	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod)
-	m.loadStatefulTracingFunctions(ExternalHttpCall, WrapNestedHandleFunction)
+	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod, InstrumentGrpcDial)
+	m.loadStatefulTracingFunctions(ExternalHttpCall, WrapNestedHandleFunction, InstrumentGrpcServer)
 	return nil
 }
 
@@ -132,7 +133,7 @@ func (m *InstrumentationManager) getDecoratorPackage() *decorator.Package {
 }
 
 // Returns the string name of the current package
-func (m *InstrumentationManager) GetPackageName() string {
+func (m *InstrumentationManager) getPackageName() string {
 	return m.currentPackage
 }
 
@@ -185,7 +186,7 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *in
 			if ok {
 				path := functionCallIdent.Path
 				if path == "" {
-					path = m.GetPackageName()
+					path = m.getPackageName()
 				}
 				_, ok := m.packages[path]
 				if ok {

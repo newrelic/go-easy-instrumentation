@@ -7,8 +7,34 @@ const (
 	GrpcImportPath   = "google.golang.org/grpc"
 )
 
+// This must be invoked on each argument added to a call expression to ensure the correct spacing rules are applied
+func getCallExpressionArgumentSpacing(call *dst.CallExpr) dst.NodeDecs {
+	// no standard has been set yet, we prefer to newline each new statement we add.
+	// this will change the original decorator rules
+	if len(call.Args) == 1 {
+		call.Args[0].Decorations().After = dst.NewLine
+		call.Args[0].Decorations().Before = dst.NewLine
+		return dst.NodeDecs{
+			After: dst.NewLine,
+		}
+	}
+	// if a prescedent exists, copy it.
+	if len(call.Args) > 1 {
+		decs := call.Args[1].Decorations()
+		return dst.NodeDecs{
+			After:  decs.After,
+			Before: decs.Before,
+		}
+	}
+	return dst.NodeDecs{
+		After:  dst.None,
+		Before: dst.None,
+	}
+}
+
 // GrpcUnaryInterceptor generates a dst Call Expression for a newrelic nrgrpc unary interceptor
-func NrGrpcUnaryClientInterceptor(decs dst.NodeDecs) *dst.CallExpr {
+func NrGrpcUnaryClientInterceptor(call *dst.CallExpr) *dst.CallExpr {
+	decs := getCallExpressionArgumentSpacing(call)
 	return &dst.CallExpr{
 		Fun: &dst.Ident{
 			Name: "WithUnaryInterceptor",
@@ -26,7 +52,8 @@ func NrGrpcUnaryClientInterceptor(decs dst.NodeDecs) *dst.CallExpr {
 	}
 }
 
-func NrGrpcStreamClientInterceptor(decs dst.NodeDecs) *dst.CallExpr {
+func NrGrpcStreamClientInterceptor(call *dst.CallExpr) *dst.CallExpr {
+	decs := getCallExpressionArgumentSpacing(call)
 	return &dst.CallExpr{
 		Fun: &dst.Ident{
 			Name: "WithStreamInterceptor",
@@ -44,23 +71,50 @@ func NrGrpcStreamClientInterceptor(decs dst.NodeDecs) *dst.CallExpr {
 	}
 }
 
-func GetCallExpressionArgumentDecorations(call *dst.CallExpr) dst.NodeDecs {
-	// no standard has been set yet, we prefer to newline each new statement we add.
-	if len(call.Args) == 1 {
-		call.Args[0].Decorations().After = dst.NewLine
-		return dst.NodeDecs{
-			After: dst.NewLine,
-		}
+func NrGrpcUnaryServerInterceptor(agentVariableName string, call *dst.CallExpr) *dst.CallExpr {
+	decs := getCallExpressionArgumentSpacing(call)
+	return &dst.CallExpr{
+		Fun: &dst.Ident{
+			Name: "UnaryInterceptor",
+			Path: GrpcImportPath,
+		},
+		Args: []dst.Expr{
+			&dst.CallExpr{
+				Fun: &dst.Ident{
+					Name: "UnaryServerInterceptor",
+					Path: NrgrpcImportPath,
+				},
+				Args: []dst.Expr{
+					dst.NewIdent(agentVariableName),
+				},
+			},
+		},
+		Decs: dst.CallExprDecorations{
+			NodeDecs: decs,
+		},
 	}
-	// if a prescedent exists, copy it.
-	if len(call.Args) > 1 {
-		decs := call.Args[0].Decorations()
-		return dst.NodeDecs{
-			After:  decs.After,
-			Before: decs.Before,
-		}
-	}
-	return dst.NodeDecs{
-		After: dst.None,
+}
+
+func NrGrpcStreamServerInterceptor(agentVariableName string, call *dst.CallExpr) *dst.CallExpr {
+	decs := getCallExpressionArgumentSpacing(call)
+	return &dst.CallExpr{
+		Fun: &dst.Ident{
+			Name: "StreamInterceptor",
+			Path: GrpcImportPath,
+		},
+		Args: []dst.Expr{
+			&dst.CallExpr{
+				Fun: &dst.Ident{
+					Name: "StreamServerInterceptor",
+					Path: NrgrpcImportPath,
+				},
+				Args: []dst.Expr{
+					dst.NewIdent(agentVariableName),
+				},
+			},
+		},
+		Decs: dst.CallExprDecorations{
+			NodeDecs: decs,
+		},
 	}
 }
