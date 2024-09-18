@@ -7,5 +7,9 @@
 	{
 		"name": "http-mux web app",
 		"dir": "end-to-end-tests/http-mux-app"
+	},
+	{
+		"name": "grpc app",
+		"dir": "end-to-end-tests/grpc"
 	}
 ]}

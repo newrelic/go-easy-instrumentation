@@ -13,6 +13,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/gopackages"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
 )
 
@@ -27,8 +28,9 @@ type tracedFunction struct {
 }
 
 type tracingFunctions struct {
-	stateless []StatelessTracingFunction
-	stateful  []StatefulTracingFunction
+	stateless  []StatelessTracingFunction
+	stateful   []StatefulTracingFunction
+	dependency []DependencyScan
 }
 
 // InstrumentationManager maintains state relevant to tracing across all files, packages and functions.
@@ -39,6 +41,7 @@ type InstrumentationManager struct {
 	diffFile          string
 	currentPackage    string
 	tracingFunctions  tracingFunctions
+	facts             facts.Keeper
 	packages          map[string]*PackageState // stores stateful information on packages by ID
 }
 
@@ -57,9 +60,11 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		appName:           appName,
 		agentVariableName: agentVariableName,
 		packages:          map[string]*PackageState{},
+		facts:             facts.NewKeeper(),
 		tracingFunctions: tracingFunctions{
-			stateless: []StatelessTracingFunction{},
-			stateful:  []StatefulTracingFunction{},
+			stateless:  []StatelessTracingFunction{},
+			stateful:   []StatefulTracingFunction{},
+			dependency: []DependencyScan{},
 		},
 	}
 
@@ -76,8 +81,9 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 
 // DetectDependencyIntegrations
 func (m *InstrumentationManager) DetectDependencyIntegrations() error {
-	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod, InstrumentGrpcDial)
+	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod, InstrumentGrpcDial, InstrumentGrpcServerMethod)
 	m.loadStatefulTracingFunctions(ExternalHttpCall, WrapNestedHandleFunction, InstrumentGrpcServer)
+	m.loadDependencyScans(FindGrpcServerObject, FindGrpcServerStreamInterface)
 	return nil
 }
 
@@ -87,6 +93,10 @@ func (m *InstrumentationManager) loadStatefulTracingFunctions(functions ...State
 
 func (m *InstrumentationManager) loadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
 	m.tracingFunctions.stateless = append(m.tracingFunctions.stateless, functions...)
+}
+
+func (m *InstrumentationManager) loadDependencyScans(scans ...DependencyScan) {
+	m.tracingFunctions.dependency = append(m.tracingFunctions.dependency, scans...)
 }
 
 func (m *InstrumentationManager) CreateDiffFile() error {
@@ -400,7 +410,7 @@ func (m *InstrumentationManager) AddRequiredModules() error {
 // Note: only pass tracing functions to this method for testing, or if you sincerely know what you are doing.
 func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions ...StatelessTracingFunction) error {
 	// Create a call graph of all calls made to functions in this package
-	err := tracePackageFunctionCalls(m)
+	err := tracePackageFunctionCalls(m, m.tracingFunctions.dependency...)
 	if err != nil {
 		return err
 	}
@@ -416,8 +426,10 @@ func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions 
 }
 
 // traceFunctionCalls discovers and sets up tracing for all function calls in the current package
-func tracePackageFunctionCalls(manager *InstrumentationManager) error {
+func tracePackageFunctionCalls(manager *InstrumentationManager, dependencyScans ...DependencyScan) error {
 	hasMain := false
+	var errReturn error
+
 	for packageName, pkg := range manager.packages {
 		manager.setPackage(packageName)
 		for _, file := range pkg.pkg.Syntax {
@@ -428,14 +440,29 @@ func tracePackageFunctionCalls(manager *InstrumentationManager) error {
 						hasMain = true
 					}
 				}
+				if len(dependencyScans) > 0 {
+					dst.Inspect(decl, func(n dst.Node) bool {
+						for _, scan := range dependencyScans {
+							entry, ok := scan(manager.getDecoratorPackage(), n)
+							if ok {
+								err := manager.facts.AddFact(entry)
+								if err != nil {
+									errReturn = fmt.Errorf("error adding fact entry %s: %v", entry, err)
+									return false
+								}
+							}
+						}
+						return true
+					})
+				}
 			}
 		}
 	}
 
 	if !hasMain {
-		return errors.New("cannot find a main method for this application")
+		errors.Join(errReturn, errors.New("cannot find a main method for this application; applications without main methods can not be instrumented"))
 	}
-	return nil
+	return errReturn
 }
 
 // apply instrumentation to the package

@@ -6,11 +6,9 @@ import (
 	"testing"
 
 	"github.com/dave/dst"
-	"github.com/newrelic/go-easy-instrumentation/parser/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/stretchr/testify/assert"
 )
-
-// Unit Tests
 
 func Test_isNetHttpClient(t *testing.T) {
 	tests := []struct {
@@ -70,14 +68,7 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testAppDir := "tmp"
-			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
-			defer cleanTestApp(t, testAppDir)
-			if err != nil {
-				t.Fatal(err)
-			}
-
+			pkgs := unitTest(t, tt.code)
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
 				t.Fatal("code must contain only one function declaration")
@@ -201,14 +192,7 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testAppDir := "tmp"
-			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
-			defer cleanTestApp(t, testAppDir)
-			if err != nil {
-				t.Fatal(err)
-			}
-
+			pkgs := unitTest(t, tt.code)
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
 				t.Fatal("code must contain only one function declaration")
@@ -265,13 +249,7 @@ func index(w http.ResponseWriter, r *http.Request, x string) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testAppDir := "tmp"
-			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
-			defer cleanTestApp(t, testAppDir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			pkgs := unitTest(t, tt.code)
 
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
@@ -376,13 +354,7 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testAppDir := "tmp"
-			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
-			defer cleanTestApp(t, testAppDir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			pkgs := unitTest(t, tt.code)
 
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
@@ -476,13 +448,7 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testAppDir := "tmp"
-			fileName := tt.name + ".go"
-			pkgs, err := createTestApp(t, testAppDir, fileName, tt.code)
-			defer cleanTestApp(t, testAppDir)
-			if err != nil {
-				t.Fatal(err)
-			}
+			pkgs := unitTest(t, tt.code)
 
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
@@ -658,7 +624,12 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
+			id, err := pseudo_uuid()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			testDir := fmt.Sprintf("tmp_%s", id)
 			defer cleanTestApp(t, testDir)
 
 			manager := testInstrumentationManager(t, tt.code, testDir)

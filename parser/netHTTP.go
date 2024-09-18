@@ -8,7 +8,8 @@ import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
-	"github.com/newrelic/go-easy-instrumentation/parser/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/util"
 )
 
 const (
@@ -27,34 +28,6 @@ const (
 	httpDefaultClientVariable = "DefaultClient"
 )
 
-func typeOfIdent(ident *dst.Ident, pkg *decorator.Package) string {
-	if ident == nil || pkg == nil {
-		return ""
-	}
-	astNode := pkg.Decorator.Ast.Nodes[ident]
-	var astIdent *ast.Ident
-	switch v := astNode.(type) {
-	case *ast.SelectorExpr:
-		if v != nil {
-			astIdent = v.Sel
-		}
-	case *ast.Ident:
-		astIdent = v
-	default:
-		return ""
-	}
-
-	if pkg.TypesInfo != nil {
-		uses, ok := pkg.TypesInfo.Uses[astIdent]
-		if ok {
-			if uses.Pkg() != nil {
-				return uses.Pkg().Path()
-			}
-		}
-	}
-	return ""
-}
-
 // GetNetHttpClientVariableName looks for an http client in the call expression n. If it finds one, the name
 // of the variable containing the client will be returned as a string.
 func getNetHttpClientVariableName(n *dst.CallExpr, pkg *decorator.Package) string {
@@ -66,12 +39,12 @@ func getNetHttpClientVariableName(n *dst.CallExpr, pkg *decorator.Package) strin
 	if ok {
 		switch v := Sel.X.(type) {
 		case *dst.SelectorExpr:
-			path := typeOfIdent(v.Sel, pkg)
+			path := util.PackagePath(v.Sel, pkg)
 			if path == codegen.HttpImportPath {
 				return v.Sel.Name
 			}
 		case *dst.Ident:
-			path := typeOfIdent(v, pkg)
+			path := util.PackagePath(v, pkg)
 			if path == codegen.HttpImportPath {
 				return v.Name
 			}
@@ -88,12 +61,12 @@ func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 
 	switch v := n.Fun.(type) {
 	case *dst.SelectorExpr:
-		path := typeOfIdent(v.Sel, pkg)
+		path := util.PackagePath(v.Sel, pkg)
 		if path == codegen.HttpImportPath {
 			return v.Sel.Name
 		}
 	case *dst.Ident:
-		path := typeOfIdent(v, pkg)
+		path := util.PackagePath(v, pkg)
 		if path == codegen.HttpImportPath {
 			return v.Name
 		}

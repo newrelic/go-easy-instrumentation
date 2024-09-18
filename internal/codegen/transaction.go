@@ -126,7 +126,7 @@ func TxnFromContext(txnVariable string, contextObject dst.Expr) *dst.AssignStmt 
 					Path: NewRelicAgentImportPath,
 				},
 				Args: []dst.Expr{
-					contextObject,
+					dst.Clone(contextObject).(dst.Expr),
 				},
 			},
 		},

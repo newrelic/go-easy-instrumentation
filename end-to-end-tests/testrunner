@@ -60,12 +60,12 @@ for testnumber, testcase in enumerate(tests['tests']):
         fails += 1
         continue
 
-    subprocess.run(['go', 'mod', 'tidy'], cwd=testcase['dir'])
 
     status = subprocess.run(['diff', '-B', '-b', '--color=always', '-L', 'expected', '-L', 'actual', referenceFile, test_diff]).returncode
     if cleanup:
         os.remove(test_diff)
-    
+        subprocess.run(['go', 'mod', 'tidy'], cwd=testcase['dir'])
+
     if status:   
         print(f"\33[ 1;31mFAIL\33[0m diff {status}: output not as expected")
         fails += 1

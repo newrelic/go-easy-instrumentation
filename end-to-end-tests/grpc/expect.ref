@@ -1,0 +1,214 @@
+--- a/client/client.go
++++ b/client/client.go
+@@ -6,28 +6,35 @@
+ import (
+ 	"context"
+ 	"fmt"
++	"grpc-app/sampleapp"
+ 	"io"
++	"time"
+ 
+-	"grpc-app/sampleapp"
+-
++	"github.com/newrelic/go-agent/v3/integrations/nrgrpc"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ 	"google.golang.org/grpc"
+ )
+ 
+-func doUnaryUnary(ctx context.Context, client sampleapp.SampleApplicationClient) {
++func doUnaryUnary(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("doUnaryUnary").End()
+ 	msg, err := client.DoUnaryUnary(ctx, &sampleapp.Message{Text: "Hello DoUnaryUnary"})
++	nrTxn.NoticeError(err)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+ 	fmt.Println(msg.Text)
+ }
+ 
+-func doUnaryStream(ctx context.Context, client sampleapp.SampleApplicationClient) {
++func doUnaryStream(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("doUnaryStream").End()
+ 	stream, err := client.DoUnaryStream(ctx, &sampleapp.Message{Text: "Hello DoUnaryStream"})
++	nrTxn.NoticeError(err)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+ 	for {
+ 		msg, err := stream.Recv()
++		nrTxn.NoticeError(err)
+ 		if err == io.EOF {
+ 			break
+ 		}
+@@ -38,8 +27,10 @@
+ 	}
+ }
+ 
+-func doStreamUnary(ctx context.Context, client sampleapp.SampleApplicationClient) {
++func doStreamUnary(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("doStreamUnary").End()
+ 	stream, err := client.DoStreamUnary(ctx)
++	nrTxn.NoticeError(err)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+@@ -52,21 +42,26 @@
+ 		}
+ 	}
+ 	msg, err := stream.CloseAndRecv()
++	nrTxn.NoticeError(err)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+ 	fmt.Println(msg.Text)
+ }
+ 
+-func doStreamStream(ctx context.Context, client sampleapp.SampleApplicationClient) {
++func doStreamStream(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("doStreamStream").End()
+ 	stream, err := client.DoStreamStream(ctx)
++	nrTxn.NoticeError(err)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+ 	waitc := make(chan struct{})
+-	go func() {
++	go func(nrTxn *newrelic.Transaction) {
++		defer nrTxn.StartSegment("async literal").End()
+ 		for {
+ 			msg, err := stream.Recv()
++			nrTxn.NoticeError(err)
+ 			if err == io.EOF {
+ 				close(waitc)
+ 				return
+@@ -76,7 +58,7 @@
+ 			}
+ 			fmt.Println(msg.Text)
+ 		}
+-	}()
++	}(nrTxn.NewGoroutine())
+ 	for i := 0; i < 3; i++ {
+ 		if err := stream.Send(&sampleapp.Message{Text: "Hello DoStreamStream"}); err != nil {
+ 			panic(err)
+@@ -86,17 +68,25 @@
+ 	<-waitc
+ }
+ 
+-func doClientCalls(ctx context.Context, client sampleapp.SampleApplicationClient) {
+-	doUnaryUnary(ctx, client)
+-	doUnaryStream(ctx, client)
+-	doStreamUnary(ctx, client)
+-	doStreamStream(ctx, client)
++func doClientCalls(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
++	doUnaryUnary(ctx, client, nrTxn)
++	doUnaryStream(ctx, client, nrTxn)
++	doStreamUnary(ctx, client, nrTxn)
++	doStreamStream(ctx, client, nrTxn)
+ }
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("grpc app"), newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	conn, err := grpc.Dial(
+ 		"localhost:8080",
++		grpc.WithUnaryInterceptor(nrgrpc.UnaryClientInterceptor),
++		grpc.WithStreamInterceptor(nrgrpc.StreamClientInterceptor),
+ 	)
++	nrTxn.NoticeError(err)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+@@ -105,5 +89,10 @@
+ 	client := sampleapp.NewSampleApplicationClient(conn)
+ 	ctx := context.Background()
+ 
+-	doClientCalls(ctx, client)
++	nrTxn := NewRelicAgent.StartTransaction("doClientCalls")
++
++	doClientCalls(ctx, client, nrTxn)
++	nrTxn.End()
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+--- a/server/server.go
++++ b/server/server.go
+@@ -6,11 +6,13 @@
+ import (
+ 	"context"
+ 	fmt "fmt"
++	"grpc-app/sampleapp"
+ 	"io"
+ 	"net"
++	"time"
+ 
+-	"grpc-app/sampleapp"
+-
++	"github.com/newrelic/go-agent/v3/integrations/nrgrpc"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ 	"google.golang.org/grpc"
+ )
+ 
+@@ -25,8 +24,11 @@
+ 
+ // DoUnaryUnary is a unary request, unary response method.
+ func (s *Server) DoUnaryUnary(ctx context.Context, msg *sampleapp.Message) (*sampleapp.Message, error) {
++	nrTxn := newrelic.FromContext(ctx)
++
+ 	processMessage(ctx, msg)
+ 	err := msg.XXX_Unmarshal(nil)
++	nrTxn.NoticeError(err)
+ 	if err != nil {
+ 		return &sampleapp.Message{Text: "DoUnaryUnary Error"}, err
+ 	}
+@@ -46,8 +46,11 @@
+ 
+ // DoStreamUnary is a stream request, unary response method.
+ func (s *Server) DoStreamUnary(stream sampleapp.SampleApplication_DoStreamUnaryServer) error {
++	nrTxn := newrelic.FromContext(stream.Context())
++
+ 	for {
+ 		msg, err := stream.Recv()
++		nrTxn.NoticeError(err)
+ 		if err == io.EOF {
+ 			return stream.SendAndClose(&sampleapp.Message{Text: "Hello from DoStreamUnary"})
+ 		} else if nil != err {
+@@ -59,8 +60,11 @@
+ 
+ // DoStreamStream is a stream request, stream response method.
+ func (s *Server) DoStreamStream(stream sampleapp.SampleApplication_DoStreamStreamServer) error {
++	nrTxn := newrelic.FromContext(stream.Context())
++
+ 	for {
+ 		msg, err := stream.Recv()
++		nrTxn.NoticeError(err)
+ 		if err == io.EOF {
+ 			return nil
+ 		} else if nil != err {
+@@ -74,12 +76,23 @@
+ }
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("grpc app"), newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	lis, err := net.Listen("tcp", "localhost:8080")
++	nrTxn.NoticeError(err)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+-	grpcServer := grpc.NewServer()
++	grpcServer := grpc.NewServer(
++		grpc.UnaryInterceptor(nrgrpc.UnaryServerInterceptor(NewRelicAgent)),
++		grpc.StreamInterceptor(nrgrpc.StreamServerInterceptor(NewRelicAgent)),
++	)
+ 	server := &Server{}
+ 	sampleapp.RegisterSampleApplicationServer(grpcServer, server)
+ 	grpcServer.Serve(lis)
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

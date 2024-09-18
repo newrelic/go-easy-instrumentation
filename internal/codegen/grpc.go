@@ -118,3 +118,12 @@ func NrGrpcStreamServerInterceptor(agentVariableName string, call *dst.CallExpr)
 		},
 	}
 }
+
+func GrpcStreamContext(streamServerObject *dst.Ident) *dst.CallExpr {
+	return &dst.CallExpr{
+		Fun: &dst.SelectorExpr{
+			X:   dst.Clone(streamServerObject).(*dst.Ident),
+			Sel: &dst.Ident{Name: "Context"},
+		},
+	}
+}

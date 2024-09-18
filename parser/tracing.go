@@ -5,7 +5,7 @@ import (
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
-	"github.com/newrelic/go-easy-instrumentation/parser/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 )
 
 type tracingState struct {

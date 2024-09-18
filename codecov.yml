@@ -11,4 +11,12 @@ component_management:
     - component_id: parser
       name: Parser
       paths: 
-        - parser/**
+        - parser/** 
+    - component_id: codegen
+      name: Codegen
+      paths: 
+        - internal/codegen/**
+    - component_id: util
+      name: Utilities
+      paths: 
+        - internal/util/**

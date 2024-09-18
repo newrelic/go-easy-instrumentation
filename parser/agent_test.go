@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/dave/dst"
-	"github.com/newrelic/go-easy-instrumentation/parser/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/stretchr/testify/assert"
 )
 
