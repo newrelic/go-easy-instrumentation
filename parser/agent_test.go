@@ -711,6 +711,7 @@ func main() {
 	}
 	t := test{}
 	_, t.err = http.Get("http://example.com")
+	txn.NoticeError(t.err)
 }
 `,
 		},
