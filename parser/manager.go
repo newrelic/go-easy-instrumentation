@@ -40,6 +40,7 @@ type InstrumentationManager struct {
 	currentPackage    string
 	tracingFunctions  tracingFunctions
 	packages          map[string]*PackageState // stores stateful information on packages by ID
+	errorCache        dst.Expr                 // stores error handling status for functions
 }
 
 // PackageManager contains state relevant to tracing within a single package.
@@ -107,6 +108,19 @@ func (m *InstrumentationManager) getImports() []string {
 		i++
 	}
 	return ret
+}
+
+func (m *InstrumentationManager) LoadError(errorLoad dst.Expr) {
+	m.errorCache = errorLoad
+
+}
+
+func (m *InstrumentationManager) GetErrorFromCache() dst.Expr {
+	return m.errorCache
+}
+
+func (m *InstrumentationManager) ResetErrorCache() {
+	m.errorCache = nil
 }
 
 // Returns Decorator Package for the current package being instrumented
@@ -398,7 +412,6 @@ func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions 
 	}
 
 	instrumentPackages(m, tracingFunctions...)
-
 	return nil
 }
 
@@ -437,6 +450,7 @@ func instrumentPackages(manager *InstrumentationManager, instrumentationFunction
 						for _, instFunc := range instrumentationFunctions {
 							instFunc(n, manager, c)
 						}
+
 						return true
 					})
 				}

@@ -316,6 +316,7 @@ func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
 				errIndex, ok := errorReturnIndex(call, pkg)
 				if ok {
 					expr := stmt.Lhs[errIndex]
+
 					ident, ok := expr.(*dst.Ident)
 					if ok {
 						// ignored errors are ignored by instrumentation as well
@@ -323,11 +324,27 @@ func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
 							return nil
 						}
 					}
+
 					return dst.Clone(expr).(dst.Expr)
 				}
 			}
 		}
 	}
+	return nil
+}
+
+func findErrorVariableIf(stmt *dst.IfStmt, manager *InstrumentationManager) dst.Expr {
+	if binExpr, ok := stmt.Cond.(*dst.BinaryExpr); ok {
+		if exp, ok := binExpr.X.(*dst.Ident); ok {
+			if exp.Obj != nil {
+				if objData, ok := exp.Obj.Decl.(*dst.AssignStmt); ok {
+					return findErrorVariable(objData, manager.getDecoratorPackage())
+				}
+			}
+			return nil
+		}
+	}
+
 	return nil
 }
 
@@ -363,12 +380,34 @@ func InstrumentMain(mainFunctionNode dst.Node, manager *InstrumentationManager, 
 // with a newrelic transaction. All transactions are assumed to be named "txn"
 func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
+	case *dst.IfStmt:
+		if binExpr, ok := nodeVal.Cond.(*dst.BinaryExpr); ok {
+			if _, ok := binExpr.X.(*dst.Ident); ok {
+				errExpr := dst.Expr(nil)
+				if manager.errorCache != nil {
+					errExpr = manager.GetErrorFromCache()
+					manager.ResetErrorCache()
+
+				} else {
+					errExpr = findErrorVariableIf(nodeVal, manager)
+					manager.ResetErrorCache()
+
+				}
+				if errExpr != nil && c.Index() >= 0 {
+					nodeVal.Body.List = append([]dst.Stmt{generateNoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations())}, nodeVal.Body.List...)
+				}
+				return true
+
+			}
+		}
 	case *dst.AssignStmt:
 		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
 		if errExpr != nil && c.Index() >= 0 {
-			c.InsertAfter(generateNoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
-			return true
+			manager.LoadError(errExpr)
 		}
+		return true
+
 	}
+
 	return false
 }

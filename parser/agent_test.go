@@ -653,8 +653,8 @@ import (
 
 func main() {
 	_, err := http.Get("http://example.com")
-	txn.NoticeError(err)
 	if err != nil {
+		txn.NoticeError(err)
 		log.Fatal(err)
 	}
 }
@@ -711,7 +711,6 @@ func main() {
 	}
 	t := test{}
 	_, t.err = http.Get("http://example.com")
-	txn.NoticeError(t.err)
 }
 `,
 		},
@@ -760,8 +759,8 @@ import (
 
 func myFunc(nrTxn *newrelic.Transaction) {
 	_, err := http.Get("http://example.com")
-	nrTxn.NoticeError(err)
 	if err != nil {
+		nrTxn.NoticeError(err)
 		panic(err)
 	}
 }
@@ -809,8 +808,8 @@ import (
 
 func myFunc(nrTxn *newrelic.Transaction) {
 	_, err := http.Get("http://example.com")
-	nrTxn.NoticeError(err)
 	if err != nil {
+		nrTxn.NoticeError(err)
 		panic(err)
 	}
 }

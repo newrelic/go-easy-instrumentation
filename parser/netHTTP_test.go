@@ -1373,8 +1373,8 @@ func myHandler(w http.ResponseWriter, r *http.Request) {
 	nrTxn := newrelic.FromContext(r.Context())
 
 	_, err := http.Get("http://example.com")
-	nrTxn.NoticeError(err)
 	if err != nil {
+		nrTxn.NoticeError(err)
 		panic(err)
 	}
 	w.Write([]byte("hello world"))
@@ -1441,8 +1441,8 @@ import (
 func myHelperFunction(url string, nrTxn *newrelic.Transaction) error {
 	defer nrTxn.StartSegment("myHelperFunction").End()
 	_, err := http.Get(url)
-	nrTxn.NoticeError(err)
 	if err != nil {
+		nrTxn.NoticeError(err)
 		return err
 	}
 	return nil
@@ -1453,6 +1453,7 @@ func myHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := myHelperFunction("http://example.com", nrTxn)
 	if err != nil {
+		nrTxn.NoticeError(err)
 		panic(err)
 	}
 	w.Write([]byte("hello world"))
@@ -1510,8 +1511,8 @@ func myHelperFunction(url string, wg *sync.WaitGroup, nrTxn *newrelic.Transactio
 	defer nrTxn.StartSegment("async myHelperFunction").End()
 	defer wg.Done()
 	_, err := http.Get(url)
-	nrTxn.NoticeError(err)
 	if err != nil {
+		nrTxn.NoticeError(err)
 		panic(err)
 	}
 }
@@ -1582,8 +1583,8 @@ import (
 func myHelperFunction(url string, nrTxn *newrelic.Transaction) {
 	defer nrTxn.StartSegment("myHelperFunction").End()
 	_, err := http.Get(url)
-	nrTxn.NoticeError(err)
 	if err != nil {
+		nrTxn.NoticeError(err)
 		panic(err)
 	}
 }
