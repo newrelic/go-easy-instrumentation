@@ -62,6 +62,20 @@ func isNewRelicMethod(call *dst.CallExpr) bool {
 	}
 	return false
 }
+func findErrorVariableIf(stmt *dst.IfStmt, manager *InstrumentationManager) dst.Expr {
+	if binExpr, ok := stmt.Cond.(*dst.BinaryExpr); ok {
+		if exp, ok := binExpr.X.(*dst.Ident); ok {
+			if exp.Obj != nil {
+				if objData, ok := exp.Obj.Decl.(*dst.AssignStmt); ok {
+					return findErrorVariable(objData, manager.getDecoratorPackage())
+				}
+			}
+			return nil
+		}
+	}
+
+	return nil
+}
 
 func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
 	if len(stmt.Rhs) == 1 {
@@ -118,12 +132,40 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 // with a newrelic transaction. All transactions are assumed to be named "txn"
 func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
+	case *dst.IfStmt:
+		if binExpr, ok := nodeVal.Cond.(*dst.BinaryExpr); ok {
+			if _, ok := binExpr.X.(*dst.Ident); ok {
+				errExpr := dst.Expr(nil)
+				if manager.errorCache != nil {
+					errExpr = manager.GetErrorFromCache()
+					manager.ResetErrorCache()
+				}
+				if errExpr != nil && c.Index() >= 0 {
+					nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations())}, nodeVal.Body.List...)
+				}
+				return true
+
+			}
+		}
 	case *dst.AssignStmt:
+		if manager.errorCache != nil {
+			manager.InsertLater()
+			manager.ResetErrorCache()
+		}
 		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
 		if errExpr != nil && c.Index() >= 0 {
-			c.InsertAfter(codegen.NoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
-			return true
+			manager.LoadError(errExpr)
+			manager.SetInsertLater(func(cursor *dstutil.Cursor) {
+				cursor.InsertBefore(codegen.NoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
+			}, c)
+		}
+		return true
+	default:
+		if manager.errorCache != nil {
+			manager.InsertLater()
+			manager.ResetErrorCache()
 		}
 	}
+
 	return false
 }
