@@ -387,11 +387,6 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 				if manager.errorCache != nil {
 					errExpr = manager.GetErrorFromCache()
 					manager.ResetErrorCache()
-
-				} else {
-					errExpr = findErrorVariableIf(nodeVal, manager)
-					manager.ResetErrorCache()
-
 				}
 				if errExpr != nil && c.Index() >= 0 {
 					nodeVal.Body.List = append([]dst.Stmt{generateNoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations())}, nodeVal.Body.List...)
@@ -401,12 +396,23 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 			}
 		}
 	case *dst.AssignStmt:
+		if manager.errorCache != nil {
+			manager.InsertLater()
+			manager.ResetErrorCache()
+		}
 		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
 		if errExpr != nil && c.Index() >= 0 {
 			manager.LoadError(errExpr)
+			manager.SetInsertLater(func(cursor *dstutil.Cursor) {
+				cursor.InsertBefore(generateNoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
+			}, c)
 		}
 		return true
-
+	default:
+		if manager.errorCache != nil {
+			manager.InsertLater()
+			manager.ResetErrorCache()
+		}
 	}
 
 	return false

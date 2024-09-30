@@ -39,8 +39,10 @@ type InstrumentationManager struct {
 	agentVariableName string
 	currentPackage    string
 	tracingFunctions  tracingFunctions
-	packages          map[string]*PackageState // stores stateful information on packages by ID
-	errorCache        dst.Expr                 // stores error handling status for functions
+	packages          map[string]*PackageState     // stores stateful information on packages by ID
+	errorCache        dst.Expr                     // stores error handling status for functions
+	insertLater       func(cursor *dstutil.Cursor) // function to insert code later in the AST
+	cursor            *dstutil.Cursor              // cursor for traversing the AST
 }
 
 // PackageManager contains state relevant to tracing within a single package.
@@ -121,6 +123,17 @@ func (m *InstrumentationManager) GetErrorFromCache() dst.Expr {
 
 func (m *InstrumentationManager) ResetErrorCache() {
 	m.errorCache = nil
+}
+func (m *InstrumentationManager) InsertLater() {
+	if m.insertLater != nil {
+		m.insertLater(m.cursor)
+	}
+}
+
+func (m *InstrumentationManager) SetInsertLater(f func(cursor *dstutil.Cursor), cursor *dstutil.Cursor) {
+	m.insertLater = f
+	copyCursor := *cursor
+	m.cursor = &copyCursor
 }
 
 // Returns Decorator Package for the current package being instrumented
@@ -412,6 +425,7 @@ func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions 
 	}
 
 	instrumentPackages(m, tracingFunctions...)
+
 	return nil
 }
 
@@ -450,7 +464,6 @@ func instrumentPackages(manager *InstrumentationManager, instrumentationFunction
 						for _, instFunc := range instrumentationFunctions {
 							instFunc(n, manager, c)
 						}
-
 						return true
 					})
 				}

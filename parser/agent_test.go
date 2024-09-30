@@ -697,6 +697,7 @@ func main() {
 	}
 	t := test{}
 	_, t.err = http.Get("http://example.com")
+	
 }
 `,
 			expect: `package main

@@ -1453,7 +1453,6 @@ func myHandler(w http.ResponseWriter, r *http.Request) {
 
 	err := myHelperFunction("http://example.com", nrTxn)
 	if err != nil {
-		nrTxn.NoticeError(err)
 		panic(err)
 	}
 	w.Write([]byte("hello world"))
