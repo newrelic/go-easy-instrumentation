@@ -24,6 +24,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	err = manager.DetectDependencyIntegrations()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	err = manager.InstrumentApplication()
 	if err != nil {
 		log.Fatal(err)

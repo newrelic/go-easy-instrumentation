@@ -5,9 +5,8 @@ import (
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 )
-
-var RequiredStatefulTracingFunctions = []StatefulTracingFunction{ExternalHttpCall, WrapNestedHandleFunction}
 
 type tracingState struct {
 	definedTxn    bool
@@ -32,10 +31,10 @@ func TraceDownstreamFunction(txnVariableName string) *tracingState {
 func (tc *tracingState) CreateTransactionIfNeeded(c *dstutil.Cursor, functionName, txnVariableName string, endImmediately bool) {
 	if tc.agentVariable != "" && c.Index() > 0 {
 		tc.txnVariable = defaultTxnName
-		c.InsertBefore(startTransaction(tc.agentVariable, defaultTxnName, functionName, tc.definedTxn))
+		c.InsertBefore(codegen.StartTransaction(tc.agentVariable, defaultTxnName, functionName, tc.definedTxn))
 		tc.definedTxn = true
 		if endImmediately {
-			c.InsertAfter(endTransaction(defaultTxnName))
+			c.InsertAfter(codegen.EndTransaction(defaultTxnName))
 		}
 	}
 }
@@ -74,13 +73,13 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 				switch fun := v.Call.Fun.(type) {
 				case *dst.FuncLit:
 					// Add threaded txn to function arguments and parameters
-					fun.Type.Params.List = append(fun.Type.Params.List, txnAsParameter(txnVarName))
-					v.Call.Args = append(v.Call.Args, txnNewGoroutine(txnVarName))
+					fun.Type.Params.List = append(fun.Type.Params.List, codegen.TxnAsParameter(txnVarName))
+					v.Call.Args = append(v.Call.Args, codegen.TxnNewGoroutine(txnVarName))
 					// add go-agent/v3/newrelic to imports
-					manager.addImport(newrelicAgentImport)
+					manager.addImport(codegen.NewRelicAgentImportPath)
 
 					// create async segment
-					fun.Body.List = append([]dst.Stmt{deferSegment("async literal", txnVarName)}, fun.Body.List...)
+					fun.Body.List = append([]dst.Stmt{codegen.DeferSegment("async literal", txnVarName)}, fun.Body.List...)
 					c.Replace(v)
 					TopLevelFunctionChanged = true
 				default:
@@ -91,11 +90,11 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 						decl := manager.getDeclaration(invInfo.functionName)
 						TraceFunction(manager, decl, tracing.TraceDownstreamFunction())
 						manager.addTxnArgumentToFunctionDecl(decl, txnVarName)
-						manager.addImport(newrelicAgentImport)
-						decl.Body.List = append([]dst.Stmt{deferSegment(fmt.Sprintf("async %s", invInfo.functionName), txnVarName)}, decl.Body.List...)
+						manager.addImport(codegen.NewRelicAgentImportPath)
+						decl.Body.List = append([]dst.Stmt{codegen.DeferSegment(fmt.Sprintf("async %s", invInfo.functionName), txnVarName)}, decl.Body.List...)
 					}
 					if manager.requiresTransactionArgument(invInfo, txnVarName) {
-						invInfo.call.Args = append(invInfo.call.Args, txnNewGoroutine(txnVarName))
+						invInfo.call.Args = append(invInfo.call.Args, codegen.TxnNewGoroutine(txnVarName))
 						c.Replace(v)
 						TopLevelFunctionChanged = true
 					}
@@ -113,9 +112,9 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 				_, downstreamFunctionTraced = TraceFunction(manager, decl, tracing.TraceDownstreamFunction())
 				if downstreamFunctionTraced {
 					manager.addTxnArgumentToFunctionDecl(decl, txnVarName)
-					manager.addImport(newrelicAgentImport)
+					manager.addImport(codegen.NewRelicAgentImportPath)
 					if tracing.agentVariable == "" {
-						decl.Body.List = append([]dst.Stmt{deferSegment(invInfo.functionName, txnVarName)}, decl.Body.List...)
+						decl.Body.List = append([]dst.Stmt{codegen.DeferSegment(invInfo.functionName, txnVarName)}, decl.Body.List...)
 					}
 				}
 			}
@@ -131,7 +130,7 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 					TopLevelFunctionChanged = true
 				}
 			}
-			for _, stmtFunc := range RequiredStatefulTracingFunctions {
+			for _, stmtFunc := range manager.tracingFunctions.stateful {
 				ok := stmtFunc(manager, v, c, tracing)
 				if ok {
 					TopLevelFunctionChanged = true

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/dave/dst"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -588,7 +589,7 @@ func Test_RequiresTransactionArgument(t *testing.T) {
 				currentPackage: "foo",
 			},
 			args: args{
-				inv:             &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Args: []dst.Expr{txnNewGoroutine("txn")}}},
+				inv:             &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Args: []dst.Expr{codegen.TxnNewGoroutine("txn")}}},
 				txnVariableName: "txn",
 			},
 			want: false,

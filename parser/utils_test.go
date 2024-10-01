@@ -1,5 +1,3 @@
-// Test Utils contains tools and building blocks that can be generically used for unit tests
-
 package parser
 
 import (
@@ -15,6 +13,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/guess"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -59,18 +58,16 @@ func panicRecovery(t *testing.T) {
 	}
 }
 
-func pseudo_uuid() (uuid string) {
-
+func pseudo_uuid() (string, error) {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
-		fmt.Println("Error: ", err)
-		return
+		return "", fmt.Errorf("Failed to generate random number from bytes: %v", err)
 	}
 
-	uuid = fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
+	uuid := fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
 
-	return
+	return uuid, nil
 }
 
 func testInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
@@ -106,8 +103,30 @@ func configureTestInstrumentationManager(manager *InstrumentationManager) error 
 	return nil
 }
 
-func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction) string {
-	testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
+func unitTest(t *testing.T, code string) []*decorator.Package {
+	id, err := pseudo_uuid()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testAppDir := fmt.Sprintf("tmp_%s", id)
+	fileName := "app.go"
+	pkgs, err := createTestApp(t, testAppDir, fileName, code)
+	defer cleanTestApp(t, testAppDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return pkgs
+}
+
+func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction, downstream bool) string {
+	id, err := pseudo_uuid()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDir := fmt.Sprintf("tmp_%s", id)
 	defer cleanTestApp(t, testDir)
 
 	manager := testInstrumentationManager(t, code, testDir)
@@ -116,19 +135,23 @@ func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTra
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 	node := pkg.Syntax[0].Decls[1]
+	tracingState := TraceMain("app", "txn")
+	if downstream {
+		tracingState = TraceDownstreamFunction("txn")
+	}
 
 	dstutil.Apply(node, nil, func(c *dstutil.Cursor) bool {
 		n := c.Node()
 		switch v := n.(type) {
 		case dst.Stmt:
-			stmtFunc(manager, v, c, TraceDownstreamFunction("txn"))
+			stmtFunc(manager, v, c, tracingState)
 		}
 		return true
 	})
 	restorer := decorator.NewRestorerWithImports(testDir, guess.New())
 
 	buf := bytes.NewBuffer([]byte{})
-	err := restorer.Fprint(buf, pkg.Syntax[0])
+	err = restorer.Fprint(buf, pkg.Syntax[0])
 	if err != nil {
 		t.Fatalf("Failed to restore the file: %v", err)
 	}
@@ -136,8 +159,13 @@ func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTra
 	return buf.String()
 }
 
-func testStatelessTracingFunction(t *testing.T, code string, tracingFunc StatelessTracingFunction) string {
-	testDir := fmt.Sprintf("tmp_%s", pseudo_uuid())
+func testStatelessTracingFunction(t *testing.T, code string, tracingFunc StatelessTracingFunction, facts ...facts.Entry) string {
+	id, err := pseudo_uuid()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testDir := fmt.Sprintf("tmp_%s", id)
 	defer cleanTestApp(t, testDir)
 
 	manager := testInstrumentationManager(t, code, testDir)
@@ -146,7 +174,14 @@ func testStatelessTracingFunction(t *testing.T, code string, tracingFunc Statele
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 
-	err := manager.InstrumentApplication(tracingFunc)
+	for _, fact := range facts {
+		err := manager.facts.AddFact(fact)
+		if err != nil {
+			t.Fatalf("unable to add fact %s: %v", fact, err)
+		}
+	}
+
+	err = manager.InstrumentApplication(tracingFunc)
 	if err != nil {
 		t.Fatalf("Failed to instrument packages: %v", err)
 	}
