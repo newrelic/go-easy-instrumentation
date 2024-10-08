@@ -8,6 +8,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/util"
 )
 
 func isNamedError(n *types.Named) bool {
@@ -62,6 +63,20 @@ func isNewRelicMethod(call *dst.CallExpr) bool {
 	}
 	return false
 }
+func findErrorVariableIf(stmt *dst.IfStmt, manager *InstrumentationManager) dst.Expr {
+	if binExpr, ok := stmt.Cond.(*dst.BinaryExpr); ok {
+		if exp, ok := binExpr.X.(*dst.Ident); ok {
+			if exp.Obj != nil {
+				if objData, ok := exp.Obj.Decl.(*dst.AssignStmt); ok {
+					return findErrorVariable(objData, manager.getDecoratorPackage())
+				}
+			}
+			return nil
+		}
+	}
+
+	return nil
+}
 
 func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
 	if len(stmt.Rhs) == 1 {
@@ -110,6 +125,13 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 	}
 }
 
+func SearchForStructuredError(manager *InstrumentationManager, binExp *dst.BinaryExpr) bool {
+	if ident, ok := binExp.X.(*dst.SelectorExpr); ok {
+		return util.TypeOf(ident.Sel, manager.getDecoratorPackage()).String() == "error"
+	}
+	return false
+}
+
 // StatefulTracingFunctions
 //////////////////////////////////////////////
 
@@ -118,12 +140,52 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 // with a newrelic transaction. All transactions are assumed to be named "txn"
 func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
+	case *dst.IfStmt:
+		// If the error is found in the condition of the if statement
+		if binExpr, ok := nodeVal.Cond.(*dst.BinaryExpr); ok {
+			if _, ok := binExpr.X.(*dst.Ident); ok {
+
+				errExpr := dst.Expr(nil)
+				if manager.errorCache != nil {
+					errExpr = manager.GetErrorFromCache()
+					manager.ResetErrorCache()
+				}
+				if errExpr != nil && c.Index() >= 0 {
+					nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations())}, nodeVal.Body.List...)
+					manager.ResetErrorCache()
+					return true
+
+				}
+				return false
+
+			} else if SearchForStructuredError(manager, binExpr) {
+				errExpr := dst.Expr(nil)
+				if manager.errorCache != nil {
+					errExpr = manager.GetErrorFromCache()
+					manager.ResetErrorCache()
+				}
+				if errExpr != nil && c.Index() >= 0 {
+					nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations())}, nodeVal.Body.List...)
+					manager.ResetErrorCache()
+					return true
+
+				}
+			}
+			return false
+		}
 	case *dst.AssignStmt:
+		if manager.errorCache != nil {
+			manager.InsertLater()
+			manager.ResetErrorCache()
+		}
 		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
 		if errExpr != nil && c.Index() >= 0 {
-			c.InsertAfter(codegen.NoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
+			manager.LoadError(errExpr)
 			return true
+
 		}
+		return false
 	}
+
 	return false
 }

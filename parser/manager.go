@@ -42,7 +42,10 @@ type InstrumentationManager struct {
 	currentPackage    string
 	tracingFunctions  tracingFunctions
 	facts             facts.Keeper
-	packages          map[string]*PackageState // stores stateful information on packages by ID
+	packages          map[string]*PackageState     // stores stateful information on packages by ID
+	errorCache        dst.Expr                     // stores error handling status for functions
+	insertLater       func(cursor *dstutil.Cursor) // function to insert code later in the AST
+	cursor            *dstutil.Cursor              // cursor for traversing the AST
 }
 
 // PackageManager contains state relevant to tracing within a single package.
@@ -130,6 +133,30 @@ func (m *InstrumentationManager) getImports() []string {
 		i++
 	}
 	return ret
+}
+
+func (m *InstrumentationManager) LoadError(errorLoad dst.Expr) {
+	m.errorCache = errorLoad
+
+}
+
+func (m *InstrumentationManager) GetErrorFromCache() dst.Expr {
+	return m.errorCache
+}
+
+func (m *InstrumentationManager) ResetErrorCache() {
+	m.errorCache = nil
+}
+func (m *InstrumentationManager) InsertLater() {
+	if m.insertLater != nil {
+		m.insertLater(m.cursor)
+	}
+}
+
+func (m *InstrumentationManager) SetInsertLater(f func(cursor *dstutil.Cursor), cursor *dstutil.Cursor) {
+	m.insertLater = f
+	copyCursor := *cursor
+	m.cursor = &copyCursor
 }
 
 // Returns Decorator Package for the current package being instrumented
