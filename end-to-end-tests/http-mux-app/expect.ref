@@ -13,7 +13,7 @@
  )
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("http-mux web app"), newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}
