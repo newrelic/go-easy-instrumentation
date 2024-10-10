@@ -8,6 +8,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/util"
 )
 
 func isNamedError(n *types.Named) bool {
@@ -118,12 +119,46 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 // with a newrelic transaction. All transactions are assumed to be named "txn"
 func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
+	case *dst.IfStmt:
+		// If the error is found in the condition of the if statement
+		if binExpr, ok := nodeVal.Cond.(*dst.BinaryExpr); ok {
+			exprType := util.TypeOf(binExpr.X, manager.getDecoratorPackage())
+			if exprType != nil && exprType.String() == "error" {
+				errExpr := dst.Expr(nil)
+				if manager.errorCache.GetExpression() != nil {
+					errExpr = manager.errorCache.GetExpression()
+					manager.errorCache.Clear()
+				}
+				if errExpr != nil && c.Index() >= 0 {
+					var stmtBlock dst.Stmt
+					if nodeVal.Body != nil && len(nodeVal.Body.List) > 0 {
+						stmtBlock = nodeVal.Body.List[0]
+					}
+					nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.txnVariable, stmtBlock)}, nodeVal.Body.List...)
+					manager.errorCache.Clear()
+					return true
+
+				}
+				return false
+
+			}
+			return false
+		}
+
 	case *dst.AssignStmt:
+		if manager.errorCache.GetExpression() != nil {
+			stmt := manager.errorCache.GetStatement()
+			codegen.NoticeUncheckedError(stmt)
+			manager.errorCache.Clear()
+		}
 		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
 		if errExpr != nil && c.Index() >= 0 {
-			c.InsertAfter(codegen.NoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
+			manager.errorCache.Load(errExpr, nodeVal)
 			return true
+
 		}
+		return false
 	}
+
 	return false
 }

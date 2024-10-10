@@ -140,6 +140,12 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 		return true
 	})
 
+	// Check if error cache is still full, if so add unchecked error warning
+	if manager.errorCache.GetExpression() != nil {
+		codegen.NoticeUncheckedError(manager.errorCache.GetStatement())
+		manager.errorCache.Clear()
+	}
+
 	// update the stored declaration, marking it as traced
 	decl := outputNode.(*dst.FuncDecl)
 	manager.updateFunctionDeclaration(decl)
