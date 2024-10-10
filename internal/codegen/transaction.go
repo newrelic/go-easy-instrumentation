@@ -84,7 +84,6 @@ func NoticeUncheckedError(stmt dst.Stmt) {
 		errList = append(errList, "//")
 	}
 	stmt.Decorations().Start.Prepend(errList...)
-
 }
 
 func NoticeError(errExpr dst.Expr, txnName string, stmtBlock dst.Stmt) *dst.ExprStmt {
