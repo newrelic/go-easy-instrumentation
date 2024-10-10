@@ -2,6 +2,7 @@ package util
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
 
 	"github.com/dave/dst"
@@ -36,29 +37,14 @@ func PackagePath(ident *dst.Ident, pkg *decorator.Package) string {
 }
 
 // TypeOf returns the types.Type of the ident according to go types info
-func TypeOf(ident *dst.Ident, pkg *decorator.Package) types.Type {
-	if ident == nil || pkg == nil {
+func TypeOf(expr dst.Expr, pkg *decorator.Package) types.Type {
+	astNode := pkg.Decorator.Ast.Nodes[expr]
+
+	if astNode == nil {
 		return nil
 	}
-
-	astNode := pkg.Decorator.Ast.Nodes[ident]
-	var astIdent *ast.Ident
-	switch v := astNode.(type) {
-	case *ast.SelectorExpr:
-		if v != nil {
-			astIdent = v.Sel
-		}
-	case *ast.Ident:
-		astIdent = v
-	default:
-		return nil
-	}
-
-	if pkg.TypesInfo != nil {
-		return pkg.TypesInfo.TypeOf(astIdent)
-
-	}
-	return nil
+	astExpr := astNode.(ast.Expr)
+	return pkg.TypesInfo.TypeOf(astExpr)
 }
 
 // FunctionName returns the name of the function being invoked in a call expression
@@ -73,4 +59,15 @@ func FunctionName(call *dst.CallExpr) string {
 		return v.Sel.Name
 	}
 	return ""
+}
+
+func Position(expr dst.Node, pkg *decorator.Package) *token.Position {
+	astNode := pkg.Decorator.Ast.Nodes[expr]
+
+	if astNode == nil {
+		return nil
+	}
+	astNode.Pos()
+	pos := pkg.Fset.Position(astNode.Pos())
+	return &pos
 }

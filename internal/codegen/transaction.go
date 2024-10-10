@@ -74,20 +74,27 @@ func StartTransaction(appVariableName, transactionVariableName, transactionName 
 	}
 }
 
-func NoticeError(errExpr dst.Expr, txnName string, nodeDecs *dst.NodeDecs) *dst.ExprStmt {
+func NoticeUncheckedError(stmt dst.Stmt) {
+	errList := []string{
+		"// NR-WARNING: Unchecked Error, please consult New Relic documentation on error capture",
+		"// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors",
+	}
+
+	if len(stmt.Decorations().Start) > 0 {
+		errList = append(errList, "//")
+	}
+	stmt.Decorations().Start.Prepend(errList...)
+
+}
+
+func NoticeError(errExpr dst.Expr, txnName string, stmtBlock dst.Stmt) *dst.ExprStmt {
 	var decs dst.ExprStmtDecorations
 	// copy all decs below the current statement into this statement
-	if nodeDecs != nil {
-		decs = dst.ExprStmtDecorations{
-			NodeDecs: dst.NodeDecs{
-				After: nodeDecs.After,
-				End:   nodeDecs.End,
-			},
-		}
-
-		// remove coppied decs from above node
-		nodeDecs.After = dst.None
-		nodeDecs.End.Clear()
+	if stmtBlock != nil {
+		decs.Before = stmtBlock.Decorations().Before
+		decs.Start = stmtBlock.Decorations().Start
+		stmtBlock.Decorations().Before = dst.None
+		stmtBlock.Decorations().Start.Clear()
 	}
 
 	return &dst.ExprStmt{

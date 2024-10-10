@@ -13,6 +13,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/gopackages"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/parser/errorcache"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
 )
@@ -43,7 +44,7 @@ type InstrumentationManager struct {
 	tracingFunctions  tracingFunctions
 	facts             facts.Keeper
 	packages          map[string]*PackageState     // stores stateful information on packages by ID
-	errorCache        dst.Expr                     // stores error handling status for functions
+	errorCache        errorcache.ErrorCache        // stores error handling status for functions
 	insertLater       func(cursor *dstutil.Cursor) // function to insert code later in the AST
 	cursor            *dstutil.Cursor              // cursor for traversing the AST
 }
@@ -64,6 +65,7 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		agentVariableName: agentVariableName,
 		packages:          map[string]*PackageState{},
 		facts:             facts.NewKeeper(),
+		errorCache:        errorcache.ErrorCache{},
 		tracingFunctions: tracingFunctions{
 			stateless:  []StatelessTracingFunction{},
 			stateful:   []StatefulTracingFunction{},
@@ -133,30 +135,6 @@ func (m *InstrumentationManager) getImports() []string {
 		i++
 	}
 	return ret
-}
-
-func (m *InstrumentationManager) LoadError(errorLoad dst.Expr) {
-	m.errorCache = errorLoad
-
-}
-
-func (m *InstrumentationManager) GetErrorFromCache() dst.Expr {
-	return m.errorCache
-}
-
-func (m *InstrumentationManager) ResetErrorCache() {
-	m.errorCache = nil
-}
-func (m *InstrumentationManager) InsertLater() {
-	if m.insertLater != nil {
-		m.insertLater(m.cursor)
-	}
-}
-
-func (m *InstrumentationManager) SetInsertLater(f func(cursor *dstutil.Cursor), cursor *dstutil.Cursor) {
-	m.insertLater = f
-	copyCursor := *cursor
-	m.cursor = &copyCursor
 }
 
 // Returns Decorator Package for the current package being instrumented
