@@ -2,6 +2,7 @@ package parser
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
 
 	"github.com/dave/dst"
@@ -9,6 +10,10 @@ import (
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
+)
+
+const (
+	UntypedNil = "untyped nil"
 )
 
 func isNamedError(n *types.Named) bool {
@@ -110,6 +115,52 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 		}
 	}
 }
+func findErrorVariableIf(stmt *dst.IfStmt, manager *InstrumentationManager) dst.Expr {
+	if binExpr, ok := stmt.Cond.(*dst.BinaryExpr); ok {
+		if exp, ok := binExpr.X.(*dst.Ident); ok {
+			if exp.Obj != nil {
+				if objData, ok := exp.Obj.Decl.(*dst.AssignStmt); ok {
+					return findErrorVariable(objData, manager.getDecoratorPackage())
+				}
+			}
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func errNilCheck(stmt *dst.BinaryExpr, pkg *decorator.Package) bool {
+	if stmt.Op != token.NEQ {
+		return false
+	}
+	exprTypeX := util.TypeOf(stmt.X, pkg)
+	exprTypeY := util.TypeOf(stmt.Y, pkg)
+	if exprTypeX != nil && exprTypeX.String() == "error" {
+		if exprTypeY != nil && exprTypeY.String() == UntypedNil {
+			return true
+		}
+	}
+	if exprTypeY != nil && exprTypeY.String() == "error" {
+		if exprTypeX != nil && exprTypeX.String() == UntypedNil {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldNoticeError(stmt dst.Stmt, pkg *decorator.Package, tracing *tracingState) bool {
+	ifStmt, ok := stmt.(*dst.IfStmt)
+	if !ok {
+		return false
+	}
+	binExpr, ok := ifStmt.Cond.(*dst.BinaryExpr)
+	if ok && errNilCheck(binExpr, pkg) {
+		return true
+	}
+
+	return shouldNoticeError(ifStmt.Else, pkg, tracing)
+}
 
 // StatefulTracingFunctions
 //////////////////////////////////////////////
@@ -117,48 +168,38 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 // NoticeError will check for the presence of an error.Error variable in the body at the index in bodyIndex.
 // If it finds that an error is returned, it will add a line after the assignment statement to capture an error
 // with a newrelic transaction. All transactions are assumed to be named "txn"
-func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
 	case *dst.IfStmt:
-		// If the error is found in the condition of the if statement
-		if binExpr, ok := nodeVal.Cond.(*dst.BinaryExpr); ok {
-			exprType := util.TypeOf(binExpr.X, manager.getDecoratorPackage())
-			if exprType != nil && exprType.String() == "error" {
-				errExpr := dst.Expr(nil)
-				if manager.errorCache.GetExpression() != nil {
-					errExpr = manager.errorCache.GetExpression()
-					manager.errorCache.Clear()
+		if shouldNoticeError(stmt, manager.getDecoratorPackage(), tracing) {
+			errExpr := manager.errorCache.GetExpression()
+			if errExpr != nil {
+				var stmtBlock dst.Stmt
+				if nodeVal.Body != nil && len(nodeVal.Body.List) > 0 {
+					stmtBlock = nodeVal.Body.List[0]
 				}
-				if errExpr != nil && c.Index() >= 0 {
-					var stmtBlock dst.Stmt
-					if nodeVal.Body != nil && len(nodeVal.Body.List) > 0 {
-						stmtBlock = nodeVal.Body.List[0]
-					}
-					nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.txnVariable, stmtBlock)}, nodeVal.Body.List...)
-					manager.errorCache.Clear()
-					return true
-
-				}
-				return false
-
+				nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.txnVariable, stmtBlock)}, nodeVal.Body.List...)
+				manager.errorCache.Clear()
+				return true
 			}
-			return false
+		} else {
+			codegen.UnknownError(nodeVal)
+			manager.errorCache.Clear()
+			return true
 		}
 
 	case *dst.AssignStmt:
-		if manager.errorCache.GetExpression() != nil {
-			stmt := manager.errorCache.GetStatement()
-			codegen.NoticeUncheckedError(stmt)
-			manager.errorCache.Clear()
-		}
 		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
-		if errExpr != nil && c.Index() >= 0 {
-			manager.errorCache.Load(errExpr, nodeVal)
-			return true
-
+		if errExpr != nil {
+			if manager.errorCache.GetExpression() != nil {
+				stmt := manager.errorCache.GetStatement()
+				codegen.NoticeUncheckedError(stmt)
+				manager.errorCache.Clear()
+				return true
+			} else {
+				manager.errorCache.Load(errExpr, nodeVal)
+			}
 		}
-		return false
 	}
-
 	return false
 }

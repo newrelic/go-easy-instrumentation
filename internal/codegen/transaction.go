@@ -86,6 +86,30 @@ func NoticeUncheckedError(stmt dst.Stmt) {
 	stmt.Decorations().Start.Prepend(errList...)
 }
 
+func SuspectExpectedError(stmt dst.Stmt) {
+	errList := []string{
+		"// NR-INFO: Possible expected error detected: please consult New Relic documentation on expected errors to learn how to capture it",
+		"// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors",
+	}
+
+	if len(stmt.Decorations().Start) > 0 {
+		errList = append(errList, "//")
+	}
+	stmt.Decorations().Start.Prepend(errList...)
+}
+
+func UnknownError(stmt dst.Stmt) {
+	errList := []string{
+		"// NR-WARNING: Unable to determine how to automatically capture this error: please consult New Relic documentation on errors to manually capture it",
+		"// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors",
+	}
+
+	if len(stmt.Decorations().Start) > 0 {
+		errList = append(errList, "//")
+	}
+	stmt.Decorations().Start.Prepend(errList...)
+}
+
 func NoticeError(errExpr dst.Expr, txnName string, stmtBlock dst.Stmt) *dst.ExprStmt {
 	var decs dst.ExprStmtDecorations
 	// copy all decs below the current statement into this statement
