@@ -185,3 +185,160 @@ func Test_txnNewGoroutine(t *testing.T) {
 		})
 	}
 }
+
+func Test_generateNoticeError(t *testing.T) {
+	type args struct {
+		errExpr  dst.Expr
+		txnName  string
+		nodeDecs *dst.NodeDecs
+	}
+	tests := []struct {
+		name string
+		args args
+		want *dst.ExprStmt
+	}{
+		{
+			name: "generate notice error",
+			args: args{
+				errExpr:  dst.NewIdent("err"),
+				txnName:  "txn",
+				nodeDecs: nil,
+			},
+			want: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X: &dst.Ident{
+							Name: "txn",
+						},
+						Sel: &dst.Ident{
+							Name: "NoticeError",
+						},
+					},
+					Args: []dst.Expr{
+						&dst.Ident{
+							Name: "err",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "generate notice error with end decorations",
+			args: args{
+				errExpr: dst.NewIdent("err"),
+				txnName: "txn",
+				nodeDecs: &dst.NodeDecs{
+					After: dst.NewLine,
+					End:   dst.Decorations{"// end"},
+				},
+			},
+			want: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X: &dst.Ident{
+							Name: "txn",
+						},
+						Sel: &dst.Ident{
+							Name: "NoticeError",
+						},
+					},
+					Args: []dst.Expr{
+						&dst.Ident{
+							Name: "err",
+						},
+					},
+				},
+				Decs: dst.ExprStmtDecorations{
+					NodeDecs: dst.NodeDecs{
+						After: dst.NewLine,
+						End:   dst.Decorations{"// end"},
+					},
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			stmtBlock := &dst.ExprStmt{}
+			if tt.args.nodeDecs != nil {
+				stmtBlock = &dst.ExprStmt{
+					Decs: dst.ExprStmtDecorations{
+						NodeDecs: *tt.args.nodeDecs,
+					},
+				}
+			}
+
+			got := NoticeError(tt.args.errExpr, tt.args.txnName, stmtBlock)
+			if tt.args.nodeDecs != nil {
+				assert.Equal(t, tt.args.nodeDecs.After, stmtBlock.Decs.After, "whitespace after stmtblock should not be modified")
+				assert.Equal(t, tt.args.nodeDecs.End, stmtBlock.Decs.End, "comment after stmtblock should not be modified")
+				assert.Equal(t, tt.args.nodeDecs.Before, got.Decs.Before, "generated notice error statement should inherit before decorations from stmtblock")
+				assert.Equal(t, tt.args.nodeDecs.Start, got.Decs.Start, "generated notice error statement should inherit start decorations from stmtblock")
+
+				assert.Equal(t, dst.None, stmtBlock.Decs.Before, "whitespace before stmtblock should be none")
+				assert.Equal(t, dst.Decorations(nil), stmtBlock.Decs.Start, "comments before stmtblock should be empty")
+
+			}
+		})
+	}
+}
+
+func Test_noticeUncheckedError(t *testing.T) {
+	type args struct {
+		errStmt dst.Stmt
+	}
+
+	tests := []struct {
+		name string
+		args args
+		want dst.NodeDecs
+	}{
+		{
+			name: "notice unchecked error",
+			args: args{
+				errStmt: &dst.ExprStmt{
+					Decs: dst.ExprStmtDecorations{
+						NodeDecs: dst.NodeDecs{},
+					},
+				},
+			},
+			want: dst.NodeDecs{
+				Start: dst.Decorations{
+					"// NR-WARNING: Unchecked Error, please consult New Relic documentation on error capture",
+					"// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors",
+				},
+			},
+		},
+		{
+			name: "notice unchecked error",
+			args: args{
+				errStmt: &dst.ExprStmt{
+					Decs: dst.ExprStmtDecorations{
+						NodeDecs: dst.NodeDecs{
+							Start: dst.Decorations{
+								"// test",
+							},
+						},
+					},
+				},
+			},
+			want: dst.NodeDecs{
+				Start: dst.Decorations{
+					"// NR-WARNING: Unchecked Error, please consult New Relic documentation on error capture",
+					"// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors",
+					"//",
+					"// test",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			NoticeUncheckedError(tt.args.errStmt)
+
+			assert.Equal(t, tt.want.Start, tt.args.errStmt.Decorations().Start, "unchecked warning should be added to error start")
+
+		})
+	}
+}
