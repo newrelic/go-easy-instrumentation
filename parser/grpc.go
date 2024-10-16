@@ -10,12 +10,12 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracecontext"
 )
 
 const (
 	grpcServerType = "*google.golang.org/grpc.Server"
 	grpcPath       = "google.golang.org/grpc"
-	contextType    = "context.Context"
 )
 
 func grpcDialCall(node dst.Node) (*dst.CallExpr, bool) {
@@ -96,7 +96,7 @@ func getTxnFromGrpcServer(manager *InstrumentationManager, params []*dst.Field, 
 				fact := f.GetFact(paramTypeName)
 				if fact == facts.GrpcServerStream {
 					streamServerIdent = param.Names[0]
-				} else if paramTypeName == contextType {
+				} else if paramTypeName == tracecontext.ContextType {
 					contextIdent = param.Names[0]
 				}
 			}

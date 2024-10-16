@@ -1,17 +1,19 @@
 package parser
 
 import (
-	"fmt"
+	"log"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracecontext"
 )
 
 type tracingState struct {
 	definedTxn    bool
 	agentVariable string
 	txnVariable   string
+	txnCarrier    tracecontext.TraceContext
 }
 
 func TraceMain(agentVariable, txnVariableName string) *tracingState {
@@ -53,23 +55,40 @@ func (tc *tracingState) TraceDownstreamFunction() *tracingState {
 	}
 }
 
+func createSegment(fn *dst.FuncDecl, tracecontext tracecontext.TraceContext) {
+	txnAssignment := tracecontext.AssignTransactionVariable(defaultTxnName)
+	txnVariable := tracecontext.TransactionVariableName()
+	stmts := []dst.Stmt{codegen.DeferSegment(fn.Name.Name, txnVariable)}
+
+	if txnAssignment != nil {
+		stmts = append([]dst.Stmt{txnAssignment}, stmts...)
+	}
+	fn.Body.List = append(stmts, fn.Body.List...)
+}
+
 // TraceFunction adds tracing to a function. This includes error capture, and passing agent metadata to relevant functions and services.
 // Traces all called functions inside the current package as well.
 // This function returns a FuncDecl object pointer that contains the potentially modified version of the FuncDecl object, fn, passed. If
 // the bool field is true, then the function was modified, and requires a transaction most likely.
 //
 // TODO: there is a ton of complexity around tracing async statements that do not have a transaction wrapping them. This is a feature gap.
-func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *tracingState) (*dst.FuncDecl, bool) {
+func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracecontext tracecontext.TraceContext, isMain bool, startSegment bool) (*dst.FuncDecl, bool) {
 	TopLevelFunctionChanged := false
+
+	if startSegment {
+		createSegment(fn, tracecontext)
+		manager.addImport(codegen.NewRelicAgentImportPath)
+		TopLevelFunctionChanged = true
+	}
+
 	outputNode := dstutil.Apply(fn, nil, func(c *dstutil.Cursor) bool {
 		n := c.Node()
 		switch v := n.(type) {
 		case *dst.GoStmt:
 			// Skip Tracing of go functions in Main. This is extremenly complicated and not implemented right now.
 			// TODO: Implement this
-			agentVariable := tracing.GetAgentVariable()
-			if agentVariable == "" {
-				txnVarName := tracing.GetTransactionVariable()
+			if !isMain {
+				txnVarName := tracecontext.TransactionVariableName()
 				switch fun := v.Call.Fun.(type) {
 				case *dst.FuncLit:
 					// Add threaded txn to function arguments and parameters
@@ -80,6 +99,7 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 
 					// create async segment
 					fun.Body.List = append([]dst.Stmt{codegen.DeferSegment("async literal", txnVarName)}, fun.Body.List...)
+					// call c.Replace to replace the node with the changed code and mark that code as not needing to be traversed
 					c.Replace(v)
 					TopLevelFunctionChanged = true
 				default:
@@ -88,13 +108,13 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 					if manager.shouldInstrumentFunction(invInfo) {
 						manager.setPackage(invInfo.packageName)
 						decl := manager.getDeclaration(invInfo.functionName)
-						TraceFunction(manager, decl, tracing.TraceDownstreamFunction())
-						manager.addTxnArgumentToFunctionDecl(decl, txnVarName)
-						manager.addImport(codegen.NewRelicAgentImportPath)
-						decl.Body.List = append([]dst.Stmt{codegen.DeferSegment(fmt.Sprintf("async %s", invInfo.functionName), txnVarName)}, decl.Body.List...)
-					}
-					if manager.requiresTransactionArgument(invInfo, txnVarName) {
-						invInfo.call.Args = append(invInfo.call.Args, codegen.TxnNewGoroutine(txnVarName))
+						tracecontext.AddParam(decl)
+						passedContext, err := tracecontext.Pass(decl, v.Call, c, true)
+						if err != nil {
+							log.Printf("Failed to pass New Relic Transaction to function %s: %v", invInfo.functionName, err)
+							break // skip instrumentation of this function
+						}
+						TraceFunction(manager, decl, passedContext, false, true)
 						c.Replace(v)
 						TopLevelFunctionChanged = true
 					}
