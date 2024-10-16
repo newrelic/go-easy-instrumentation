@@ -2,6 +2,7 @@ package util
 
 import (
 	"go/ast"
+	"go/token"
 	"go/types"
 
 	"github.com/dave/dst"
@@ -73,4 +74,18 @@ func FunctionName(call *dst.CallExpr) string {
 		return v.Sel.Name
 	}
 	return ""
+}
+
+func Position(node dst.Node, pkg *decorator.Package) *token.Position {
+	if node == nil || pkg == nil {
+		return nil
+	}
+
+	astNode := pkg.Decorator.Ast.Nodes[node]
+	if astNode == nil {
+		return nil
+	}
+
+	pos := pkg.Fset.Position(astNode.Pos())
+	return &pos
 }
