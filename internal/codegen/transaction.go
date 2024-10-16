@@ -34,17 +34,35 @@ func TxnAsParameter(txnName string) *dst.Field {
 	}
 }
 
-func TxnNewGoroutine(txnVarName string) *dst.CallExpr {
+func TxnNewGoroutine(transaction dst.Expr) *dst.CallExpr {
 	return &dst.CallExpr{
 		Fun: &dst.SelectorExpr{
-			X: &dst.Ident{
-				Name: txnVarName,
-			},
+			X: transaction,
 			Sel: &dst.Ident{
 				Name: "NewGoroutine",
 			},
 		},
 	}
+}
+
+// returns true if a node contains a call to `txn.NewGoroutine()`
+func ContainsTxnNewGoroutine(node dst.Node) bool {
+	ok := false
+	dst.Inspect(node, func(node dst.Node) bool {
+		call, ok := node.(*dst.CallExpr)
+		if ok {
+			sel, ok := call.Fun.(*dst.SelectorExpr)
+			if ok {
+				if sel.Sel.Name == "NewGoroutine" {
+					ok = true
+					return false
+				}
+			}
+		}
+		return true
+	})
+
+	return ok
 }
 
 // starts a NewRelic transaction
@@ -103,32 +121,5 @@ func NoticeError(errExpr dst.Expr, txnName string, nodeDecs *dst.NodeDecs) *dst.
 			Args: []dst.Expr{errExpr},
 		},
 		Decs: decs,
-	}
-}
-
-func TxnFromContext(txnVariable string, contextObject dst.Expr) *dst.AssignStmt {
-	return &dst.AssignStmt{
-		Decs: dst.AssignStmtDecorations{
-			NodeDecs: dst.NodeDecs{
-				After: dst.EmptyLine,
-			},
-		},
-		Lhs: []dst.Expr{
-			&dst.Ident{
-				Name: txnVariable,
-			},
-		},
-		Tok: token.DEFINE,
-		Rhs: []dst.Expr{
-			&dst.CallExpr{
-				Fun: &dst.Ident{
-					Name: "FromContext",
-					Path: NewRelicAgentImportPath,
-				},
-				Args: []dst.Expr{
-					dst.Clone(contextObject).(dst.Expr),
-				},
-			},
-		},
 	}
 }

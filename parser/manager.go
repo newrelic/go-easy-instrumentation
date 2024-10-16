@@ -300,23 +300,6 @@ func containsTransactionArgument(call *dst.CallExpr, txnName string) bool {
 	return false
 }
 
-// RequiresTransactionArgument returns true if a modified function needs a transaction as an argument.
-// This can be used to check if transactions should be passed by callers.
-func (m *InstrumentationManager) requiresTransactionArgument(inv *invocationInfo, txnVariableName string) bool {
-	if inv == nil {
-		return false
-	}
-
-	state, ok := m.packages[m.currentPackage]
-	if ok {
-		v, ok := state.tracedFuncs[inv.functionName]
-		if ok && !containsTransactionArgument(inv.call, txnVariableName) {
-			return v.requiresTxn
-		}
-	}
-	return false
-}
-
 // GetDeclaration returns a pointer to the location in the DST tree where a function is declared and defined.
 func (m *InstrumentationManager) getDeclaration(functionName string) *dst.FuncDecl {
 	if m.packages[m.currentPackage] != nil && m.packages[m.currentPackage].tracedFuncs != nil {
