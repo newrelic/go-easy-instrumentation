@@ -15,6 +15,10 @@ func main() {
 	log.Default().SetFlags(0)
 	cfg := cli.NewCLIConfig()
 
+	if cfg.Debug {
+		comment.EnableConsolePrinter()
+	}
+
 	pkgs, err := decorator.Load(&packages.Config{Dir: cfg.PackagePath, Mode: packages.LoadSyntax}, cfg.PackageName)
 	if err != nil {
 		log.Fatal(err)

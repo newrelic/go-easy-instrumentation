@@ -18,6 +18,7 @@ const (
 )
 
 type CLIConfig struct {
+	Debug             bool
 	PackagePath       string
 	PackageName       string
 	AppName           string
@@ -45,12 +46,14 @@ func NewCLIConfig() *CLIConfig {
 	var appNameFlag = flag.String("name", defaultAppName, "configure the New Relic application name")
 	var diffFlag = flag.String("diff", relativePath, "output diff file path name")
 	var agentFlag = flag.String("agent", defaultAgentVariableName, "application variable for New Relic agent")
+	var debug = flag.Bool("debug", false, "enable debug mode")
 	flag.Parse()
 
 	cfg.PackagePath = setConfigValue(pathFlag, defaultPackagePath)
 	cfg.AppName = setConfigValue(appNameFlag, defaultAppName)
 	cfg.DiffFile = setConfigValue(diffFlag, diffFile)
 	cfg.AgentVariableName = setConfigValue(agentFlag, defaultAgentVariableName)
+	cfg.Debug = *debug
 
 	cfg.Validate()
 	return cfg
