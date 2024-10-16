@@ -13,6 +13,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/gopackages"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/parser/errorcache"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
@@ -81,6 +82,7 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		}
 	}
 
+	comment.EnableConsolePrinter()
 	return manager
 }
 

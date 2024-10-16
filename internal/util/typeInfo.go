@@ -61,13 +61,16 @@ func FunctionName(call *dst.CallExpr) string {
 	return ""
 }
 
-func Position(expr dst.Node, pkg *decorator.Package) *token.Position {
-	astNode := pkg.Decorator.Ast.Nodes[expr]
+func Position(node dst.Node, pkg *decorator.Package) *token.Position {
+	if node == nil || pkg == nil {
+		return nil
+	}
 
+	astNode := pkg.Decorator.Ast.Nodes[node]
 	if astNode == nil {
 		return nil
 	}
-	astNode.Pos()
+
 	pos := pkg.Fset.Position(astNode.Pos())
 	return &pos
 }
