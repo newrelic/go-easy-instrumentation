@@ -7,12 +7,17 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/newrelic/go-easy-instrumentation/cli"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/parser"
 )
 
 func main() {
 	log.Default().SetFlags(0)
 	cfg := cli.NewCLIConfig()
+
+	if cfg.Debug {
+		comment.EnableConsolePrinter()
+	}
 
 	pkgs, err := decorator.Load(&packages.Config{Dir: cfg.PackagePath, Mode: packages.LoadSyntax}, cfg.PackageName)
 	if err != nil {
@@ -44,4 +49,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	comment.WriteAll()
 }
