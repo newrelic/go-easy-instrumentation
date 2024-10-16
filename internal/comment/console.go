@@ -22,6 +22,12 @@ func EnableConsolePrinter() {
 	}
 }
 
+func WriteAll() {
+	if printer != nil {
+		printer.Flush()
+	}
+}
+
 // Add appends a new comment to the consolePrints slice.
 // This function is used to add comments that will be printed to console.
 // The message is the main comment, and additionalInfo is a list of optional
@@ -48,7 +54,7 @@ func (p *ConsolePrinter) Add(pkg *decorator.Package, node dst.Node, header, mess
 	p.comments = append(p.comments, b.String())
 }
 
-// FlushComments logs all the comments in the consolePrints slice.
+// Flush logs all the comments in the consolePrints slice.
 func (p *ConsolePrinter) Flush() {
 	if p == nil {
 		return

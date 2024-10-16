@@ -7,6 +7,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/newrelic/go-easy-instrumentation/cli"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/parser"
 )
 
@@ -44,4 +45,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	comment.WriteAll()
 }
