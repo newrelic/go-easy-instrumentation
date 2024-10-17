@@ -182,7 +182,7 @@ func shouldNoticeError(stmt dst.Stmt, pkg *decorator.Package, tracing *tracingSt
 // NoticeError will check for the presence of an error.Error variable in the body at the index in bodyIndex.
 // If it finds that an error is returned, it will add a line after the assignment statement to capture an error
 // with a newrelic transaction. All transactions are assumed to be named "txn"
-func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, tracing *tracingState) bool {
+func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
 	case *dst.IfStmt:
 		if shouldNoticeError(stmt, manager.getDecoratorPackage(), tracing) {

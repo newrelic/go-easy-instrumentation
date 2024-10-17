@@ -126,7 +126,7 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 			}
 			manager.setPackage(rootPkg)
 			if !downstreamFunctionTraced {
-				ok := NoticeError(manager, v, tracing)
+				ok := NoticeError(manager, v, c, tracing)
 				if ok {
 					TopLevelFunctionChanged = true
 				}

@@ -44,10 +44,8 @@ type InstrumentationManager struct {
 	currentPackage    string
 	tracingFunctions  tracingFunctions
 	facts             facts.Keeper
-	packages          map[string]*PackageState     // stores stateful information on packages by ID
-	errorCache        errorcache.ErrorCache        // stores error handling status for functions
-	insertLater       func(cursor *dstutil.Cursor) // function to insert code later in the AST
-	cursor            *dstutil.Cursor              // cursor for traversing the AST
+	packages          map[string]*PackageState // stores stateful information on packages by ID
+	errorCache        errorcache.ErrorCache    // stores error handling status for functions
 }
 
 // PackageManager contains state relevant to tracing within a single package.
