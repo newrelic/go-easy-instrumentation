@@ -13,6 +13,8 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/gopackages"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
+	"github.com/newrelic/go-easy-instrumentation/parser/errorcache"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
 )
@@ -43,6 +45,7 @@ type InstrumentationManager struct {
 	tracingFunctions  tracingFunctions
 	facts             facts.Keeper
 	packages          map[string]*PackageState // stores stateful information on packages by ID
+	errorCache        errorcache.ErrorCache    // stores error handling status for functions
 }
 
 // PackageManager contains state relevant to tracing within a single package.
@@ -54,6 +57,8 @@ type PackageState struct {
 
 // NewInstrumentationManager initializes an InstrumentationManager cache for a given package.
 func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariableName, diffFile, userAppPath string) *InstrumentationManager {
+	comment.EnableConsolePrinter()
+
 	manager := &InstrumentationManager{
 		userAppPath:       userAppPath,
 		diffFile:          diffFile,
@@ -61,6 +66,7 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		agentVariableName: agentVariableName,
 		packages:          map[string]*PackageState{},
 		facts:             facts.NewKeeper(),
+		errorCache:        errorcache.ErrorCache{},
 		tracingFunctions: tracingFunctions{
 			stateless:  []StatelessTracingFunction{},
 			stateful:   []StatefulTracingFunction{},

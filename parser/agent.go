@@ -8,6 +8,12 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
+	"github.com/newrelic/go-easy-instrumentation/internal/util"
+)
+
+const (
+	UntypedNil = "untyped nil"
 )
 
 func isNamedError(n *types.Named) bool {
@@ -109,6 +115,66 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 		}
 	}
 }
+func findErrorVariableIf(stmt *dst.IfStmt, manager *InstrumentationManager) dst.Expr {
+	if binExpr, ok := stmt.Cond.(*dst.BinaryExpr); ok {
+		if exp, ok := binExpr.X.(*dst.Ident); ok {
+			if exp.Obj != nil {
+				if objData, ok := exp.Obj.Decl.(*dst.AssignStmt); ok {
+					return findErrorVariable(objData, manager.getDecoratorPackage())
+				}
+			}
+			return nil
+		}
+	}
+
+	return nil
+}
+
+func errNilCheck(stmt *dst.BinaryExpr, pkg *decorator.Package) bool {
+
+	exprTypeX := util.TypeOf(stmt.X, pkg)
+	exprTypeY := util.TypeOf(stmt.Y, pkg)
+	// Case - err != nil && condition
+	// If there is an extra condition, the types of X and Y will be booleans
+	nestedX, okX := stmt.X.(*dst.BinaryExpr)
+	nestedY, okY := stmt.Y.(*dst.BinaryExpr)
+
+	if okX && okY {
+		return errNilCheck(nestedX, pkg) || errNilCheck(nestedY, pkg)
+	}
+
+	if okX {
+		return errNilCheck(nestedX, pkg)
+	}
+
+	if okY {
+		return errNilCheck(nestedY, pkg)
+	}
+	if exprTypeX != nil && exprTypeX.String() == "error" {
+		if exprTypeY != nil && exprTypeY.String() == UntypedNil {
+			return true
+		}
+	}
+	if exprTypeY != nil && exprTypeY.String() == "error" {
+		if exprTypeX != nil && exprTypeX.String() == UntypedNil {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldNoticeError(stmt dst.Stmt, pkg *decorator.Package, tracing *tracingState) bool {
+	ifStmt, ok := stmt.(*dst.IfStmt)
+	if !ok {
+		return false
+	}
+	binExpr, ok := ifStmt.Cond.(*dst.BinaryExpr)
+	if ok && errNilCheck(binExpr, pkg) {
+		return true
+	}
+
+	return shouldNoticeError(ifStmt.Else, pkg, tracing)
+}
 
 // StatefulTracingFunctions
 //////////////////////////////////////////////
@@ -118,11 +184,31 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 // with a newrelic transaction. All transactions are assumed to be named "txn"
 func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
 	switch nodeVal := stmt.(type) {
+	case *dst.IfStmt:
+		if shouldNoticeError(stmt, manager.getDecoratorPackage(), tracing) {
+			errExpr := manager.errorCache.GetExpression()
+			if errExpr != nil {
+				var stmtBlock dst.Stmt
+				if nodeVal.Body != nil && len(nodeVal.Body.List) > 0 {
+					stmtBlock = nodeVal.Body.List[0]
+				}
+				nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.txnVariable, stmtBlock)}, nodeVal.Body.List...)
+				manager.errorCache.Clear()
+				return true
+			}
+		}
 	case *dst.AssignStmt:
 		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
-		if errExpr != nil && c.Index() >= 0 {
-			c.InsertAfter(codegen.NoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
-			return true
+		if errExpr != nil {
+			if manager.errorCache.GetExpression() != nil {
+				stmt := manager.errorCache.GetStatement()
+				comment.Warn(manager.getDecoratorPackage(), stmt, "Unchecked Error, please consult New Relic documentation on error capture")
+
+				manager.errorCache.Clear()
+				return true
+			} else {
+				manager.errorCache.Load(errExpr, nodeVal)
+			}
 		}
 	}
 	return false

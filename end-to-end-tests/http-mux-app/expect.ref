@@ -13,7 +13,7 @@
  )
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("http-mux web app"), newrelic.ConfigFromEnvironment())
++	 NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("http-mux web app"), newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}
@@ -32,7 +32,21 @@
  
  	nextRequestID := func() string {
  		return fmt.Sprintf("%d", time.Now().UnixNano())
-@@ -74,6 +81,8 @@
+@@ -61,6 +68,7 @@
+ 
+ 		server.SetKeepAlivesEnabled(false)
+ 		if err := server.Shutdown(ctx); err != nil {
++			nrTxn.NoticeError(err)
+ 			logger.Fatalf("Could not gracefully shutdown the server: %v\n", err)
+ 		}
+ 		close(done)
+@@ -69,11 +77,14 @@
+ 	logger.Println("Server is ready to handle requests at", listenAddr)
+ 	atomic.StoreInt32(&healthy, 1)
+ 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
++		nrTxn.NoticeError(err)
+ 		logger.Fatalf("Could not listen on %s: %v\n", listenAddr, err)
+ 	}
  
  	<-done
  	logger.Println("Server stopped")

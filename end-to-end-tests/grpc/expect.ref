@@ -1,6 +1,6 @@
 --- a/client/client.go
 +++ b/client/client.go
-@@ -6,28 +6,35 @@
+@@ -6,24 +6,30 @@
  import (
  	"context"
  	"fmt"
@@ -19,8 +19,8 @@
 +func doUnaryUnary(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
 +	defer nrTxn.StartSegment("doUnaryUnary").End()
  	msg, err := client.DoUnaryUnary(ctx, &sampleapp.Message{Text: "Hello DoUnaryUnary"})
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		panic(err)
  	}
  	fmt.Println(msg.Text)
@@ -30,17 +30,19 @@
 +func doUnaryStream(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
 +	defer nrTxn.StartSegment("doUnaryStream").End()
  	stream, err := client.DoUnaryStream(ctx, &sampleapp.Message{Text: "Hello DoUnaryStream"})
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		panic(err)
  	}
  	for {
- 		msg, err := stream.Recv()
-+		nrTxn.NoticeError(err)
- 		if err == io.EOF {
+@@ -32,19 +24,23 @@
  			break
  		}
-@@ -38,8 +27,10 @@
+ 		if err != nil {
++			nrTxn.NoticeError(err)
+ 			panic(err)
+ 		}
+ 		fmt.Println(msg.Text)
  	}
  }
  
@@ -48,16 +50,21 @@
 +func doStreamUnary(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
 +	defer nrTxn.StartSegment("doStreamUnary").End()
  	stream, err := client.DoStreamUnary(ctx)
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		panic(err)
  	}
-@@ -52,21 +42,26 @@
- 		}
+ 	for i := 0; i < 3; i++ {
+ 		if err := stream.Send(&sampleapp.Message{Text: "Hello DoStreamUnary"}); err != nil {
++			nrTxn.NoticeError(err)
+ 			if err == io.EOF {
+ 				break
+ 			}
+@@ -53,18 +37,22 @@
  	}
  	msg, err := stream.CloseAndRecv()
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		panic(err)
  	}
  	fmt.Println(msg.Text)
@@ -67,8 +74,8 @@
 +func doStreamStream(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
 +	defer nrTxn.StartSegment("doStreamStream").End()
  	stream, err := client.DoStreamStream(ctx)
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		panic(err)
  	}
  	waitc := make(chan struct{})
@@ -77,11 +84,13 @@
 +		defer nrTxn.StartSegment("async literal").End()
  		for {
  			msg, err := stream.Recv()
-+			nrTxn.NoticeError(err)
  			if err == io.EOF {
- 				close(waitc)
+@@ -72,13 +50,15 @@
  				return
-@@ -76,7 +58,7 @@
+ 			}
+ 			if err != nil {
++				nrTxn.NoticeError(err)
+ 				panic(err)
  			}
  			fmt.Println(msg.Text)
  		}
@@ -89,8 +98,11 @@
 +	}(nrTxn.NewGoroutine())
  	for i := 0; i < 3; i++ {
  		if err := stream.Send(&sampleapp.Message{Text: "Hello DoStreamStream"}); err != nil {
++			nrTxn.NoticeError(err)
  			panic(err)
-@@ -86,17 +68,25 @@
+ 		}
+ 	}
+@@ -86,18 +60,26 @@
  	<-waitc
  }
  
@@ -117,11 +129,12 @@
 +		grpc.WithUnaryInterceptor(nrgrpc.UnaryClientInterceptor),
 +		grpc.WithStreamInterceptor(nrgrpc.StreamClientInterceptor),
  	)
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		panic(err)
  	}
-@@ -105,5 +89,10 @@
+ 	defer conn.Close()
+@@ -105,5 +80,10 @@
  	client := sampleapp.NewSampleApplicationClient(conn)
  	ctx := context.Background()
  
@@ -151,7 +164,7 @@
  	"google.golang.org/grpc"
  )
  
-@@ -25,8 +24,11 @@
+@@ -25,9 +24,12 @@
  
  // DoUnaryUnary is a unary request, unary response method.
  func (s *Server) DoUnaryUnary(ctx context.Context, msg *sampleapp.Message) (*sampleapp.Message, error) {
@@ -159,11 +172,25 @@
 +
  	processMessage(ctx, msg)
  	err := msg.XXX_Unmarshal(nil)
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		return &sampleapp.Message{Text: "DoUnaryUnary Error"}, err
  	}
-@@ -46,8 +46,11 @@
+ 	return &sampleapp.Message{Text: "Hello from DoUnaryUnary"}, nil
+@@ -35,9 +34,12 @@
+ 
+ // DoUnaryStream is a unary request, stream response method.
+ func (s *Server) DoUnaryStream(msg *sampleapp.Message, stream sampleapp.SampleApplication_DoUnaryStreamServer) error {
++	nrTxn := newrelic.FromContext(stream.Context())
++
+ 	processMessage(stream.Context(), msg)
+ 	for i := 0; i < 3; i++ {
+ 		if err := stream.Send(&sampleapp.Message{Text: "Hello from DoUnaryStream"}); nil != err {
++			nrTxn.NoticeError(err)
+ 			return err
+ 		}
+ 	}
+@@ -46,11 +45,14 @@
  
  // DoStreamUnary is a stream request, unary response method.
  func (s *Server) DoStreamUnary(stream sampleapp.SampleApplication_DoStreamUnaryServer) error {
@@ -171,11 +198,14 @@
 +
  	for {
  		msg, err := stream.Recv()
-+		nrTxn.NoticeError(err)
  		if err == io.EOF {
  			return stream.SendAndClose(&sampleapp.Message{Text: "Hello from DoStreamUnary"})
  		} else if nil != err {
-@@ -59,8 +60,11 @@
++			nrTxn.NoticeError(err)
+ 			return err
+ 		}
+ 		processMessage(stream.Context(), msg)
+@@ -59,27 +56,42 @@
  
  // DoStreamStream is a stream request, stream response method.
  func (s *Server) DoStreamStream(stream sampleapp.SampleApplication_DoStreamStreamServer) error {
@@ -183,11 +213,18 @@
 +
  	for {
  		msg, err := stream.Recv()
-+		nrTxn.NoticeError(err)
  		if err == io.EOF {
  			return nil
  		} else if nil != err {
-@@ -74,12 +76,23 @@
++			nrTxn.NoticeError(err)
+ 			return err
+ 		}
+ 		processMessage(stream.Context(), msg)
+ 		if err := stream.Send(&sampleapp.Message{Text: "Hello from DoStreamStream"}); nil != err {
++			nrTxn.NoticeError(err)
+ 			return err
+ 		}
+ 	}
  }
  
  func main() {
@@ -197,8 +234,8 @@
 +	}
 +
  	lis, err := net.Listen("tcp", "localhost:8080")
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		panic(err)
  	}
 -	grpcServer := grpc.NewServer()
