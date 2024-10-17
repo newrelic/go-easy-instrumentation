@@ -59,6 +59,8 @@ type PackageState struct {
 
 // NewInstrumentationManager initializes an InstrumentationManager cache for a given package.
 func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariableName, diffFile, userAppPath string) *InstrumentationManager {
+	comment.EnableConsolePrinter()
+
 	manager := &InstrumentationManager{
 		userAppPath:       userAppPath,
 		diffFile:          diffFile,
