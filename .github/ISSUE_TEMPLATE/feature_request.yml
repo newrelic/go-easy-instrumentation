@@ -1,0 +1,24 @@
+name: Feature Request
+about: "For feature requests. Please search for existing issues first. Also see CONTRIBUTING."
+
+- type: textarea
+    id: problem
+    attributes:
+      label: What would you like go-easy-instrumentation to be able to do?
+      description: As a go-easy-instrumentation user, what would you like to be able to do?
+      placeholder: I have a problem that I would like you to solve....
+      value: "Thank you for filing a feature request with us. If this is an urgent need, please get in touch with [New Relic support](https://support.newrelic.com/s/).
+    validations:
+      required: true
+- type: textarea
+    id: ux
+    attributes:
+      label: What new inputs, user experience, or workflow do you need?
+      description: Please demonstrate the new user experience or workflow that you want.
+      render: shell
+- type: textarea
+    id: Outputs
+    attributes:
+      label: What would you like the diff file to look like?
+      description: Show us an example of what the diff should look like for your feature.
+      render: diff

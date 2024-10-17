@@ -82,7 +82,6 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		}
 	}
 
-	comment.EnableConsolePrinter()
 	return manager
 }
 
