@@ -2,13 +2,13 @@ package parser
 
 import (
 	"go/ast"
-	"go/token"
 	"go/types"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 )
 
@@ -131,11 +131,25 @@ func findErrorVariableIf(stmt *dst.IfStmt, manager *InstrumentationManager) dst.
 }
 
 func errNilCheck(stmt *dst.BinaryExpr, pkg *decorator.Package) bool {
-	if stmt.Op != token.NEQ {
-		return false
-	}
+
 	exprTypeX := util.TypeOf(stmt.X, pkg)
 	exprTypeY := util.TypeOf(stmt.Y, pkg)
+	// Case - err != nil && condition
+	// If there is an extra condition, the types of X and Y will be booleans
+	nestedX, okX := stmt.X.(*dst.BinaryExpr)
+	nestedY, okY := stmt.Y.(*dst.BinaryExpr)
+
+	if okX && okY {
+		return errNilCheck(nestedX, pkg) || errNilCheck(nestedY, pkg)
+	}
+
+	if okX {
+		return errNilCheck(nestedX, pkg)
+	}
+
+	if okY {
+		return errNilCheck(nestedY, pkg)
+	}
 	if exprTypeX != nil && exprTypeX.String() == "error" {
 		if exprTypeY != nil && exprTypeY.String() == UntypedNil {
 			return true
@@ -182,18 +196,14 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, tracing *tracin
 				manager.errorCache.Clear()
 				return true
 			}
-		} else {
-			codegen.UnknownError(nodeVal)
-			manager.errorCache.Clear()
-			return true
 		}
-
 	case *dst.AssignStmt:
 		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
 		if errExpr != nil {
 			if manager.errorCache.GetExpression() != nil {
 				stmt := manager.errorCache.GetStatement()
-				codegen.NoticeUncheckedError(stmt)
+				comment.Warn(manager.getDecoratorPackage(), stmt, "Unchecked Error, please consult New Relic documentation on error capture")
+
 				manager.errorCache.Clear()
 				return true
 			} else {

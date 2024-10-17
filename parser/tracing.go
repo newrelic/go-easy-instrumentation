@@ -6,6 +6,7 @@ import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 )
 
 type tracingState struct {
@@ -142,7 +143,7 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 
 	// Check if error cache is still full, if so add unchecked error warning
 	if manager.errorCache.GetExpression() != nil {
-		codegen.NoticeUncheckedError(manager.errorCache.GetStatement())
+		comment.Warn(manager.getDecoratorPackage(), manager.errorCache.GetStatement(), "Unchecked Error, please consult New Relic documentation on error capture", "https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors")
 		manager.errorCache.Clear()
 	}
 
