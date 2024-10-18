@@ -1,6 +1,6 @@
 --- a/pkg/service.go
 +++ b/pkg/service.go
-@@ -4,16 +4,23 @@
+@@ -4,17 +4,24 @@
  	"fmt"
  	"log/slog"
  	"net/http"
@@ -22,11 +22,12 @@
  	resp, err := http.DefaultClient.Do(req)
 +	externalSegment.Response = resp
 +	externalSegment.End()
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		return err
  	}
-@@ -22,8 +21,10 @@
+ 
+@@ -22,9 +20,11 @@
  	return nil
  }
  
@@ -34,10 +35,11 @@
 +func buildGetRequest(path string, nrTxn *newrelic.Transaction) (*http.Request, error) {
 +	defer nrTxn.StartSegment("buildGetRequest").End()
  	req, err := http.NewRequest("GET", path, nil)
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		errMsg := fmt.Sprintf("failed to build request: %v", err)
  		slog.Error(errMsg)
+ 		return nil, fmt.Errorf(errMsg)
 --- a/handlers.go
 +++ b/handlers.go
 @@ -8,6 +8,8 @@
@@ -49,7 +51,7 @@
  )
  
  // the most basic http handler function
-@@ -25,13 +27,16 @@
+@@ -25,7 +27,9 @@
  }
  
  func noticeError(w http.ResponseWriter, r *http.Request) {
@@ -60,22 +62,23 @@
  	if err != nil {
  		io.WriteString(w, err.Error())
  		return
- 	}
+@@ -33,6 +37,7 @@
  
  	str, _, err := DoAThing(true)
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		io.WriteString(w, err.Error())
  	} else {
-@@ -40,14 +39,21 @@
+ 		io.WriteString(w, str+" no errors occured")
+@@ -40,15 +45,22 @@
  }
  
  func external(w http.ResponseWriter, r *http.Request) {
 +	nrTxn := newrelic.FromContext(r.Context())
 +
  	req, err := http.NewRequest("GET", "https://example.com", nil)
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		slog.Error(err.Error())
  		return
  	}
@@ -85,11 +88,12 @@
  	resp, err := http.DefaultClient.Do(req)
 +	externalSegment.Response = resp
 +	externalSegment.End()
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		io.WriteString(w, err.Error())
  		return
-@@ -58,8 +56,15 @@
+ 	}
+@@ -58,9 +61,16 @@
  }
  
  func basicExternal(w http.ResponseWriter, r *http.Request) {
@@ -101,11 +105,12 @@
 +	//
  	// Make an http request to an external address
  	resp, err := http.Get("https://example.com")
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		slog.Error(err.Error())
  		io.WriteString(w, err.Error())
-@@ -71,16 +74,22 @@
+ 		return
+@@ -71,19 +78,25 @@
  }
  
  func roundtripper(w http.ResponseWriter, r *http.Request) {
@@ -116,19 +121,22 @@
  	client2 := client // verify that this doesn't get the transport replaced by the parser
  
  	request, err := http.NewRequest("GET", "https://example.com", nil)
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		slog.Error(err.Error())
  		return
  	}
  
 +	request = newrelic.RequestWithTransactionContext(request, nrTxn)
  	resp, err := client2.Do(request)
-+	nrTxn.NoticeError(err)
  
  	// this is an unusual spacing and comment pattern to test the decoration preservation
  	if err != nil {
-@@ -94,29 +93,39 @@
++		nrTxn.NoticeError(err)
+ 		slog.Error(err.Error())
+ 		io.WriteString(w, err.Error())
+ 		return
+@@ -94,29 +94,39 @@
  }
  
  func async(w http.ResponseWriter, r *http.Request) {
@@ -156,8 +164,8 @@
 +	// please see these examples of code patterns for external http calls that can be instrumented:
 +	// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
  	_, err := http.Get("http://example.com")
-+	nrTxn.NoticeError(err)
  	if err != nil {
++		nrTxn.NoticeError(err)
  		slog.Error(err.Error())
  	}
  }

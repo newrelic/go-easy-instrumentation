@@ -108,91 +108,6 @@ func Test_isNewRelicMethod(t *testing.T) {
 	}
 }
 
-func Test_generateNoticeError(t *testing.T) {
-	type args struct {
-		errExpr  dst.Expr
-		txnName  string
-		nodeDecs *dst.NodeDecs
-	}
-	tests := []struct {
-		name string
-		args args
-		want *dst.ExprStmt
-	}{
-		{
-			name: "generate notice error",
-			args: args{
-				errExpr:  dst.NewIdent("err"),
-				txnName:  "txn",
-				nodeDecs: nil,
-			},
-			want: &dst.ExprStmt{
-				X: &dst.CallExpr{
-					Fun: &dst.SelectorExpr{
-						X: &dst.Ident{
-							Name: "txn",
-						},
-						Sel: &dst.Ident{
-							Name: "NoticeError",
-						},
-					},
-					Args: []dst.Expr{
-						&dst.Ident{
-							Name: "err",
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "generate notice error",
-			args: args{
-				errExpr: dst.NewIdent("err"),
-				txnName: "txn",
-				nodeDecs: &dst.NodeDecs{
-					After: dst.NewLine,
-					End:   dst.Decorations{"// end"},
-				},
-			},
-			want: &dst.ExprStmt{
-				X: &dst.CallExpr{
-					Fun: &dst.SelectorExpr{
-						X: &dst.Ident{
-							Name: "txn",
-						},
-						Sel: &dst.Ident{
-							Name: "NoticeError",
-						},
-					},
-					Args: []dst.Expr{
-						&dst.Ident{
-							Name: "err",
-						},
-					},
-				},
-				Decs: dst.ExprStmtDecorations{
-					NodeDecs: dst.NodeDecs{
-						After: dst.NewLine,
-						End:   dst.Decorations{"// end"},
-					},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := codegen.NoticeError(tt.args.errExpr, tt.args.txnName, tt.args.nodeDecs)
-			assert.Equal(t, tt.want, got, "generated notice error expression is not correct")
-			if tt.args.nodeDecs != nil {
-				emptyDecoration := dst.Decorations{}
-				emptyDecoration.Clear()
-				assert.Equal(t, dst.None, tt.args.nodeDecs.After, "passed node decorations `After` should be `None`")
-				assert.Equal(t, emptyDecoration, tt.args.nodeDecs.End, "passed node decorations `End` should be cleared")
-			}
-		})
-	}
-}
-
 func Test_noticeError(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -224,8 +139,8 @@ import (
 
 func main() {
 	_, err := http.Get("http://example.com")
-	txn.NoticeError(err)
 	if err != nil {
+		txn.NoticeError(err)
 		log.Fatal(err)
 	}
 }
@@ -267,7 +182,10 @@ func main() {
 		err error
 	}
 	t := test{}
-	_, t.err = http.Get("http://example.com")
+	_, t.err := http.Get("http://example.com")
+	if t.err != nil {
+		log.Fatal(t.err)
+	}	
 }
 `,
 			expect: `package main
@@ -281,8 +199,11 @@ func main() {
 		err error
 	}
 	t := test{}
-	_, t.err = http.Get("http://example.com")
-	txn.NoticeError(t.err)
+	_, t.err := http.Get("http://example.com")
+	if t.err != nil {
+		txn.NoticeError(t.err)
+		log.Fatal(t.err)
+	}
 }
 `,
 		},
@@ -331,8 +252,8 @@ import (
 
 func myFunc(nrTxn *newrelic.Transaction) {
 	_, err := http.Get("http://example.com")
-	nrTxn.NoticeError(err)
 	if err != nil {
+		nrTxn.NoticeError(err)
 		panic(err)
 	}
 }
@@ -380,8 +301,8 @@ import (
 
 func myFunc(nrTxn *newrelic.Transaction) {
 	_, err := http.Get("http://example.com")
-	nrTxn.NoticeError(err)
 	if err != nil {
+		nrTxn.NoticeError(err)
 		panic(err)
 	}
 }
