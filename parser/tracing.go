@@ -91,7 +91,6 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 						decl := manager.getDeclaration(invInfo.functionName)
 						TraceFunction(manager, decl, tracing.TraceDownstreamFunction())
 						manager.addTxnArgumentToFunctionDecl(decl, txnVarName)
-
 						manager.addImport(codegen.NewRelicAgentImportPath)
 						decl.Body.List = append([]dst.Stmt{codegen.DeferSegment(fmt.Sprintf("async %s", invInfo.functionName), txnVarName)}, decl.Body.List...)
 					}
