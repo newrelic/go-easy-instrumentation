@@ -4,7 +4,8 @@
 package main
 
 import (
-	"fmt"
+	"log/slog"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,10 +32,21 @@ func bindingEndpoint(c *gin.Context) {
 	}
 	testStruct := Test{}
 	if err := c.BindJSON(&testStruct); err != nil {
-		fmt.Println(s)
 		return
 	}
 
+}
+
+func anotherFunc(c *gin.Context) {
+	resp, err := http.Get("http://example.com")
+	if err != nil {
+		slog.Error(err.Error())
+	}
+	c.Writer.WriteString(resp.Status)
+}
+func testCallingAnotherFunc(c *gin.Context) {
+
+	anotherFunc(c)
 }
 
 func endpointChangeCode(c *gin.Context) {
@@ -70,6 +82,7 @@ func main() {
 	router.GET("/headers", endpointResponseHeaders)
 	router.GET("/txn", endpointAccessTransaction)
 	router.GET("/binding", bindingEndpoint)
+	router.GET("/another", testCallingAnotherFunc)
 
 	// Since the handler function name is used as the transaction name,
 	// anonymous functions do not get usefully named.  We encourage
