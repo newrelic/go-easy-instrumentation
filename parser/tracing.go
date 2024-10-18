@@ -91,13 +91,11 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 						decl := manager.getDeclaration(invInfo.functionName)
 						TraceFunction(manager, decl, tracing.TraceDownstreamFunction())
 						manager.addTxnArgumentToFunctionDecl(decl, txnVarName)
-						fmt.Println("adding txn arg", decl.Name.Name)
 
 						manager.addImport(codegen.NewRelicAgentImportPath)
 						decl.Body.List = append([]dst.Stmt{codegen.DeferSegment(fmt.Sprintf("async %s", invInfo.functionName), txnVarName)}, decl.Body.List...)
 					}
 					if manager.requiresTransactionArgument(invInfo, txnVarName) {
-						fmt.Println("requires transaction argument", invInfo.functionName)
 						invInfo.call.Args = append(invInfo.call.Args, codegen.TxnNewGoroutine(txnVarName))
 						c.Replace(v)
 						TopLevelFunctionChanged = true
@@ -131,7 +129,6 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 			if !downstreamFunctionTraced {
 				ok := NoticeError(manager, v, c, tracing)
 				if ok {
-					fmt.Println("noticing error")
 					TopLevelFunctionChanged = true
 				}
 			}
