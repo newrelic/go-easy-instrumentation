@@ -87,7 +87,7 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 
 // DetectDependencyIntegrations
 func (m *InstrumentationManager) DetectDependencyIntegrations() error {
-	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod, InstrumentGrpcDial, InstrumentGrpcServerMethod)
+	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod, InstrumentGrpcDial, InstrumentGinMiddleware, InstrumentGrpcServerMethod)
 	m.loadStatefulTracingFunctions(ExternalHttpCall, WrapNestedHandleFunction, InstrumentGrpcServer)
 	m.loadDependencyScans(FindGrpcServerObject, FindGrpcServerStreamInterface)
 	return nil
