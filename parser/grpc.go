@@ -134,7 +134,7 @@ func InstrumentGrpcServerMethod(manager *InstrumentationManager, c *dstutil.Curs
 		// find either a context or a server stream object
 		txnAssignment, ok := getTxnFromGrpcServer(manager, funcDecl.Type.Params.List, defaultTxnName)
 		if ok {
-			decl, ok := TraceFunction(manager, funcDecl, TraceDownstreamFunction(defaultTxnName))
+			decl, ok := TraceFunction(manager, funcDecl, TraceDownstreamFunction(defaultTxnName), noSegment())
 			if ok {
 				decl.Body.List = append([]dst.Stmt{txnAssignment}, decl.Body.List...)
 				c.Replace(decl)

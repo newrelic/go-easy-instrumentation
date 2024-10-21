@@ -251,6 +251,7 @@ import (
 )
 
 func myFunc(nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("myFunc").End()
 	_, err := http.Get("http://example.com")
 	if err != nil {
 		nrTxn.NoticeError(err)
@@ -300,6 +301,7 @@ import (
 )
 
 func myFunc(nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("myFunc").End()
 	_, err := http.Get("http://example.com")
 	if err != nil {
 		nrTxn.NoticeError(err)
