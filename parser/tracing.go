@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"slices"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
@@ -54,13 +55,56 @@ func (tc *tracingState) TraceDownstreamFunction() *tracingState {
 	}
 }
 
+type segmentOpts struct {
+	async  bool
+	create bool
+}
+
+// name gets the name of a segment
+func (opt *segmentOpts) name(fn *dst.FuncDecl) string {
+	name := fn.Name.Name
+	if opt.async {
+		name = fmt.Sprintf("async %s", name)
+	}
+	return name
+}
+
+// noSegment indicates that a segment should not be created
+func noSegment() segmentOpts {
+	return segmentOpts{}
+}
+
+// async segment creates a segment for an async function that begins and ends in the body of a function
+func asyncSegment() segmentOpts {
+	return segmentOpts{async: true, create: true}
+}
+
+// functionSegment creates a segment that begins and ends in the body of a function
+func functionSegment() segmentOpts {
+	return segmentOpts{create: true}
+}
+
+func prependStatementToFunctionDecl(fn *dst.FuncDecl, stmt dst.Stmt) {
+	if fn.Body == nil || fn.Body.List == nil {
+		return
+	}
+
+	fn.Body.List = slices.Insert(fn.Body.List, 0, stmt)
+}
+
+func prependStatementToFunctionLit(fn *dst.FuncLit, stmt dst.Stmt) {
+	if fn.Body == nil || fn.Body.List == nil {
+		return
+	}
+
+	fn.Body.List = slices.Insert(fn.Body.List, 0, stmt)
+}
+
 // TraceFunction adds tracing to a function. This includes error capture, and passing agent metadata to relevant functions and services.
 // Traces all called functions inside the current package as well.
 // This function returns a FuncDecl object pointer that contains the potentially modified version of the FuncDecl object, fn, passed. If
 // the bool field is true, then the function was modified, and requires a transaction most likely.
-//
-// TODO: there is a ton of complexity around tracing async statements that do not have a transaction wrapping them. This is a feature gap.
-func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *tracingState) (*dst.FuncDecl, bool) {
+func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *tracingState, segment segmentOpts) (*dst.FuncDecl, bool) {
 	TopLevelFunctionChanged := false
 	outputNode := dstutil.Apply(fn, nil, func(c *dstutil.Cursor) bool {
 		n := c.Node()
@@ -79,8 +123,8 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 					// add go-agent/v3/newrelic to imports
 					manager.addImport(codegen.NewRelicAgentImportPath)
 
-					// create async segment
-					fun.Body.List = append([]dst.Stmt{codegen.DeferSegment("async literal", txnVarName)}, fun.Body.List...)
+					// create async segment; this is a special case
+					prependStatementToFunctionLit(fun, codegen.DeferSegment("async literal", txnVarName))
 					c.Replace(v)
 					TopLevelFunctionChanged = true
 				default:
@@ -89,10 +133,8 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 					if manager.shouldInstrumentFunction(invInfo) {
 						manager.setPackage(invInfo.packageName)
 						decl := manager.getDeclaration(invInfo.functionName)
-						TraceFunction(manager, decl, tracing.TraceDownstreamFunction())
+						TraceFunction(manager, decl, tracing.TraceDownstreamFunction(), asyncSegment())
 						manager.addTxnArgumentToFunctionDecl(decl, txnVarName)
-						manager.addImport(codegen.NewRelicAgentImportPath)
-						decl.Body.List = append([]dst.Stmt{codegen.DeferSegment(fmt.Sprintf("async %s", invInfo.functionName), txnVarName)}, decl.Body.List...)
 					}
 					if manager.requiresTransactionArgument(invInfo, txnVarName) {
 						invInfo.call.Args = append(invInfo.call.Args, codegen.TxnNewGoroutine(txnVarName))
@@ -110,13 +152,10 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 			if manager.shouldInstrumentFunction(invInfo) {
 				manager.setPackage(invInfo.packageName)
 				decl := manager.getDeclaration(invInfo.functionName)
-				_, downstreamFunctionTraced = TraceFunction(manager, decl, tracing.TraceDownstreamFunction())
+				_, downstreamFunctionTraced = TraceFunction(manager, decl, tracing.TraceDownstreamFunction(), functionSegment())
 				if downstreamFunctionTraced {
 					manager.addTxnArgumentToFunctionDecl(decl, txnVarName)
 					manager.addImport(codegen.NewRelicAgentImportPath)
-					if tracing.agentVariable == "" {
-						decl.Body.List = append([]dst.Stmt{codegen.DeferSegment(invInfo.functionName, txnVarName)}, decl.Body.List...)
-					}
 				}
 			}
 			if manager.requiresTransactionArgument(invInfo, txnVarName) {
@@ -145,6 +184,12 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 	if manager.errorCache.GetExpression() != nil {
 		comment.Warn(manager.getDecoratorPackage(), manager.errorCache.GetStatement(), "Unchecked Error, please consult New Relic documentation on error capture", "https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors")
 		manager.errorCache.Clear()
+	}
+
+	if segment.create {
+		prependStatementToFunctionDecl(fn, codegen.DeferSegment(segment.name(fn), tracing.GetTransactionVariable()))
+		manager.addImport(codegen.NewRelicAgentImportPath)
+		TopLevelFunctionChanged = true
 	}
 
 	// update the stored declaration, marking it as traced

@@ -151,10 +151,10 @@ func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor
 	fn, isFn := n.(*dst.FuncDecl)
 	if isFn && isHttpHandler(fn, manager.getDecoratorPackage()) {
 		txnName := defaultTxnName
-		newFn, ok := TraceFunction(manager, fn, TraceDownstreamFunction(txnName))
+		newFn, ok := TraceFunction(manager, fn, TraceDownstreamFunction(txnName), noSegment())
 		if ok {
-			defineTxnFromCtx(newFn, txnName)
 			c.Replace(newFn)
+			defineTxnFromCtx(newFn, txnName)
 			manager.updateFunctionDeclaration(newFn)
 		}
 	}
