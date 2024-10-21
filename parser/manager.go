@@ -22,9 +22,8 @@ import (
 //
 // Please access this object's data through methods rather than directly manipulating it.
 type tracedFunction struct {
-	traced      bool
-	requiresTxn bool
-	body        *dst.FuncDecl
+	traced bool
+	body   *dst.FuncDecl
 }
 
 type tracingFunctions struct {
@@ -179,11 +178,12 @@ type invocationInfo struct {
 	functionName string
 	packageName  string
 	call         *dst.CallExpr
+	decl         *tracedFunction
 }
 
-// GetPackageFunctionInvocation returns the name of the function being invoked, and the expression containing the call
-// where that invocation occurs if a function is declared in this package.
-func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *invocationInfo {
+// getInvocationInfo returns an object containing information needed to instrumenta funciton call if
+// the function call was determined to be declared in any package in this application. Otherwise, it returns nil.
+func (m *InstrumentationManager) getInvocationInfo(node dst.Node) *invocationInfo {
 	var invInfo *invocationInfo
 
 	dst.Inspect(node, func(n dst.Node) bool {
@@ -198,14 +198,18 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *in
 				if path == "" {
 					path = m.getPackageName()
 				}
-				_, ok := m.packages[path]
-				if ok {
-					invInfo = &invocationInfo{
-						functionName: functionCallIdent.Name,
-						packageName:  path,
-						call:         call,
+
+				if m.packages[path] != nil && m.packages[path].tracedFuncs != nil {
+					v, ok := m.packages[path].tracedFuncs[functionCallIdent.Name]
+					if ok {
+						invInfo = &invocationInfo{
+							functionName: functionCallIdent.Name,
+							packageName:  path,
+							call:         call,
+							decl:         v,
+						}
+						return false
 					}
-					return false
 				}
 			}
 			return true
@@ -216,88 +220,12 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *in
 	return invInfo
 }
 
-// AddTxnArgumentToFuncDecl adds a transaction argument to the declaration of a function. This marks that function as needing a transaction,
-// and can be looked up by name to know that the last argument is a transaction.
-func (m *InstrumentationManager) addTxnArgumentToFunctionDecl(decl *dst.FuncDecl, txnVarName string) {
-	if decl == nil {
-		return
-	}
-
-	if decl.Type.Params == nil {
-		decl.Type.Params = &dst.FieldList{
-			List: []*dst.Field{{
-				Names: []*dst.Ident{dst.NewIdent(txnVarName)},
-				Type: &dst.StarExpr{
-					X: &dst.SelectorExpr{
-						X:   dst.NewIdent("newrelic"),
-						Sel: dst.NewIdent("Transaction"),
-					},
-				},
-			}},
-		}
-	} else {
-		decl.Type.Params.List = append(decl.Type.Params.List, &dst.Field{
-			Names: []*dst.Ident{dst.NewIdent(txnVarName)},
-			Type: &dst.StarExpr{
-				X: &dst.SelectorExpr{
-					X:   dst.NewIdent("newrelic"),
-					Sel: dst.NewIdent("Transaction"),
-				},
-			},
-		})
-	}
-	state, ok := m.packages[m.currentPackage]
-	if ok {
-		fn, ok := state.tracedFuncs[decl.Name.Name]
-		if ok {
-			fn.requiresTxn = true
-		}
-	}
-}
-
-// IsTracingComplete returns true if a function has all the tracing it needs added to it.
-func (m *InstrumentationManager) shouldInstrumentFunction(inv *invocationInfo) bool {
+func (inv *invocationInfo) doTracing() bool {
 	if inv == nil {
 		return false
 	}
 
-	state, ok := m.packages[inv.packageName]
-	if ok {
-		v, ok := state.tracedFuncs[inv.functionName]
-		if ok {
-			return !v.traced
-		}
-	}
-
-	return false
-}
-
-// conatinsTransactionArgument returns true if a function call contains a transaction argument.
-// This function works for async functions as well.
-func containsTransactionArgument(call *dst.CallExpr, txnName string) bool {
-	if call == nil || call.Args == nil {
-		return false
-	}
-
-	for _, arg := range call.Args {
-		switch v := arg.(type) {
-		case *dst.Ident:
-			if v.Name == txnName {
-				return true
-			}
-		case *dst.CallExpr:
-			sel, ok := v.Fun.(*dst.SelectorExpr)
-			if ok {
-				if sel.Sel.Name == "NewGoroutine" {
-					ident, ok := sel.X.(*dst.Ident)
-					if ok && ident.Name == txnName {
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
+	return inv.decl.traced
 }
 
 // GetDeclaration returns a pointer to the location in the DST tree where a function is declared and defined.

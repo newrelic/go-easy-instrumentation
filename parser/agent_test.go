@@ -442,6 +442,8 @@ func main() {
 		panic(err)
 	}
 
+	// NR INFO: Go Easy Instrumentation can not trace async function calls that are not inside a function call.
+	// Please manually trace this goroutine, or move it to a function that awaits its completion.
 	go myFunc()
 
 	NewRelicAgent.Shutdown(5 * time.Second)

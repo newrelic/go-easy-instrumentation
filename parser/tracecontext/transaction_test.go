@@ -10,8 +10,8 @@ import (
 func TestTransaction_Pass(t *testing.T) {
 	tests := []passTest{
 		{
-			name: "pass transaction to function",
-			tc:   NewTransaction("tx"),
+			name: "func decl has txn param, call does not have txn arg",
+			tc:   NewTransaction("tx", nil),
 			args: passTestArgs{
 				decl: &dst.FuncDecl{
 					Name: dst.NewIdent("foo"),
@@ -34,14 +34,12 @@ func TestTransaction_Pass(t *testing.T) {
 					Args: []dst.Expr{},
 				},
 			},
-			wantStatements: nil,
-			wantArgs:       []dst.Expr{dst.NewIdent("tx")},
-			wantTc:         NewTransaction("tx"),
-			wantErr:        nil,
+			wantArgs: []dst.Expr{dst.NewIdent("tx")},
+			wantTc:   NewTransaction("tx", nil),
 		},
 		{
-			name: "pass transaction to function call wih argument",
-			tc:   NewTransaction("tx"),
+			name: "func decl has txn param, and func call has txn arg",
+			tc:   NewTransaction("tx", nil),
 			args: passTestArgs{
 				decl: &dst.FuncDecl{
 					Name: dst.NewIdent("foo"),
@@ -64,14 +62,12 @@ func TestTransaction_Pass(t *testing.T) {
 					Args: []dst.Expr{dst.NewIdent("tx")},
 				},
 			},
-			wantStatements: nil,
-			wantArgs:       []dst.Expr{dst.NewIdent("tx")},
-			wantTc:         NewTransaction("tx"),
-			wantErr:        nil,
+			wantArgs: []dst.Expr{dst.NewIdent("tx")},
+			wantTc:   NewTransaction("tx", nil),
 		},
 		{
-			name: "pass transaction to function call with compound parameters",
-			tc:   NewTransaction("tx"),
+			name: "func decl has compound parameters, and counts correctly",
+			tc:   NewTransaction("tx", nil),
 			args: passTestArgs{
 				decl: &dst.FuncDecl{
 					Name: dst.NewIdent("foo"),
@@ -98,14 +94,12 @@ func TestTransaction_Pass(t *testing.T) {
 					Args: []dst.Expr{dst.NewIdent("1"), dst.NewIdent("2"), dst.NewIdent("tx")},
 				},
 			},
-			wantStatements: nil,
-			wantArgs:       []dst.Expr{dst.NewIdent("1"), dst.NewIdent("2"), dst.NewIdent("tx")},
-			wantTc:         NewTransaction("tx"),
-			wantErr:        nil,
+			wantArgs: []dst.Expr{dst.NewIdent("1"), dst.NewIdent("2"), dst.NewIdent("tx")},
+			wantTc:   NewTransaction("tx", nil),
 		},
 		{
-			name: "pass transaction to function with a context parameter",
-			tc:   NewTransaction("tx"),
+			name: "func decl has context parameter, context argument gets wrapped",
+			tc:   NewTransaction("tx", nil),
 			args: passTestArgs{
 				decl: &dst.FuncDecl{
 					Name: dst.NewIdent("foo"),
@@ -125,19 +119,43 @@ func TestTransaction_Pass(t *testing.T) {
 						Name: "foo",
 						Path: "baz",
 					},
-					Args: []dst.Expr{dst.NewIdent("context")},
+					Args: []dst.Expr{dst.NewIdent("ctx")},
 				},
 			},
-			wantStatements: []dst.Stmt{
-				codegen.WrapContext(dst.NewIdent("context"), dst.NewIdent("tx"), codegen.DefaultContextVariableName),
-			},
-			wantArgs: []dst.Expr{dst.NewIdent(codegen.DefaultContextVariableName)},
-			wantTc:   NewContext("ctx_param"),
-			wantErr:  nil,
+			wantArgs: []dst.Expr{codegen.WrapContextExpression(dst.NewIdent("ctx"), dst.NewIdent("tx"))},
+			wantTc:   NewContext("ctx_param", nil),
 		},
 		{
-			name: "pass transaction to function without valid parameter",
-			tc:   NewTransaction("tx"),
+			name: "func decl has context parameter, context argument gets wrapped",
+			tc:   NewTransaction("tx", nil),
+			args: passTestArgs{
+				decl: &dst.FuncDecl{
+					Name: dst.NewIdent("foo"),
+					Type: &dst.FuncType{
+						Params: &dst.FieldList{
+							List: []*dst.Field{
+								{
+									Names: []*dst.Ident{dst.NewIdent("ctx_param")},
+									Type:  contextParameterType(),
+								},
+							},
+						},
+					},
+				},
+				call: &dst.CallExpr{
+					Fun: &dst.Ident{
+						Name: "foo",
+						Path: "baz",
+					},
+					Args: []dst.Expr{codegen.WrapContextExpression(dst.NewIdent("ctx"), dst.NewIdent("tx"))},
+				},
+			},
+			wantArgs: []dst.Expr{codegen.WrapContextExpression(dst.NewIdent("ctx"), dst.NewIdent("tx"))},
+			wantTc:   NewContext("ctx_param", nil),
+		},
+		{
+			name: "function with no params",
+			tc:   NewTransaction("tx", nil),
 			args: passTestArgs{
 				decl: &dst.FuncDecl{
 					Name: dst.NewIdent("foo"),
@@ -155,10 +173,14 @@ func TestTransaction_Pass(t *testing.T) {
 					Args: []dst.Expr{},
 				},
 			},
-			wantStatements: []dst.Stmt{},
-			wantArgs:       []dst.Expr{},
-			wantTc:         nil,
-			wantErr:        NewPassError(NewTransaction("tx"), "no context or transaction argument found in function declaration foo"),
+			wantArgs: []dst.Expr{dst.NewIdent("tx")},
+			wantParams: []*dst.Field{
+				{
+					Names: []*dst.Ident{dst.NewIdent("tx")},
+					Type:  transactionArgumentType(),
+				},
+			},
+			wantTc: NewTransaction("tx", nil),
 		},
 	}
 

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/dave/dst"
-	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/dave/dst/decorator"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -265,6 +265,15 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 
 // What if there are two instrumentable function invocations in a statement?
 func Test_GetPackageFunctionInvocation(t *testing.T) {
+	tracedFunc := tracedFunction{
+		body:   &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}},
+		traced: false,
+	}
+	testPackages := map[string]*PackageState{"foo": {
+		tracedFuncs:  map[string]*tracedFunction{"bar": &tracedFunc},
+		pkg:          &decorator.Package{},
+		importsAdded: map[string]bool{},
+	}}
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -285,34 +294,34 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 		{
 			name: "basic_passing_case",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {}},
+				packages:       testPackages,
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}},
-			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}, decl: &tracedFunc},
 		},
 		{
 			name: "empty_path_passes",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {}},
+				packages:       testPackages,
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}},
-			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: &tracedFunc},
 		},
 		{
 			name: "finds_call_in_complex_node",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {}},
+				packages:       testPackages,
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.ExprStmt{X: &dst.CallExpr{Fun: &dst.Ident{Name: "Sprintf", Path: "fmt"}, Args: []dst.Expr{&dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}}}}},
-			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: &tracedFunc},
 		},
 		{
 			name: "ignore_functions_not_in_package",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {}},
+				packages:       testPackages,
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "fmt"}}},
@@ -321,7 +330,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 		{
 			name: "ignore_block_statements",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {}},
+				packages:       testPackages,
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.BlockStmt{List: []dst.Stmt{&dst.ExprStmt{X: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}}}}},
@@ -339,325 +348,8 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 			defer panicRecovery(t)
-			got := m.getPackageFunctionInvocation(tt.args.node)
+			got := m.getInvocationInfo(tt.args.node)
 			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func Test_AddTxnArgumentToFunctionDecl(t *testing.T) {
-	type fields struct {
-		userAppPath       string
-		diffFile          string
-		appName           string
-		agentVariableName string
-		currentPackage    string
-		packages          map[string]*PackageState
-	}
-	type args struct {
-		decl       *dst.FuncDecl
-		txnVarName string
-	}
-	tests := []struct {
-		name           string
-		fields         fields
-		args           args
-		want           *dst.FuncDecl
-		wantRequireTxn bool
-	}{
-		{
-			name: "simple_passing_case",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				decl:       &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}, Type: &dst.FuncType{Params: &dst.FieldList{}}},
-				txnVarName: "txn",
-			},
-			want: &dst.FuncDecl{
-				Name: &dst.Ident{Name: "bar"},
-				Type: &dst.FuncType{
-					Params: &dst.FieldList{
-						List: []*dst.Field{{
-							Names: []*dst.Ident{dst.NewIdent("txn")},
-							Type: &dst.StarExpr{
-								X: &dst.SelectorExpr{
-									X:   dst.NewIdent("newrelic"),
-									Sel: dst.NewIdent("Transaction"),
-								},
-							},
-						}},
-					},
-				},
-			},
-			wantRequireTxn: true,
-		},
-		{
-			name: "simple_case_nil_params",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				decl:       &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}, Type: &dst.FuncType{Params: nil}},
-				txnVarName: "txn",
-			},
-			want: &dst.FuncDecl{
-				Name: &dst.Ident{Name: "bar"},
-				Type: &dst.FuncType{
-					Params: &dst.FieldList{
-						List: []*dst.Field{{
-							Names: []*dst.Ident{dst.NewIdent("txn")},
-							Type: &dst.StarExpr{
-								X: &dst.SelectorExpr{
-									X:   dst.NewIdent("newrelic"),
-									Sel: dst.NewIdent("Transaction"),
-								},
-							},
-						}},
-					},
-				},
-			},
-			wantRequireTxn: true,
-		},
-		{
-			name: "nil_function_declaration",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				decl:       nil,
-				txnVarName: "txn",
-			},
-			want:           nil,
-			wantRequireTxn: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := &InstrumentationManager{
-				userAppPath:       tt.fields.userAppPath,
-				diffFile:          tt.fields.diffFile,
-				appName:           tt.fields.appName,
-				agentVariableName: tt.fields.agentVariableName,
-				currentPackage:    tt.fields.currentPackage,
-				packages:          tt.fields.packages,
-			}
-			defer panicRecovery(t)
-			m.addTxnArgumentToFunctionDecl(tt.args.decl, tt.args.txnVarName)
-			assert.Equal(t, tt.want, tt.args.decl)
-			assert.Equal(t, tt.wantRequireTxn, m.packages[m.currentPackage].tracedFuncs["bar"].requiresTxn)
-		})
-	}
-}
-
-func Test_ShouldInstrumentFunction(t *testing.T) {
-	type fields struct {
-		userAppPath       string
-		diffFile          string
-		appName           string
-		agentVariableName string
-		currentPackage    string
-		packages          map[string]*PackageState
-	}
-	type args struct {
-		inv *invocationInfo
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   bool
-	}{
-		{
-			name: "function_should_be_instrumented",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
-				currentPackage: "foo",
-			},
-			args: args{inv: &invocationInfo{packageName: "foo", functionName: "bar"}},
-			want: true,
-		},
-		{
-			name: "nil_invocation",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
-				currentPackage: "foo",
-			},
-			args: args{inv: nil},
-			want: false,
-		},
-		{
-			name: "already_instrumented",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {traced: true}}}},
-				currentPackage: "foo",
-			},
-			args: args{inv: &invocationInfo{packageName: "foo", functionName: "bar"}},
-			want: false,
-		},
-		{
-			name: "package_not_found",
-			fields: fields{
-				packages:       map[string]*PackageState{},
-				currentPackage: "foo",
-			},
-			args: args{inv: &invocationInfo{packageName: "foo", functionName: "bar"}},
-			want: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := &InstrumentationManager{
-				userAppPath:       tt.fields.userAppPath,
-				diffFile:          tt.fields.diffFile,
-				appName:           tt.fields.appName,
-				agentVariableName: tt.fields.agentVariableName,
-				currentPackage:    tt.fields.currentPackage,
-				packages:          tt.fields.packages,
-			}
-			defer panicRecovery(t)
-			got := m.shouldInstrumentFunction(tt.args.inv)
-			if got != tt.want {
-				t.Errorf("InstrumentationManager.ShouldInstrumentFunction() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_RequiresTransactionArgument(t *testing.T) {
-	type fields struct {
-		userAppPath       string
-		diffFile          string
-		appName           string
-		agentVariableName string
-		currentPackage    string
-		packages          map[string]*PackageState
-	}
-	type args struct {
-		inv             *invocationInfo
-		txnVariableName string
-	}
-	tests := []struct {
-		name   string
-		fields fields
-		args   args
-		want   bool
-	}{
-		{
-			name: "requres_txn",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {requiresTxn: true}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				inv:             &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Args: []dst.Expr{}}},
-				txnVariableName: "txn",
-			},
-			want: true,
-		},
-		{
-			name: "call_contains_arguments",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {requiresTxn: true}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				inv:             &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Args: []dst.Expr{dst.NewIdent("baz")}}},
-				txnVariableName: "txn",
-			},
-			want: true,
-		},
-		{
-			name: "call_contains_txn_argument",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {requiresTxn: true}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				inv:             &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Args: []dst.Expr{dst.NewIdent("txn")}}},
-				txnVariableName: "txn",
-			},
-			want: false,
-		},
-		{
-			name: "call_contains_async_txn_argument",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {requiresTxn: true}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				inv:             &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Args: []dst.Expr{codegen.TxnNewGoroutine("txn")}}},
-				txnVariableName: "txn",
-			},
-			want: false,
-		},
-		{
-			name: "nil_invocation",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				inv:             nil,
-				txnVariableName: "txn",
-			},
-			want: false,
-		},
-		{
-			name: "nil_call_arguments",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				inv:             &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Args: nil}},
-				txnVariableName: "txn",
-			},
-			want: false,
-		},
-		{
-			name: "does_not_require_txn",
-			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {requiresTxn: false}}}},
-				currentPackage: "foo",
-			},
-			args: args{
-				inv:             &invocationInfo{packageName: "foo", functionName: "bar"},
-				txnVariableName: "txn",
-			},
-			want: false,
-		},
-		{
-			name: "package_not_found",
-			fields: fields{
-				packages:       map[string]*PackageState{},
-				currentPackage: "foo",
-			},
-			args: args{
-				inv:             &invocationInfo{packageName: "foo", functionName: "bar"},
-				txnVariableName: "txn",
-			},
-			want: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := &InstrumentationManager{
-				userAppPath:       tt.fields.userAppPath,
-				diffFile:          tt.fields.diffFile,
-				appName:           tt.fields.appName,
-				agentVariableName: tt.fields.agentVariableName,
-				currentPackage:    tt.fields.currentPackage,
-				packages:          tt.fields.packages,
-			}
-			defer panicRecovery(t)
-			got := m.requiresTransactionArgument(tt.args.inv, tt.args.txnVariableName)
-			if got != tt.want {
-				t.Errorf("InstrumentationManager.RequiresTransactionArgument() = %v, want %v", got, tt.want)
-			}
 		})
 	}
 }

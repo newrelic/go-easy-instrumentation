@@ -134,7 +134,8 @@ func InstrumentGrpcServerMethod(manager *InstrumentationManager, c *dstutil.Curs
 		// find either a context or a server stream object
 		txnAssignment, ok := getTxnFromGrpcServer(manager, funcDecl.Type.Params.List, defaultTxnName)
 		if ok {
-			decl, ok := TraceFunction(manager, funcDecl, TraceDownstreamFunction(defaultTxnName))
+			tracecontext := tracecontext.NewTransaction(defaultTxnName, manager.getDecoratorPackage())
+			decl, ok := TraceFunction(manager, funcDecl, tracecontext, false)
 			if ok {
 				decl.Body.List = append([]dst.Stmt{txnAssignment}, decl.Body.List...)
 				c.Replace(decl)
@@ -147,10 +148,14 @@ func InstrumentGrpcServerMethod(manager *InstrumentationManager, c *dstutil.Curs
 //////////////////////////////////////////////
 
 // InstrumentGrpcServer adds the New Relic gRPC server interceptors to the grpc.NewServer call
-func InstrumentGrpcServer(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func InstrumentGrpcServer(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracecontext tracecontext.TraceContext) bool {
 	if callExpr, ok := grpcNewServerCall(stmt); ok {
-		callExpr.Args = append(callExpr.Args, codegen.NrGrpcUnaryServerInterceptor(tracing.GetAgentVariable(), callExpr))
-		callExpr.Args = append(callExpr.Args, codegen.NrGrpcStreamServerInterceptor(tracing.GetAgentVariable(), callExpr))
+		agent, assign := tracecontext.Agent()
+		if assign != nil {
+			c.InsertBefore(assign)
+		}
+		callExpr.Args = append(callExpr.Args, codegen.NrGrpcUnaryServerInterceptor(agent, callExpr))
+		callExpr.Args = append(callExpr.Args, codegen.NrGrpcStreamServerInterceptor(agent, callExpr))
 		manager.addImport(codegen.NrgrpcImportPath)
 		return true
 	}

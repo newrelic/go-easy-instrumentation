@@ -8,7 +8,8 @@ import (
 
 const (
 	// the import path for the newrelic package
-	NewRelicAgentImportPath string = "github.com/newrelic/go-agent/v3/newrelic"
+	NewRelicAgentImportPath  string = "github.com/newrelic/go-agent/v3/newrelic"
+	DefaultAgentVariableName string = "NewRelicAgent"
 )
 
 func InitializeAgent(AppName, AgentVariableName string) []dst.Stmt {

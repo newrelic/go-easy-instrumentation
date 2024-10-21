@@ -70,3 +70,16 @@ func Position(node dst.Node, pkg *decorator.Package) *token.Position {
 	pos := pkg.Fset.Position(astNode.Pos())
 	return &pos
 }
+
+func WriteExpr(expr dst.Expr, pkg *decorator.Package) string {
+	if expr == nil || pkg == nil {
+		return ""
+	}
+
+	astExpr := pkg.Decorator.Ast.Nodes[expr].(ast.Expr)
+	if astExpr == nil {
+		return ""
+	}
+
+	return types.ExprString(astExpr)
+}

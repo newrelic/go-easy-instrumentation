@@ -1,7 +1,10 @@
 package tracecontext
 
 import (
+	"fmt"
+
 	"github.com/dave/dst"
+	"github.com/dave/dst/decorator"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 )
 
@@ -29,26 +32,30 @@ func isTransactionParam(arg *dst.Field) bool {
 
 // Transaction is an object that represents a new relic transaction object.
 type Transaction struct {
-	variableName string
+	pkg                 *decorator.Package
+	agentVariable       string
+	transactionVariable string
 }
 
 // StartTransaction creates a new transaction and returns the transaction and the code to start the transaction.
 // The return values can never be nil.
 // If overwrite is true, the variable will be assigned instead of defined.
-func StartTransaction(variableName, transactionName, agentVariable string, overwrite bool) (*Transaction, dst.Stmt) {
-	return &Transaction{variableName: variableName}, codegen.StartTransaction(agentVariable, variableName, transactionName, overwrite)
+func StartTransaction(pkg *decorator.Package, variableName, transactionName, agentVariable string, overwrite bool) (*Transaction, dst.Stmt) {
+	tc := &Transaction{
+		transactionVariable: variableName,
+		agentVariable:       agentVariable,
+		pkg:                 pkg,
+	}
+	stmt := codegen.StartTransaction(agentVariable, variableName, transactionName, overwrite)
+	return tc, stmt
 }
 
 // NewTransaction creates a new transaction object.
-func NewTransaction(variableName string) *Transaction {
+func NewTransaction(variableName string, pkg *decorator.Package) *Transaction {
 	return &Transaction{
-		variableName: variableName,
+		pkg:                 pkg,
+		transactionVariable: variableName,
 	}
-}
-
-// AssignTransactionToVariable returns nil for transactions because the transaction is already assigned to a variable.
-func (t *Transaction) AssignTransactionVariable(variableName string) dst.Stmt {
-	return nil
 }
 
 // Pass Transaction will search for a context or transaction parameter in the function declaration.
@@ -64,13 +71,13 @@ func (t *Transaction) AssignTransactionVariable(variableName string) dst.Stmt {
 //     a. The function call does not have a transaction argument; we will append a transaction argument to the function call
 //     b. The function call already has a transaction argument; do nothing
 //  3. The function declaration does not have a context or transaction parameter; we will append a transaction argument to the function declaration and the function call
-func (t *Transaction) Pass(decl *dst.FuncDecl, call *dst.CallExpr, async bool) (TraceContext, error) {
+func (t *Transaction) Pass(decl *dst.FuncDecl, call *dst.CallExpr, async bool) TraceContext {
 	var txn dst.Expr
 
 	// if async, create an async transaction
-	txn = dst.NewIdent(t.variableName)
+	txn = dst.NewIdent(t.transactionVariable)
 	if async {
-		txn = codegen.TxnNewGoroutine(dst.NewIdent(t.variableName))
+		txn = codegen.TxnNewGoroutine(dst.NewIdent(t.transactionVariable))
 	}
 
 	// argumentIndex counts the number of arguments seen so far so we can compare the types
@@ -83,29 +90,22 @@ func (t *Transaction) Pass(decl *dst.FuncDecl, call *dst.CallExpr, async bool) (
 			if argumentIndex < len(call.Args) {
 				// update the context argument to include the transaction
 				arg := call.Args[argumentIndex]
-				if async {
-					arg = codegen.WrapContextExpression(arg, codegen.TxnNewGoroutine(dst.NewIdent(t.variableName)))
-				} else {
-					arg = codegen.WrapContextExpression(arg, dst.NewIdent(t.variableName))
+				if !codegen.ContainsWrapContextExpression(arg) {
+					call.Args[argumentIndex] = codegen.WrapContextExpression(arg, txn)
 				}
 			}
-			// return the context trace context for the child function
-			return NewContext(param.Names[0].Name), nil
+			return NewContext(param.Names[0].Name, t.pkg)
 
 		} else if isTransactionParam(param) {
 			// this will always be the last argument, so check to make sure we have not already added it
 			// applications already using the go agent are not supported
 			numParams := decl.Type.Params.NumFields()
 			if len(call.Args) < numParams && argumentIndex == len(call.Args) {
-				if async {
-					call.Args = append(call.Args, codegen.TxnNewGoroutine(dst.NewIdent(t.variableName)))
-				} else {
-					call.Args = append(call.Args, dst.NewIdent(t.variableName))
-				}
+				call.Args = append(call.Args, txn)
 			}
 
 			// return the trace context for the subprocess
-			return NewTransaction(param.Names[0].Name), nil
+			return NewTransaction(param.Names[0].Name, t.pkg)
 		}
 
 		argumentIndex += incrementParameterCount(param)
@@ -114,17 +114,31 @@ func (t *Transaction) Pass(decl *dst.FuncDecl, call *dst.CallExpr, async bool) (
 	// if we reach this point, we have not found a context or transaction parameter
 	// add a transaction parameter to the function declaration
 	decl.Type.Params.List = append(decl.Type.Params.List, &dst.Field{
-		Names: []*dst.Ident{dst.NewIdent(t.variableName)},
+		Names: []*dst.Ident{dst.NewIdent(t.transactionVariable)},
 		Type:  transactionArgumentType(),
 	})
 
 	call.Args = append(call.Args, txn)
-	return NewTransaction(t.variableName), nil
+	return NewTransaction(t.transactionVariable, t.pkg)
 }
 
-// TransactionVariableName returns the variable name of the transaction.
-func (t *Transaction) TransactionVariableName() string {
-	return t.variableName
+// Transaction returns the variable name of the transaction.
+func (t *Transaction) Transaction() (string, dst.Stmt) {
+	return t.transactionVariable, nil
+}
+
+// Transaction returns the variable name of the transaction.
+// If the agent has not yet been assigned to a variable, a line of code to do that will be returned as the second return value.
+// This code must be inserted before the current cursor index.
+func (t *Transaction) Agent() (string, dst.Stmt) {
+	if t.agentVariable != "" {
+		return t.agentVariable, nil
+	}
+
+	stmt := codegen.GetApplication(dst.NewIdent(t.transactionVariable), codegen.DefaultAgentVariableName)
+	fmt.Println(stmt)
+	t.agentVariable = codegen.DefaultAgentVariableName
+	return t.agentVariable, stmt
 }
 
 // Type returns a *newrelic.Transaction type

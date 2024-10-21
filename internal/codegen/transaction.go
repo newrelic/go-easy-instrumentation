@@ -123,3 +123,20 @@ func NoticeError(errExpr dst.Expr, txnName string, nodeDecs *dst.NodeDecs) *dst.
 		Decs: decs,
 	}
 }
+
+// GetApplication returns an assignment statement that assigns the application from a transaction to a variable
+// equivalent to `agent := txn.Application()`
+func GetApplication(txn dst.Expr, agentVariableName string) *dst.AssignStmt {
+	return &dst.AssignStmt{
+		Lhs: []dst.Expr{dst.NewIdent(agentVariableName)},
+		Tok: token.DEFINE,
+		Rhs: []dst.Expr{
+			&dst.CallExpr{
+				Fun: &dst.SelectorExpr{
+					X:   txn,
+					Sel: dst.NewIdent("Application"),
+				},
+			},
+		},
+	}
+}

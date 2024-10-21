@@ -8,6 +8,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracecontext"
 )
 
 func isNamedError(n *types.Named) bool {
@@ -101,8 +102,7 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 
 			// add go-agent/v3/newrelic to imports
 			manager.addImport(codegen.NewRelicAgentImportPath)
-
-			newMain, _ := TraceFunction(manager, decl, TraceMain(manager.agentVariableName, defaultTxnName))
+			newMain := TraceMain(manager, decl, manager.agentVariableName)
 
 			// this will skip the tracing of this function in the outer tree walking algorithm
 			c.Replace(newMain)
@@ -116,12 +116,16 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 // NoticeError will check for the presence of an error.Error variable in the body at the index in bodyIndex.
 // If it finds that an error is returned, it will add a line after the assignment statement to capture an error
 // with a newrelic transaction. All transactions are assumed to be named "txn"
-func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracecontext tracecontext.TraceContext) bool {
 	switch nodeVal := stmt.(type) {
 	case *dst.AssignStmt:
 		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
 		if errExpr != nil && c.Index() >= 0 {
-			c.InsertAfter(codegen.NoticeError(errExpr, tracing.txnVariable, nodeVal.Decorations()))
+			txn, stmt := tracecontext.Transaction()
+			if stmt != nil {
+				c.InsertBefore(stmt)
+			}
+			c.InsertAfter(codegen.NoticeError(errExpr, txn, nodeVal.Decorations()))
 			return true
 		}
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracecontext"
 )
 
 const (
@@ -151,7 +152,8 @@ func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor
 	fn, isFn := n.(*dst.FuncDecl)
 	if isFn && isHttpHandler(fn, manager.getDecoratorPackage()) {
 		txnName := defaultTxnName
-		newFn, ok := TraceFunction(manager, fn, TraceDownstreamFunction(txnName))
+		tracecontext := tracecontext.NewTransaction(txnName, manager.getDecoratorPackage())
+		newFn, ok := TraceFunction(manager, fn, tracecontext, false)
 		if ok {
 			defineTxnFromCtx(newFn, txnName)
 			c.Replace(newFn)
@@ -252,7 +254,7 @@ func getHttpResponseVariable(manager *InstrumentationManager, stmt dst.Stmt) dst
 
 // ExternalHttpCall finds and instruments external net/http calls to the method http.Do.
 // It returns true if a modification was made
-func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracecontext tracecontext.TraceContext) bool {
 	if c.Index() < 0 {
 		return false
 	}
@@ -269,12 +271,17 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 		return true
 	})
 	if call != nil && c.Index() >= 0 {
+		txn, assign := tracecontext.Transaction()
+		if assign != nil {
+			c.InsertBefore(assign)
+		}
+
 		clientVar := getNetHttpClientVariableName(call, pkg)
 		requestObject := call.Args[0]
 		if clientVar == httpDefaultClientVariable {
 			// create external segment to wrap calls made with default client
 			segmentName := "externalSegment"
-			c.InsertBefore(codegen.StartExternalSegment(requestObject, tracing.txnVariable, segmentName, stmt.Decorations()))
+			c.InsertBefore(codegen.StartExternalSegment(requestObject, txn, segmentName, stmt.Decorations()))
 			c.InsertAfter(codegen.EndExternalSegment(segmentName, stmt.Decorations()))
 			responseVar := getHttpResponseVariable(manager, stmt)
 			manager.addImport(codegen.NewRelicAgentImportPath)
@@ -283,7 +290,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 			}
 			return true
 		} else {
-			c.InsertBefore(codegen.WrapRequestContext(requestObject, tracing.txnVariable, stmt.Decorations()))
+			c.InsertBefore(codegen.WrapRequestContext(requestObject, txn, stmt.Decorations()))
 			manager.addImport(codegen.NewRelicAgentImportPath)
 			return true
 		}
@@ -293,7 +300,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 
 // WrapHandleFunction is a function that wraps net/http.HandeFunc() declarations inside of functions
 // that are being traced by a transaction.
-func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracecontext tracecontext.TraceContext) bool {
 	wasModified := false
 	pkg := manager.getDecoratorPackage()
 	dst.Inspect(stmt, func(n dst.Node) bool {
@@ -304,44 +311,29 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 			switch funcName {
 			case httpHandleFunc, httpMuxHandle:
 				if len(callExpr.Args) == 2 {
+					agent, assign := tracecontext.Agent()
+					if assign != nil && c.Index() >= 0 {
+						c.InsertBefore(assign)
+					}
+
 					// Instrument handle funcs
 					oldArgs := callExpr.Args
-					if tracing.GetAgentVariable() != "" {
-						callExpr.Args = []dst.Expr{
-							&dst.CallExpr{
-								Fun: &dst.Ident{
-									Name: "WrapHandleFunc",
-									Path: codegen.NewRelicAgentImportPath,
-								},
-								Args: []dst.Expr{
-									&dst.Ident{
-										Name: tracing.GetAgentVariable(),
-									},
-									oldArgs[0],
-									oldArgs[1],
-								},
+					callExpr.Args = []dst.Expr{
+						&dst.CallExpr{
+							Fun: &dst.Ident{
+								Name: "WrapHandleFunc",
+								Path: codegen.NewRelicAgentImportPath,
 							},
-						}
-					} else {
-						callExpr.Args = []dst.Expr{
-							&dst.CallExpr{
-								Fun: &dst.Ident{
-									Name: "WrapHandleFunc",
-									Path: codegen.NewRelicAgentImportPath,
+							Args: []dst.Expr{
+								&dst.Ident{
+									Name: agent,
 								},
-								Args: []dst.Expr{
-									&dst.CallExpr{
-										Fun: &dst.SelectorExpr{
-											X:   dst.NewIdent(tracing.GetTransactionVariable()),
-											Sel: dst.NewIdent("Application"),
-										},
-									},
-									oldArgs[0],
-									oldArgs[1],
-								},
+								oldArgs[0],
+								oldArgs[1],
 							},
-						}
+						},
 					}
+
 					wasModified = true
 					manager.addImport(codegen.NewRelicAgentImportPath)
 					return false

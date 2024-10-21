@@ -6,15 +6,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 )
 
 // Default Config Values
 const (
-	defaultAgentVariableName = "NewRelicAgent"
-	defaultPackageName       = "./..."
-	defaultPackagePath       = ""
-	defaultAppName           = ""
-	defaultDiffFileName      = "new-relic-instrumentation.diff"
+	defaultPackageName  = "./..."
+	defaultPackagePath  = ""
+	defaultAppName      = ""
+	defaultDiffFileName = "new-relic-instrumentation.diff"
 )
 
 type CLIConfig struct {
@@ -45,14 +46,14 @@ func NewCLIConfig() *CLIConfig {
 	var pathFlag = flag.String("path", defaultPackagePath, "path to package to instrument")
 	var appNameFlag = flag.String("name", defaultAppName, "configure the New Relic application name")
 	var diffFlag = flag.String("diff", relativePath, "output diff file path name")
-	var agentFlag = flag.String("agent", defaultAgentVariableName, "application variable for New Relic agent")
+	var agentFlag = flag.String("agent", codegen.DefaultAgentVariableName, "application variable for New Relic agent")
 	var debug = flag.Bool("debug", false, "enable debug mode")
 	flag.Parse()
 
 	cfg.PackagePath = setConfigValue(pathFlag, defaultPackagePath)
 	cfg.AppName = setConfigValue(appNameFlag, defaultAppName)
 	cfg.DiffFile = setConfigValue(diffFlag, diffFile)
-	cfg.AgentVariableName = setConfigValue(agentFlag, defaultAgentVariableName)
+	cfg.AgentVariableName = setConfigValue(agentFlag, codegen.DefaultAgentVariableName)
 	cfg.Debug = *debug
 
 	cfg.Validate()

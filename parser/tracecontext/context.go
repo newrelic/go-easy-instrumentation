@@ -1,9 +1,13 @@
 package tracecontext
 
 import (
+	"fmt"
+
 	"github.com/dave/dst"
+	"github.com/dave/dst/decorator"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
-	"github.com/newrelic/go-easy-instrumentation/internal/comments"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
+	"github.com/newrelic/go-easy-instrumentation/internal/util"
 )
 
 const (
@@ -18,6 +22,15 @@ func contextParameterType() *dst.Ident {
 	}
 }
 
+func firstContextParameter(decl *dst.FuncDecl) string {
+	for _, param := range decl.Type.Params.List {
+		if isContextParam(param) {
+			return param.Names[0].Name
+		}
+	}
+	return ""
+}
+
 // isContextParam returns true if a field is a context.Context.
 func isContextParam(arg *dst.Field) bool {
 	ident, ok := arg.Type.(*dst.Ident)
@@ -25,18 +38,30 @@ func isContextParam(arg *dst.Field) bool {
 }
 
 type Context struct {
+	pkg                     *decorator.Package
+	agentVariableName       string
 	contextVariableName     string
 	transactionVariableName string
 }
 
-func NewContext(contextVariableName string) *Context {
+func NewContext(contextVariableName string, pkg *decorator.Package) *Context {
 	return &Context{
+		pkg:                 pkg,
 		contextVariableName: contextVariableName,
 	}
 }
 
-func (ctx *Context) AssignTransactionVariable(variableName string) dst.Stmt {
+func (ctx *Context) assignTransactionVariable(variableName string) dst.Stmt {
 	if ctx.transactionVariableName != "" {
+		return nil
+	}
+
+	ctx.transactionVariableName = variableName
+	return codegen.TxnFromContext(variableName, dst.NewIdent(ctx.contextVariableName))
+}
+
+func (ctx *Context) assignAgentVariable(variableName string) dst.Stmt {
+	if ctx.agentVariableName != "" {
 		return nil
 	}
 
@@ -58,8 +83,9 @@ func (ctx *Context) AssignTransactionVariable(variableName string) dst.Stmt {
 //     Non-Async Case:
 //     a. the function call context variable is equal to the context variable; do nothing
 //     b. the function call context variable is not equal to the context variable; inject a transaction into it
-func (ctx *Context) Pass(decl *dst.FuncDecl, call *dst.CallExpr, async bool) (TraceContext, error) {
+func (ctx *Context) Pass(decl *dst.FuncDecl, call *dst.CallExpr, async bool) TraceContext {
 	argumentIndex := 0
+
 	for _, param := range decl.Type.Params.List {
 		if isContextParam(param) {
 			numParams := decl.Type.Params.NumFields()
@@ -71,10 +97,8 @@ func (ctx *Context) Pass(decl *dst.FuncDecl, call *dst.CallExpr, async bool) (Tr
 				} else {
 					call.Args = append(call.Args, dst.NewIdent(ctx.contextVariableName))
 				}
-			}
-
-			// The function call already has a context argument
-			if async {
+			} else {
+				// The function call already has a context argument
 				arg := call.Args[argumentIndex]
 				// if this is async, check that the context argument contains a call to `txn.NewGoroutine`
 				// since we know that is how we wrap async transactions in easy instrumentation
@@ -87,14 +111,19 @@ func (ctx *Context) Pass(decl *dst.FuncDecl, call *dst.CallExpr, async bool) (Tr
 					if !ok || ident.Name != ctx.contextVariableName {
 						// if the context is not the same, we will inject the transaction into the context
 						arg = codegen.WrapContextExpression(arg, codegen.TxnFromContextExpression(dst.NewIdent(ctx.contextVariableName)))
-						comments.Info(call, "the context argument has been defensively injected with a transaction to ensure tracing is not lost.",
-							"If the original context argument is a child of a context with a transaction, you may optionally undo this change for better readability.")
+						argName := util.WriteExpr(arg, ctx.pkg)
+						if argName != "" {
+							argName = fmt.Sprintf(" \"%s\"", argName)
+						}
+						comment.Info(ctx.pkg, call,
+							fmt.Sprintf("Go Easy Instrumentation is uncertian the context argument%s contains a transaction, so it added or updated the existing one just in case.", argName),
+							"This change does not affect the correctness of the code, but may have a small performance and readability impact.")
 					}
 				}
 			}
 
 			// the child function will use the context parameter
-			return NewContext(param.Names[0].Name), nil
+			return NewContext(param.Names[0].Name, ctx.pkg)
 		}
 		argumentIndex += incrementParameterCount(param)
 	}
@@ -112,12 +141,34 @@ func (ctx *Context) Pass(decl *dst.FuncDecl, call *dst.CallExpr, async bool) (Tr
 		context = codegen.WrapContextExpression(context, codegen.TxnNewGoroutine(codegen.TxnFromContextExpression(context)))
 	}
 	call.Args = append(call.Args, context)
-	return NewContext(ctx.contextVariableName), nil
+	return NewContext(ctx.contextVariableName, ctx.pkg)
 }
 
 // If AssignTransactionVariable has been called, this will return the variable name of the transaction.
-func (ctx *Context) TransactionVariableName() string {
-	return ctx.transactionVariableName
+// If a statment is returned, it MUST be added to the function body before the call.
+func (ctx *Context) Transaction() (string, dst.Stmt) {
+	stmt := ctx.assignTransactionVariable(ctx.contextVariableName)
+	return ctx.transactionVariableName, stmt
+}
+
+// If AssignAgentVariable has been called, this will return the variable name of the agent.
+// If the agent has not yet been assigned to a variable, it will return the name of a new agent variable and the code to create it.
+// If a statement is returned, it must be added to the function body before the call is made.
+func (ctx *Context) Agent() (string, dst.Stmt) {
+	if ctx.agentVariableName != "" {
+		return ctx.agentVariableName, nil
+	}
+
+	var txn dst.Expr
+	if ctx.transactionVariableName != "" {
+		txn = dst.NewIdent(ctx.transactionVariableName)
+	} else {
+		txn = codegen.TxnFromContextExpression(dst.NewIdent(ctx.contextVariableName))
+	}
+
+	stmt := codegen.GetApplication(txn, codegen.DefaultAgentVariableName)
+	ctx.agentVariableName = codegen.DefaultAgentVariableName
+	return ctx.agentVariableName, stmt
 }
 
 // Type returns the type of the context object: context.Context
