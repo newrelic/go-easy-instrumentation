@@ -224,7 +224,6 @@ func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 // instrumentation, it leaves a comment header warning the customer. This function needs no tracing context to work.
 func CannotInstrumentHttpMethod(manager *InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
-
 	funcName, ok := isNetHttpMethodCannotInstrument(n)
 	if ok {
 		if decl := n.Decorations(); decl != nil {
