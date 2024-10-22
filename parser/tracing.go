@@ -30,14 +30,15 @@ func TraceDownstreamFunction(txnVariableName string) *tracingState {
 	}
 }
 
-func (tc *tracingState) CreateTransactionIfNeeded(c *dstutil.Cursor, functionName, txnVariableName string, endImmediately bool) {
+func (tc *tracingState) CreateTransactionIfNeeded(c *dstutil.Cursor, wrappedStatement dst.Stmt, functionName, txnVariableName string) {
 	if tc.agentVariable != "" && c.Index() > 0 {
 		tc.txnVariable = defaultTxnName
-		c.InsertBefore(codegen.StartTransaction(tc.agentVariable, defaultTxnName, functionName, tc.definedTxn))
+		start := codegen.StartTransaction(tc.agentVariable, defaultTxnName, functionName, tc.definedTxn)
+		end := codegen.EndTransaction(defaultTxnName)
+		codegen.WrapStatements(start, wrappedStatement, end)
 		tc.definedTxn = true
-		if endImmediately {
-			c.InsertAfter(codegen.EndTransaction(defaultTxnName))
-		}
+		c.InsertBefore(start)
+		c.InsertAfter(end)
 	}
 }
 
@@ -159,7 +160,7 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 				}
 			}
 			if manager.requiresTransactionArgument(invInfo, txnVarName) {
-				tracing.CreateTransactionIfNeeded(c, invInfo.functionName, txnVarName, true)
+				tracing.CreateTransactionIfNeeded(c, v, invInfo.functionName, txnVarName)
 				invInfo.call.Args = append(invInfo.call.Args, dst.NewIdent(txnVarName))
 				TopLevelFunctionChanged = true
 			}

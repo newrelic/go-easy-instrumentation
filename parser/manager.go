@@ -8,12 +8,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/gopackages"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
+	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/errorcache"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
@@ -438,7 +440,13 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, dependencyScans 
 
 	for packageName, pkg := range manager.packages {
 		manager.setPackage(packageName)
+
 		for _, file := range pkg.pkg.Syntax {
+			pos := util.Position(file, pkg.pkg)
+			if pos != nil && strings.Contains(pos.Filename, ".pb.go") {
+				continue
+			}
+
 			for _, decl := range file.Decls {
 				if fn, isFn := decl.(*dst.FuncDecl); isFn {
 					manager.createFunctionDeclaration(fn)
