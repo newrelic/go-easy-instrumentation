@@ -165,6 +165,9 @@ func TraceFunction(manager *InstrumentationManager, fn *dst.FuncDecl, tracing *t
 				TopLevelFunctionChanged = true
 			}
 			manager.setPackage(rootPkg)
+
+			// We know that if the function is traced, the error will be captured in that function.
+			// In this case, we skip capturing the returned error to avoid a duplicate.
 			if !downstreamFunctionTraced {
 				ok := NoticeError(manager, v, c, tracing)
 				if ok {

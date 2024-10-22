@@ -31,3 +31,7 @@ func buildGetRequest(path string) (*http.Request, error) {
 	}
 	return req, nil
 }
+
+func PackagedHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("I am a packaged handler"))
+}
