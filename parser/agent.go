@@ -107,7 +107,6 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 
 			// add go-agent/v3/newrelic to imports
 			manager.addImport(codegen.NewRelicAgentImportPath)
-
 			newMain, _ := TraceFunction(manager, decl, TraceMain(manager.agentVariableName, defaultTxnName), noSegment())
 
 			// this will skip the tracing of this function in the outer tree walking algorithm

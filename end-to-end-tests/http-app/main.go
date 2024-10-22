@@ -1,6 +1,7 @@
 package main
 
 import (
+	"http-app/pkg"
 	"log/slog"
 	"net/http"
 	"os"
@@ -15,8 +16,9 @@ func initServer() {
 	http.HandleFunc("/basicExternal", basicExternal)
 	http.HandleFunc("/async", async)
 	http.HandleFunc("/async2", async2)
+	http.HandleFunc("/packaged", pkg.PackagedHandler)
 
-	// this should get ignored
+	// this should no longer get ignored
 	DoAThing(true)
 }
 

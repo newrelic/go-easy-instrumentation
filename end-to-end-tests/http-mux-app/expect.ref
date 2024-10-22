@@ -13,7 +13,7 @@
  )
  
  func main() {
-+	 NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("http-mux web app"), newrelic.ConfigFromEnvironment())
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("http-mux web app"), newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}
@@ -21,18 +21,38 @@
  	flag.StringVar(&listenAddr, "listen-addr", ":5000", "server listen address")
  	flag.Parse()
  
-@@ -31,8 +38,8 @@
+@@ -31,21 +38,27 @@
  	logger.Println("Server is starting...")
  
  	router := http.NewServeMux()
 -	router.Handle("/", index())
 -	router.Handle("/healthz", healthz())
-+	router.Handle(newrelic.WrapHandleFunc(NewRelicAgent, "/", index()))
-+	router.Handle(newrelic.WrapHandleFunc(NewRelicAgent, "/healthz", healthz()))
++	nrTxn := NewRelicAgent.StartTransaction("index")
++	router.Handle(newrelic.WrapHandleFunc(NewRelicAgent, "/", index(nrTxn)))
++	nrTxn.End()
++	nrTxn = NewRelicAgent.StartTransaction("healthz")
++	router.Handle(newrelic.WrapHandleFunc(NewRelicAgent, "/healthz", healthz(nrTxn)))
++	nrTxn.End()
  
  	nextRequestID := func() string {
  		return fmt.Sprintf("%d", time.Now().UnixNano())
-@@ -61,6 +68,7 @@
+ 	}
+ 
++	nrTxn = NewRelicAgent.StartTransaction("logging")
+ 	server := &http.Server{
+ 		Addr:         listenAddr,
+-		Handler:      tracing(nextRequestID)(logging(logger)(router)),
++		Handler:      tracing(nextRequestID)(logging(logger, nrTxn)(router)),
+ 		ErrorLog:     logger,
+ 		ReadTimeout:  5 * time.Second,
+ 		WriteTimeout: 10 * time.Second,
+ 		IdleTimeout:  15 * time.Second,
+ 	}
++	nrTxn.End()
+ 
+ 	done := make(chan bool)
+ 	quit := make(chan os.Signal, 1)
+@@ -61,6 +62,7 @@
  
  		server.SetKeepAlivesEnabled(false)
  		if err := server.Shutdown(ctx); err != nil {
@@ -40,7 +60,7 @@
  			logger.Fatalf("Could not gracefully shutdown the server: %v\n", err)
  		}
  		close(done)
-@@ -69,11 +77,14 @@
+@@ -69,14 +71,18 @@
  	logger.Println("Server is ready to handle requests at", listenAddr)
  	atomic.StoreInt32(&healthy, 1)
  	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -54,4 +74,29 @@
 +	NewRelicAgent.Shutdown(5 * time.Second)
  }
  
- func index() http.Handler {
+-func index() http.Handler {
++func index(nrTxn *newrelic.Transaction) http.Handler {
++	defer nrTxn.StartSegment("index").End()
+ 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+ 		if r.URL.Path != "/" {
+ 			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
+@@ -89,7 +88,8 @@
+ 	})
+ }
+ 
+-func healthz() http.Handler {
++func healthz(nrTxn *newrelic.Transaction) http.Handler {
++	defer nrTxn.StartSegment("healthz").End()
+ 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+ 		if atomic.LoadInt32(&healthy) == 1 {
+ 			w.WriteHeader(http.StatusNoContent)
+@@ -99,7 +99,8 @@
+ 	})
+ }
+ 
+-func logging(logger *log.Logger) func(http.Handler) http.Handler {
++func logging(logger *log.Logger, nrTxn *newrelic.Transaction) func(http.Handler) http.Handler {
++	defer nrTxn.StartSegment("logging").End()
+ 	return func(next http.Handler) http.Handler {
+ 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+ 			defer func() {

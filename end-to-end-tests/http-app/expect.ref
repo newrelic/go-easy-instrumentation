@@ -51,7 +51,17 @@
  )
  
  // the most basic http handler function
-@@ -25,7 +27,9 @@
+@@ -15,7 +17,8 @@
+ 	io.WriteString(w, "hello world")
+ }
+ 
+-func DoAThing(willError bool) (string, bool, error) {
++func DoAThing(willError bool, nrTxn *newrelic.Transaction) (string, bool, error) {
++	defer nrTxn.StartSegment("DoAThing").End()
+ 	time.Sleep(200 * time.Millisecond)
+ 	if willError {
+ 		return "thing not done", false, errors.New("this is an error")
+@@ -25,13 +28,15 @@
  }
  
  func noticeError(w http.ResponseWriter, r *http.Request) {
@@ -62,15 +72,14 @@
  	if err != nil {
  		io.WriteString(w, err.Error())
  		return
-@@ -33,6 +37,7 @@
+ 	}
  
- 	str, _, err := DoAThing(true)
+-	str, _, err := DoAThing(true)
++	str, _, err := DoAThing(true, nrTxn)
  	if err != nil {
-+		nrTxn.NoticeError(err)
  		io.WriteString(w, err.Error())
  	} else {
- 		io.WriteString(w, str+" no errors occured")
-@@ -40,15 +45,22 @@
+@@ -40,15 +40,22 @@
  }
  
  func external(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +102,7 @@
  		io.WriteString(w, err.Error())
  		return
  	}
-@@ -58,9 +61,16 @@
+@@ -58,9 +56,16 @@
  }
  
  func basicExternal(w http.ResponseWriter, r *http.Request) {
@@ -110,7 +119,7 @@
  		slog.Error(err.Error())
  		io.WriteString(w, err.Error())
  		return
-@@ -71,19 +78,25 @@
+@@ -71,19 +73,25 @@
  }
  
  func roundtripper(w http.ResponseWriter, r *http.Request) {
@@ -136,7 +145,7 @@
  		slog.Error(err.Error())
  		io.WriteString(w, err.Error())
  		return
-@@ -94,29 +94,39 @@
+@@ -94,29 +89,39 @@
  }
  
  func async(w http.ResponseWriter, r *http.Request) {
@@ -182,7 +191,7 @@
  }
 --- a/main.go
 +++ b/main.go
-@@ -4,28 +4,41 @@
+@@ -5,29 +5,42 @@
  	"log/slog"
  	"net/http"
  	"os"
@@ -200,7 +209,9 @@
 -	http.HandleFunc("/basicExternal", basicExternal)
 -	http.HandleFunc("/async", async)
 -	http.HandleFunc("/async2", async2)
+-	http.HandleFunc("/packaged", pkg.PackagedHandler)
 +func initServer(nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("initServer").End()
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/", index))
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/error", noticeError))
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/external", external))
@@ -208,9 +219,11 @@
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/basicExternal", basicExternal))
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/async", async))
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/async2", async2))
++	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/packaged", pkg.PackagedHandler))
  
- 	// this should get ignored
- 	DoAThing(true)
+ 	// this should no longer get ignored
+-	DoAThing(true)
++	DoAThing(true, nrTxn)
  }
  
  func main() {
@@ -226,9 +239,8 @@
 -	initServer()
 +	nrTxn := NewRelicAgent.StartTransaction("initServer")
 +	initServer(nrTxn)
- 
 +	nrTxn.End()
-+
+ 
  	http.ListenAndServe(":8000", nil)
 +
 +	NewRelicAgent.Shutdown(5 * time.Second)
