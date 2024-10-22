@@ -191,26 +191,32 @@ func cannotTraceOutboundHttp(method string, decs *dst.NodeDecs) []string {
 func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 	var cannotInstrument bool
 	var returnFuncName string
-
-	switch node.(type) {
-	case *dst.AssignStmt, *dst.ExprStmt:
-		dst.Inspect(node, func(n dst.Node) bool {
-			c, ok := n.(*dst.CallExpr)
-			if ok {
-				ident, ok := c.Fun.(*dst.Ident)
-				if ok && ident.Path == codegen.HttpImportPath {
-					switch ident.Name {
-					case httpGet, httpPost, httpPostForm, httpHead:
-						returnFuncName = ident.Name
-						cannotInstrument = true
-						return false
+	switch v := node.(type) {
+	case *dst.AssignStmt:
+		if len(v.Rhs) == 1 {
+			if call, ok := v.Rhs[0].(*dst.CallExpr); ok {
+				if ident, ok := call.Fun.(*dst.Ident); ok {
+					if ident.Path == codegen.HttpImportPath {
+						switch ident.Name {
+						case httpGet, httpPost, httpPostForm, httpHead:
+							return ident.Name, true
+						}
 					}
 				}
 			}
-			return true
-		})
+		}
+	case *dst.ExprStmt:
+		if call, ok := v.X.(*dst.CallExpr); ok {
+			if ident, ok := call.Fun.(*dst.Ident); ok {
+				if ident.Path == codegen.HttpImportPath {
+					switch ident.Name {
+					case httpGet, httpPost, httpPostForm, httpHead:
+						return ident.Name, true
+					}
+				}
+			}
+		}
 	}
-
 	return returnFuncName, cannotInstrument
 }
 
@@ -218,6 +224,7 @@ func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 // instrumentation, it leaves a comment header warning the customer. This function needs no tracing context to work.
 func CannotInstrumentHttpMethod(manager *InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
+
 	funcName, ok := isNetHttpMethodCannotInstrument(n)
 	if ok {
 		if decl := n.Decorations(); decl != nil {
