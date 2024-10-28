@@ -153,10 +153,7 @@ func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor
 		txnName := defaultTxnName
 		newFn, ok := TraceFunction(manager, fn, TraceDownstreamFunction(txnName), noSegment())
 		if ok {
-			// prevent further tracing of this node and its children
-			c.Replace(newFn)
 			defineTxnFromCtx(newFn, txnName) // pass the transaction
-			manager.updateFunctionDeclaration(newFn)
 		}
 	}
 }
