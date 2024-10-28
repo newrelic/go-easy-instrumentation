@@ -1,29 +1,20 @@
 package codegen
 
-import (
-	"fmt"
+import "github.com/dave/dst"
 
-	"github.com/dave/dst"
-)
+func WrapStatements(first, wrapped, last dst.Stmt) {
+	firstDecs := first.Decorations()
+	wrappedDecs := wrapped.Decorations()
+	lastDecs := last.Decorations()
 
-// GroupStatements groups a set of statements together into
-// a whitespace separated block.
-func GroupStatements(stmts ...dst.Stmt) ([]dst.Stmt, error) {
-	if len(stmts) < 2 {
-		return nil, fmt.Errorf("must provide at least two statements to group")
-	}
+	firstDecs.Before = wrappedDecs.Before
+	firstDecs.Start = wrappedDecs.Start
 
-	final := make([]dst.Stmt, len(stmts))
-	for i, stmt := range stmts {
-		decs := stmt.Decorations()
-		decs.Before = dst.None
-		decs.After = dst.None
+	lastDecs.After = wrappedDecs.After
+	lastDecs.End = wrappedDecs.End
 
-		if i == len(stmts)-1 {
-			decs.After = dst.NewLine
-		}
-		final[i] = stmt
-	}
-
-	return final, nil
+	wrappedDecs.Before = dst.None
+	wrappedDecs.Start.Clear()
+	wrappedDecs.After = dst.None
+	wrappedDecs.End = nil
 }

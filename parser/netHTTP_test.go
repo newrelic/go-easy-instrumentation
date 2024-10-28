@@ -1152,6 +1152,62 @@ func main() {
 `,
 		},
 		{
+			name: "tracing propogated to downstream calls without captures",
+			code: `package main
+
+import "net/http"
+
+func myHelperFunction(url string) bool {
+	if url == "http://error.com" {
+		return false
+	} 
+	return true
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	if myHelperFunction("http://example.com") {
+		w.Write([]byte("hello world"))
+	}
+	http.Error(w, "I am an error", 400)
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHelperFunction(url string, nrTxn *newrelic.Transaction) bool {
+	defer nrTxn.StartSegment("myHelperFunction").End()
+	if url == "http://error.com" {
+		return false
+	}
+	return true
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	nrTxn := newrelic.FromContext(r.Context())
+
+	if myHelperFunction("http://example.com", nrTxn) {
+		w.Write([]byte("hello world"))
+	}
+	http.Error(w, "I am an error", 400)
+}
+
+func main() {
+	http.HandleFunc("/", myHandler)
+	http.ListenAndServe(":8080", nil)
+}
+`,
+		},
+		{
 			name: "tracing propogated to async downstream calls",
 			code: `package main
 
