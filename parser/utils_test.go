@@ -14,6 +14,7 @@ import (
 	"github.com/dave/dst/decorator/resolver/guess"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -135,9 +136,9 @@ func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTra
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 	node := pkg.Syntax[0].Decls[1]
-	tracingState := TraceMain("app", "txn")
+	tracingState := tracestate.Main("app")
 	if downstream {
-		tracingState = TraceDownstreamFunction("txn")
+		tracingState = tracestate.FunctionBody("txn")
 	}
 
 	dstutil.Apply(node, nil, func(c *dstutil.Cursor) bool {

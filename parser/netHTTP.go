@@ -10,6 +10,7 @@ import (
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
 const (
@@ -150,8 +151,8 @@ func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor
 	n := c.Node()
 	fn, isFn := n.(*dst.FuncDecl)
 	if isFn && isHttpHandler(fn, manager.getDecoratorPackage()) {
-		txnName := defaultTxnName
-		newFn, ok := TraceFunction(manager, fn, TraceDownstreamFunction(txnName), noSegment())
+		txnName := codegen.DefaultTransactionVariable
+		newFn, ok := TraceFunction(manager, fn, tracestate.FunctionBody(txnName))
 		if ok {
 			defineTxnFromCtx(newFn, txnName) // pass the transaction
 		}
@@ -256,7 +257,7 @@ func getHttpResponseVariable(manager *InstrumentationManager, stmt dst.Stmt) dst
 
 // ExternalHttpCall finds and instruments external net/http calls to the method http.Do.
 // It returns true if a modification was made
-func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	if c.Index() < 0 {
 		return false
 	}
@@ -278,7 +279,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 		if clientVar == httpDefaultClientVariable {
 			// create external segment to wrap calls made with default client
 			segmentName := "externalSegment"
-			c.InsertBefore(codegen.StartExternalSegment(requestObject, tracing.txnVariable, segmentName, stmt.Decorations()))
+			c.InsertBefore(codegen.StartExternalSegment(requestObject, tracing.TransactionVariable(), segmentName, stmt.Decorations()))
 			c.InsertAfter(codegen.EndExternalSegment(segmentName, stmt.Decorations()))
 			responseVar := getHttpResponseVariable(manager, stmt)
 			manager.addImport(codegen.NewRelicAgentImportPath)
@@ -287,7 +288,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 			}
 			return true
 		} else {
-			c.InsertBefore(codegen.WrapRequestContext(requestObject, tracing.txnVariable, stmt.Decorations()))
+			c.InsertBefore(codegen.WrapRequestContext(requestObject, tracing.TransactionVariable(), stmt.Decorations()))
 			manager.addImport(codegen.NewRelicAgentImportPath)
 			return true
 		}
@@ -297,7 +298,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 
 // WrapHandleFunction is a function that wraps net/http.HandeFunc() declarations inside of functions
 // that are being traced by a transaction.
-func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	wasModified := false
 	pkg := manager.getDecoratorPackage()
 	dst.Inspect(stmt, func(n dst.Node) bool {
@@ -310,7 +311,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 				if len(callExpr.Args) == 2 {
 					// Instrument handle funcs
 					oldArgs := callExpr.Args
-					if tracing.GetAgentVariable() != "" {
+					if tracing.AgentVariable() != "" {
 						callExpr.Args = []dst.Expr{
 							&dst.CallExpr{
 								Fun: &dst.Ident{
@@ -319,7 +320,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 								},
 								Args: []dst.Expr{
 									&dst.Ident{
-										Name: tracing.GetAgentVariable(),
+										Name: tracing.AgentVariable(),
 									},
 									oldArgs[0],
 									oldArgs[1],
@@ -336,7 +337,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 								Args: []dst.Expr{
 									&dst.CallExpr{
 										Fun: &dst.SelectorExpr{
-											X:   dst.NewIdent(tracing.GetTransactionVariable()),
+											X:   dst.NewIdent(tracing.TransactionVariable()),
 											Sel: dst.NewIdent("Application"),
 										},
 									},

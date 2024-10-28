@@ -5,6 +5,12 @@ import (
 	"go/token"
 
 	"github.com/dave/dst"
+	"github.com/dave/dst/decorator"
+	"github.com/newrelic/go-easy-instrumentation/internal/util"
+)
+
+const (
+	DefaultTransactionVariable = "nrTxn"
 )
 
 func EndTransaction(transactionVariableName string) *dst.ExprStmt {
@@ -34,12 +40,12 @@ func TxnAsParameter(txnName string) *dst.Field {
 	}
 }
 
-func TxnNewGoroutine(txnVarName string) *dst.CallExpr {
+// TxnNewGoroutine returns a call to txn.NewGoroutine()
+func TxnNewGoroutine(transaction dst.Expr) *dst.CallExpr {
+	txnClone := dst.Clone(transaction).(dst.Expr)
 	return &dst.CallExpr{
 		Fun: &dst.SelectorExpr{
-			X: &dst.Ident{
-				Name: txnVarName,
-			},
+			X: txnClone,
 			Sel: &dst.Ident{
 				Name: "NewGoroutine",
 			},
@@ -122,6 +128,40 @@ func TxnFromContext(txnVariable string, contextObject dst.Expr) *dst.AssignStmt 
 				Args: []dst.Expr{
 					dst.Clone(contextObject).(dst.Expr),
 				},
+			},
+		},
+	}
+}
+
+// returns true if a node contains a call to `txn.NewGoroutine()`
+func ContainsTxnNewGoroutine(pkg *decorator.Package, node dst.Node) bool {
+	found := false
+	dst.Inspect(node, func(node dst.Node) bool {
+		sel, ok := node.(*dst.SelectorExpr)
+		t := util.TypeOf(sel.X, pkg)
+		if ok && t != nil && sel.Sel.Name == "NewGoroutine" && t.String() == "*newrelic.Transaction" {
+			found = true
+			return false
+		}
+
+		return true
+	})
+
+	return found
+}
+
+// TransactionParameter returns a field definition for a function parameter that is a *newrelic.Transaction
+func TransactionParameter(parameterName string) *dst.Field {
+	return &dst.Field{
+		Names: []*dst.Ident{
+			{
+				Name: parameterName,
+			},
+		},
+		Type: &dst.StarExpr{
+			X: &dst.Ident{
+				Name: "Transaction",
+				Path: "newrelic",
 			},
 		},
 	}

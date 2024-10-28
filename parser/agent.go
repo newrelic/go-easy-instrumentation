@@ -10,6 +10,7 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
 const (
@@ -107,7 +108,7 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 
 			// add go-agent/v3/newrelic to imports
 			manager.addImport(codegen.NewRelicAgentImportPath)
-			newMain, _ := TraceFunction(manager, decl, TraceMain(manager.agentVariableName, defaultTxnName), noSegment())
+			newMain, _ := TraceFunction(manager, decl, tracestate.Main(manager.agentVariableName))
 
 			// this will skip the tracing of this function in the outer tree walking algorithm
 			c.Replace(newMain)
@@ -162,7 +163,7 @@ func errNilCheck(stmt *dst.BinaryExpr, pkg *decorator.Package) bool {
 	return false
 }
 
-func shouldNoticeError(stmt dst.Stmt, pkg *decorator.Package, tracing *tracingState) bool {
+func shouldNoticeError(stmt dst.Stmt, pkg *decorator.Package, tracing *tracestate.State) bool {
 	ifStmt, ok := stmt.(*dst.IfStmt)
 	if !ok {
 		return false
@@ -181,7 +182,7 @@ func shouldNoticeError(stmt dst.Stmt, pkg *decorator.Package, tracing *tracingSt
 // NoticeError will check for the presence of an error.Error variable in the body at the index in bodyIndex.
 // If it finds that an error is returned, it will add a line after the assignment statement to capture an error
 // with a newrelic transaction. All transactions are assumed to be named "txn"
-func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	switch nodeVal := stmt.(type) {
 	case *dst.IfStmt:
 		if shouldNoticeError(stmt, manager.getDecoratorPackage(), tracing) {
@@ -191,7 +192,7 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 				if nodeVal.Body != nil && len(nodeVal.Body.List) > 0 {
 					stmtBlock = nodeVal.Body.List[0]
 				}
-				nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.txnVariable, stmtBlock)}, nodeVal.Body.List...)
+				nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.TransactionVariable(), stmtBlock)}, nodeVal.Body.List...)
 				manager.errorCache.Clear()
 				return true
 			}
