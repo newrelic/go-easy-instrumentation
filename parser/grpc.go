@@ -134,10 +134,11 @@ func InstrumentGrpcServerMethod(manager *InstrumentationManager, c *dstutil.Curs
 		// find either a context or a server stream object
 		txnAssignment, ok := getTxnFromGrpcServer(manager, funcDecl.Type.Params.List, defaultTxnName)
 		if ok {
+			// ok is true if the body of this function has any tracing code added to it. If this is true, we know it needs a transaction to get
+			// pulled from the grpc server object
 			decl, ok := TraceFunction(manager, funcDecl, TraceDownstreamFunction(defaultTxnName), noSegment())
 			if ok {
 				decl.Body.List = append([]dst.Stmt{txnAssignment}, decl.Body.List...)
-				c.Replace(decl)
 			}
 		}
 	}
