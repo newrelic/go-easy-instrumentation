@@ -26,9 +26,8 @@ import (
 //
 // Please access this object's data through methods rather than directly manipulating it.
 type tracedFunction struct {
-	traced      bool
-	requiresTxn bool
-	body        *dst.FuncDecl
+	traced bool
+	body   *dst.FuncDecl
 }
 
 type tracingFunctions struct {
@@ -118,6 +117,9 @@ func (m *InstrumentationManager) setPackage(pkgName string) {
 }
 
 func (m *InstrumentationManager) addImport(path string) {
+	if path == "" {
+		return
+	}
 	state, ok := m.packages[m.currentPackage]
 	if ok {
 		state.importsAdded[path] = true
@@ -191,6 +193,8 @@ type invocationInfo struct {
 
 // GetPackageFunctionInvocation returns the name of the function being invoked, and the expression containing the call
 // where that invocation occurs if a function is declared in this package.
+//
+// If the node does not contain a function call made to a function declared in this application, this method will return nil.
 func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *invocationInfo {
 	var invInfo *invocationInfo
 
@@ -206,8 +210,8 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *in
 				if path == "" {
 					path = m.getPackageName()
 				}
-				_, ok := m.packages[path]
-				if ok {
+				pkg, ok := m.packages[path]
+				if ok && pkg.tracedFuncs[functionCallIdent.Name] != nil {
 					invInfo = &invocationInfo{
 						functionName: functionCallIdent.Name,
 						packageName:  path,
@@ -224,45 +228,6 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *in
 	return invInfo
 }
 
-// AddTxnArgumentToFuncDecl adds a transaction argument to the declaration of a function. This marks that function as needing a transaction,
-// and can be looked up by name to know that the last argument is a transaction.
-func (m *InstrumentationManager) addTxnArgumentToFunctionDecl(decl *dst.FuncDecl, txnVarName string) {
-	if decl == nil {
-		return
-	}
-
-	if decl.Type.Params == nil {
-		decl.Type.Params = &dst.FieldList{
-			List: []*dst.Field{{
-				Names: []*dst.Ident{dst.NewIdent(txnVarName)},
-				Type: &dst.StarExpr{
-					X: &dst.SelectorExpr{
-						X:   dst.NewIdent("newrelic"),
-						Sel: dst.NewIdent("Transaction"),
-					},
-				},
-			}},
-		}
-	} else {
-		decl.Type.Params.List = append(decl.Type.Params.List, &dst.Field{
-			Names: []*dst.Ident{dst.NewIdent(txnVarName)},
-			Type: &dst.StarExpr{
-				X: &dst.SelectorExpr{
-					X:   dst.NewIdent("newrelic"),
-					Sel: dst.NewIdent("Transaction"),
-				},
-			},
-		})
-	}
-	state, ok := m.packages[m.currentPackage]
-	if ok {
-		fn, ok := state.tracedFuncs[decl.Name.Name]
-		if ok {
-			fn.requiresTxn = true
-		}
-	}
-}
-
 // IsTracingComplete returns true if a function has all the tracing it needs added to it.
 func (m *InstrumentationManager) shouldInstrumentFunction(inv *invocationInfo) bool {
 	if inv == nil {
@@ -277,51 +242,6 @@ func (m *InstrumentationManager) shouldInstrumentFunction(inv *invocationInfo) b
 		}
 	}
 
-	return false
-}
-
-// conatinsTransactionArgument returns true if a function call contains a transaction argument.
-// This function works for async functions as well.
-func containsTransactionArgument(call *dst.CallExpr, txnName string) bool {
-	if call == nil || call.Args == nil {
-		return false
-	}
-
-	for _, arg := range call.Args {
-		switch v := arg.(type) {
-		case *dst.Ident:
-			if v.Name == txnName {
-				return true
-			}
-		case *dst.CallExpr:
-			sel, ok := v.Fun.(*dst.SelectorExpr)
-			if ok {
-				if sel.Sel.Name == "NewGoroutine" {
-					ident, ok := sel.X.(*dst.Ident)
-					if ok && ident.Name == txnName {
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
-}
-
-// RequiresTransactionArgument returns true if a modified function needs a transaction as an argument.
-// This can be used to check if transactions should be passed by callers.
-func (m *InstrumentationManager) requiresTransactionArgument(inv *invocationInfo, txnVariableName string) bool {
-	if inv == nil {
-		return false
-	}
-
-	state, ok := m.packages[m.currentPackage]
-	if ok {
-		v, ok := state.tracedFuncs[inv.functionName]
-		if ok && !containsTransactionArgument(inv.call, txnVariableName) {
-			return v.requiresTxn
-		}
-	}
 	return false
 }
 

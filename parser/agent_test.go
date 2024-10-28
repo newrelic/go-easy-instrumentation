@@ -365,6 +365,8 @@ func main() {
 		panic(err)
 	}
 
+	// NR INFO: go-easy-instrumentation doesn't support tracing goroutines in a main method; please instrument manually.
+	// https://docs.newrelic.com/docs/apm/agents/go-agent/instrumentation/instrument-go-transactions/#goroutines
 	go myFunc()
 
 	NewRelicAgent.Shutdown(5 * time.Second)
