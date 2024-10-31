@@ -92,7 +92,7 @@ func ginAnonymousFunction(node dst.Node, manager *InstrumentationManager, c *dst
 												path := util.PackagePath(ident, manager.getDecoratorPackage())
 												if path == codegen.GinImportPath {
 													comment.Warn(manager.getDecoratorPackage(), v, "Since the handler function name is used as the transaction name,", "anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
-													funcLit.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(defaultTxnName, ctxName), DeferStartSegment(defaultTxnName, anonFunctionRoute)}, funcLit.Body.List...)
+													funcLit.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(defaultTxnName, ctxName), codegen.DeferStartSegment(defaultTxnName, anonFunctionRoute)}, funcLit.Body.List...)
 													return funcLit, true, ctxName
 												}
 											}
