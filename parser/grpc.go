@@ -137,7 +137,8 @@ func InstrumentGrpcServerMethod(manager *InstrumentationManager, c *dstutil.Curs
 		if ok {
 			// ok is true if the body of this function has any tracing code added to it. If this is true, we know it needs a transaction to get
 			// pulled from the grpc server object
-			decl, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(codegen.DefaultTransactionVariable))
+			node, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(codegen.DefaultTransactionVariable))
+			decl := node.(*dst.FuncDecl)
 			if ok {
 				decl.Body.List = append([]dst.Stmt{txnAssignment}, decl.Body.List...)
 			}

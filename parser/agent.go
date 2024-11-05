@@ -1,8 +1,10 @@
 package parser
 
 import (
-	"go/ast"
+	"fmt"
+	"go/token"
 	"go/types"
+	"slices"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -17,15 +19,6 @@ const (
 	UntypedNil = "untyped nil"
 )
 
-func isNamedError(n *types.Named) bool {
-	if n == nil {
-		return false
-	}
-
-	o := n.Obj()
-	return o != nil && o.Pkg() == nil && o.Name() == "error"
-}
-
 // errorReturnIndex returns the index of the error return value in the function call
 // if no error is returned it will return 0, false
 func errorReturnIndex(v *dst.CallExpr, pkg *decorator.Package) (int, bool) {
@@ -33,26 +26,25 @@ func errorReturnIndex(v *dst.CallExpr, pkg *decorator.Package) (int, bool) {
 		return 0, false
 	}
 
-	astCall, ok := pkg.Decorator.Ast.Nodes[v]
+	ty := util.TypeOf(v, pkg)
+	if ty == nil {
+		return 0, false
+	}
+
+	tup, ok := ty.(*types.Tuple)
 	if ok {
-		ty := pkg.TypesInfo.TypeOf(astCall.(*ast.CallExpr))
-		switch n := ty.(type) {
-		case *types.Named:
-			if isNamedError(n) {
-				return 0, true
-			}
-		case *types.Tuple:
-			for i := 0; i < n.Len(); i++ {
-				t := n.At(i).Type()
-				switch e := t.(type) {
-				case *types.Named:
-					if isNamedError(e) {
-						return i, true
-					}
-				}
+		for i := 0; i < tup.Len(); i++ {
+			t := tup.At(i).Type()
+			if util.IsError(t) {
+				return i, true
 			}
 		}
 	}
+
+	if util.IsError(ty) {
+		return 0, true
+	}
+
 	return 0, false
 }
 
@@ -71,22 +63,21 @@ func isNewRelicMethod(call *dst.CallExpr) bool {
 }
 
 func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
-	if len(stmt.Rhs) == 1 {
-		if call, ok := stmt.Rhs[0].(*dst.CallExpr); ok {
-			if !isNewRelicMethod(call) {
-				errIndex, ok := errorReturnIndex(call, pkg)
-				if ok {
-					expr := stmt.Lhs[errIndex]
-					ident, ok := expr.(*dst.Ident)
-					if ok {
-						// ignored errors are ignored by instrumentation as well
-						if ident.Name == "_" {
-							return nil
-						}
-					}
-					return dst.Clone(expr).(dst.Expr)
-				}
-			}
+	for _, variable := range stmt.Lhs {
+		t := util.TypeOf(variable, pkg)
+		if t == nil {
+			continue
+		}
+
+		// ignore blank identifiers
+		ident, ok := variable.(*dst.Ident)
+		if ok && ident.Name == "_" {
+			continue
+		}
+
+		// if the variable is an error type, return it
+		if util.IsError(t) {
+			return variable
 		}
 	}
 	return nil
@@ -130,35 +121,41 @@ func findErrorVariableIf(stmt *dst.IfStmt, manager *InstrumentationManager) dst.
 	return nil
 }
 
+// errNilCheck tests if an if statement contains a conditional check that an error is not nil
 func errNilCheck(stmt *dst.BinaryExpr, pkg *decorator.Package) bool {
-
 	exprTypeX := util.TypeOf(stmt.X, pkg)
+	if exprTypeX == nil {
+		return false
+	}
+
 	exprTypeY := util.TypeOf(stmt.Y, pkg)
-	// Case - err != nil && condition
-	// If there is an extra condition, the types of X and Y will be booleans
+	if exprTypeY == nil {
+		return false
+	}
+
+	// If the left side contains a nested error that checks err != nil, then return true
 	nestedX, okX := stmt.X.(*dst.BinaryExpr)
+	if okX && errNilCheck(nestedX, pkg) {
+		return true
+	}
+
+	// If the right side contains a nested error that checks err != nil, then return true
 	nestedY, okY := stmt.Y.(*dst.BinaryExpr)
-
-	if okX && okY {
-		return errNilCheck(nestedX, pkg) || errNilCheck(nestedY, pkg)
+	if okY && errNilCheck(nestedY, pkg) {
+		return true
 	}
 
-	if okX {
-		return errNilCheck(nestedX, pkg)
+	// base case: this is a single binary expression
+	if stmt.Op != token.NEQ {
+		return false
 	}
 
-	if okY {
-		return errNilCheck(nestedY, pkg)
+	if util.IsError(exprTypeX) && exprTypeY.String() == UntypedNil {
+		return true
 	}
-	if exprTypeX != nil && exprTypeX.String() == "error" {
-		if exprTypeY != nil && exprTypeY.String() == UntypedNil {
-			return true
-		}
-	}
-	if exprTypeY != nil && exprTypeY.String() == "error" {
-		if exprTypeX != nil && exprTypeX.String() == UntypedNil {
-			return true
-		}
+
+	if util.IsError(exprTypeY) && exprTypeX.String() == UntypedNil {
+		return true
 	}
 	return false
 }
@@ -182,10 +179,43 @@ func shouldNoticeError(stmt dst.Stmt, pkg *decorator.Package, tracing *tracestat
 // NoticeError will check for the presence of an error.Error variable in the body at the index in bodyIndex.
 // If it finds that an error is returned, it will add a line after the assignment statement to capture an error
 // with a newrelic transaction. All transactions are assumed to be named "txn"
-func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
+func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State, functionCallWasTraced bool) bool {
+	if tracing.IsMain() {
+		return false
+	}
+
+	pkg := manager.getDecoratorPackage()
 	switch nodeVal := stmt.(type) {
+	case *dst.ReturnStmt:
+		if functionCallWasTraced || c.Index() < 0 {
+			return false
+		}
+		for i, result := range nodeVal.Results {
+			call, ok := result.(*dst.CallExpr)
+			if ok {
+				newSmts, retVals := codegen.CaptureErrorReturnCallExpression(pkg, call, tracing.TransactionVariable())
+				if newSmts == nil {
+					return false
+				}
+
+				for _, stmt := range newSmts {
+					c.InsertBefore(stmt)
+				}
+
+				nodeVal.Results = slices.Delete(nodeVal.Results, i, i+1)
+				nodeVal.Results = slices.Insert(nodeVal.Results, i, retVals...)
+			}
+			cachedExpr := manager.errorCache.GetExpression()
+			if cachedExpr != nil && util.AssertExpressionEqual(result, cachedExpr) {
+				manager.errorCache.Clear()
+				capture := codegen.IfErrorNotNilNoticeError(cachedExpr, tracing.TransactionVariable())
+				capture.Decs.Before = dst.EmptyLine
+				c.InsertBefore(capture)
+				return true
+			}
+		}
 	case *dst.IfStmt:
-		if shouldNoticeError(stmt, manager.getDecoratorPackage(), tracing) {
+		if shouldNoticeError(stmt, pkg, tracing) {
 			errExpr := manager.errorCache.GetExpression()
 			if errExpr != nil {
 				var stmtBlock dst.Stmt
@@ -198,17 +228,23 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 			}
 		}
 	case *dst.AssignStmt:
-		errExpr := findErrorVariable(nodeVal, manager.getDecoratorPackage())
+		// if the call was traced, ignore the assigned error because it will be captured in the upstream
+		// function body
+		if functionCallWasTraced {
+			return false
+		}
+		errExpr := findErrorVariable(nodeVal, pkg)
 		if errExpr != nil {
+			fmt.Printf("%+v %s %s\n", nodeVal.Lhs, nodeVal.Tok.String(), util.WriteExpr(nodeVal.Rhs[0], pkg))
 			if manager.errorCache.GetExpression() != nil {
 				stmt := manager.errorCache.GetStatement()
-				comment.Warn(manager.getDecoratorPackage(), stmt, "Unchecked Error, please consult New Relic documentation on error capture")
-
+				comment.Warn(pkg, stmt, "Unchecked Error, please consult New Relic documentation on error capture")
 				manager.errorCache.Clear()
-				return true
-			} else {
-				manager.errorCache.Load(errExpr, nodeVal)
 			}
+
+			// Always load the error into the cache
+			fmt.Println("loaded into cache: ", errExpr)
+			manager.errorCache.Load(errExpr, nodeVal)
 		}
 	}
 	return false

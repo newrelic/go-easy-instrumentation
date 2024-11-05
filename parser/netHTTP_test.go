@@ -1287,10 +1287,10 @@ import (
 	"sync"
 )
 
-func myHelperFunction(url string) {
+func myHelperFunction(url string) error {
 	_, err := http.Get(url)
 	if err != nil {
-		panic(err)
+		return err
 	}
 }
 
@@ -1300,7 +1300,15 @@ func myHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			myHelperFunction("http://example.com")
+			err := myHelperFunction("http://example.com")
+			if err != nil {
+				panic(err)
+			}
+			req, err := http.NewRequest("GET", "http://example.com", nil)
+			if err != nil {
+				panic(err)
+			}
+			http.DefaultClient.Do(req)
 		}()
 	}
 	wg.Wait()
@@ -1322,12 +1330,12 @@ import (
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
-func myHelperFunction(url string, nrTxn *newrelic.Transaction) {
+func myHelperFunction(url string, nrTxn *newrelic.Transaction) error {
 	defer nrTxn.StartSegment("myHelperFunction").End()
 	_, err := http.Get(url)
 	if err != nil {
 		nrTxn.NoticeError(err)
-		panic(err)
+		return err
 	}
 }
 
@@ -1338,9 +1346,19 @@ func myHandler(w http.ResponseWriter, r *http.Request) {
 	for i := 0; i < 5; i++ {
 		wg.Add(1)
 		go func(nrTxn *newrelic.Transaction) {
-			defer nrTxn.StartSegment("async literal").End()
+			defer nrTxn.StartSegment("async function literal").End()
 			defer wg.Done()
-			myHelperFunction("http://example.com", nrTxn)
+			err := myHelperFunction("http://example.com", nrTxn)
+			if err != nil {
+				nrTxn.NoticeError(err)
+				panic(err)
+			}
+			req, err := http.NewRequest("GET", "http://example.com", nil)
+			if err != nil {
+				nrTxn.NoticeError(err)
+				panic(err)
+			}
+			http.DefaultClient.Do(req)
 		}(nrTxn.NewGoroutine())
 	}
 	wg.Wait()

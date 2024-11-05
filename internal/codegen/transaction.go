@@ -80,32 +80,6 @@ func StartTransaction(appVariableName, transactionVariableName, transactionName 
 	}
 }
 
-func NoticeError(errExpr dst.Expr, txnName string, stmtBlock dst.Stmt) *dst.ExprStmt {
-	var decs dst.ExprStmtDecorations
-	// copy all decs below the current statement into this statement
-	if stmtBlock != nil {
-		decs.Before = stmtBlock.Decorations().Before
-		decs.Start = stmtBlock.Decorations().Start
-		stmtBlock.Decorations().Before = dst.None
-		stmtBlock.Decorations().Start.Clear()
-	}
-
-	return &dst.ExprStmt{
-		X: &dst.CallExpr{
-			Fun: &dst.SelectorExpr{
-				X: &dst.Ident{
-					Name: txnName,
-				},
-				Sel: &dst.Ident{
-					Name: "NoticeError",
-				},
-			},
-			Args: []dst.Expr{errExpr},
-		},
-		Decs: decs,
-	}
-}
-
 func TxnFromContext(txnVariable string, contextObject dst.Expr) *dst.AssignStmt {
 	return &dst.AssignStmt{
 		Decs: dst.AssignStmtDecorations{

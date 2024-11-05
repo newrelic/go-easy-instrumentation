@@ -9,6 +9,10 @@ import (
 	"github.com/dave/dst/decorator"
 )
 
+const (
+	ErrorType = "error"
+)
+
 // PackagePath returns the package path of the ident according to go types info
 func PackagePath(ident *dst.Ident, pkg *decorator.Package) string {
 	if ident == nil || pkg == nil {
@@ -73,4 +77,36 @@ func Position(node dst.Node, pkg *decorator.Package) *token.Position {
 
 	pos := pkg.Fset.Position(astNode.Pos())
 	return &pos
+}
+
+func WriteExpr(expr dst.Expr, pkg *decorator.Package) string {
+	if expr == nil || pkg == nil {
+		return ""
+	}
+
+	astExpr := pkg.Decorator.Ast.Nodes[expr]
+	if astExpr == nil {
+		return ""
+	}
+
+	return types.ExprString(astExpr.(ast.Expr))
+}
+
+func IsError(t types.Type) bool {
+	if t == nil {
+		return false
+	}
+	// if the variable is an error type, return it
+	if t.String() == ErrorType {
+		return true
+	}
+
+	// if the variable is a named error type, return it
+	name, ok := t.(*types.Named)
+	if !ok {
+		return false
+	}
+
+	o := name.Obj()
+	return o != nil && o.Pkg() == nil && o.Name() == "error"
 }

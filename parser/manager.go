@@ -18,6 +18,7 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/errorcache"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
 )
 
@@ -25,7 +26,7 @@ import (
 // its tracing status.
 //
 // Please access this object's data through methods rather than directly manipulating it.
-type tracedFunction struct {
+type tracedFunctionDecl struct {
 	traced bool
 	body   *dst.FuncDecl
 }
@@ -51,9 +52,9 @@ type InstrumentationManager struct {
 
 // PackageManager contains state relevant to tracing within a single package.
 type PackageState struct {
-	pkg          *decorator.Package         // the package being instrumented
-	tracedFuncs  map[string]*tracedFunction // maintains state of tracing for functions within the package
-	importsAdded map[string]bool            // tracks imports added to the package
+	pkg          *decorator.Package             // the package being instrumented
+	tracedFuncs  map[string]*tracedFunctionDecl // maintains state of tracing for functions within the package
+	importsAdded map[string]bool                // tracks imports added to the package
 }
 
 // NewInstrumentationManager initializes an InstrumentationManager cache for a given package.
@@ -78,7 +79,7 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	for _, pkg := range pkgs {
 		manager.packages[pkg.ID] = &PackageState{
 			pkg:          pkg,
-			tracedFuncs:  map[string]*tracedFunction{},
+			tracedFuncs:  map[string]*tracedFunctionDecl{},
 			importsAdded: map[string]bool{},
 		}
 	}
@@ -157,7 +158,7 @@ func (m *InstrumentationManager) getPackageName() string {
 	return m.currentPackage
 }
 
-// CreateFunctionDeclaration creates a tracking object for a function declaration that can be used
+// createFunctionDeclaration creates a tracking object for a function declaration that can be used
 // to find tracing locations. This is for initializing and set up only.
 func (m *InstrumentationManager) createFunctionDeclaration(decl *dst.FuncDecl) {
 	state, ok := m.packages[m.currentPackage]
@@ -167,7 +168,7 @@ func (m *InstrumentationManager) createFunctionDeclaration(decl *dst.FuncDecl) {
 
 	_, ok = state.tracedFuncs[decl.Name.Name]
 	if !ok {
-		state.tracedFuncs[decl.Name.Name] = &tracedFunction{
+		state.tracedFuncs[decl.Name.Name] = &tracedFunctionDecl{
 			body: decl,
 		}
 	}
@@ -195,7 +196,7 @@ type invocationInfo struct {
 // where that invocation occurs if a function is declared in this package.
 //
 // If the node does not contain a function call made to a function declared in this application, this method will return nil.
-func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *invocationInfo {
+func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node, state *tracestate.State) *invocationInfo {
 	var invInfo *invocationInfo
 
 	dst.Inspect(node, func(n dst.Node) bool {
@@ -204,22 +205,32 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *in
 			return false
 		case *dst.CallExpr:
 			call := v
-			functionCallIdent, ok := call.Fun.(*dst.Ident)
+			_, ok := state.GetFuncLitVariable(m.getDecoratorPackage(), call.Fun)
 			if ok {
-				path := functionCallIdent.Path
-				if path == "" {
-					path = m.getPackageName()
-				}
-				pkg, ok := m.packages[path]
-				if ok && pkg.tracedFuncs[functionCallIdent.Name] != nil {
-					invInfo = &invocationInfo{
-						functionName: functionCallIdent.Name,
-						packageName:  path,
-						call:         call,
-					}
-					return false
+				invInfo = &invocationInfo{
+					functionName: "Function Literal",
+					packageName:  m.getPackageName(),
+					call:         call,
 				}
 			}
+			functionCallIdent, ok := call.Fun.(*dst.Ident)
+			if !ok {
+				return true
+			}
+			path := functionCallIdent.Path
+			if path == "" {
+				path = m.getPackageName()
+			}
+			pkg, ok := m.packages[path]
+			if ok && pkg.tracedFuncs[functionCallIdent.Name] != nil {
+				invInfo = &invocationInfo{
+					functionName: functionCallIdent.Name,
+					packageName:  path,
+					call:         call,
+				}
+				return false
+			}
+
 			return true
 		}
 		return true

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/dave/dst"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -146,7 +148,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 		{
 			name: "CreateFunctionDeclaration",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunction{}}},
+				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{}}},
 				currentPackage: "foo",
 			},
 			args:   args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
@@ -155,7 +157,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 		{
 			name: "CreateFunctionDeclaration_nil_check",
 			fields: fields{
-				packages: map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunction{}}},
+				packages: map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{}}},
 			},
 			args:   args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
 			expect: false,
@@ -163,7 +165,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 		{
 			name: "CreateFunctionDeclaration_already_exists",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
+				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 				currentPackage: "foo",
 			},
 			args:   args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
@@ -222,7 +224,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 		{
 			name: "UpdateFunctionDeclaration",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
+				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 				currentPackage: "foo",
 			},
 			args:    args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
@@ -231,7 +233,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 		{
 			name: "UpdateFunctionDeclaration_nil_check",
 			fields: fields{
-				packages: map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
+				packages: map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 			},
 			args:    args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
 			updates: false,
@@ -265,7 +267,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 // What if there are two instrumentable function invocations in a statement?
 func Test_GetPackageFunctionInvocation(t *testing.T) {
 	state := map[string]*PackageState{"foo": {
-		tracedFuncs: map[string]*tracedFunction{"bar": {body: &dst.FuncDecl{}}},
+		tracedFuncs: map[string]*tracedFunctionDecl{"bar": {body: &dst.FuncDecl{}}},
 	}}
 	type fields struct {
 		userAppPath       string
@@ -350,7 +352,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 			defer panicRecovery(t)
-			got := m.getPackageFunctionInvocation(tt.args.node)
+			got := m.getPackageFunctionInvocation(tt.args.node, tracestate.FunctionBody(codegen.DefaultTransactionVariable))
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -377,7 +379,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 		{
 			name: "function_should_be_instrumented",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
+				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 				currentPackage: "foo",
 			},
 			args: args{inv: &invocationInfo{packageName: "foo", functionName: "bar"}},
@@ -386,7 +388,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 		{
 			name: "nil_invocation",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {}}}},
+				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 				currentPackage: "foo",
 			},
 			args: args{inv: nil},
@@ -395,7 +397,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 		{
 			name: "already_instrumented",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunction{"bar": {traced: true}}}},
+				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {traced: true}}}},
 				currentPackage: "foo",
 			},
 			args: args{inv: &invocationInfo{packageName: "foo", functionName: "bar"}},

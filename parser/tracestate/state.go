@@ -7,76 +7,109 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate/traceobject"
 )
 
 // State stores the current state of the tracing process.
 type State struct {
-	main              bool                    // main indicates that the current state is for a main function.
-	definedTxn        bool                    // definedTxn indicates that a transaction has been defined from an agent application in the current scope.
-	async             bool                    // async indicates that the current function is an async function.
-	needsSegment      bool                    // needsSegment indicates that a segment should be created for the current function.
-	assignTxnVariable bool                    // assignTxnVariable indicates that the transaction variable should be assigned to a new variable name from the passed object
-	agentVariable     string                  // agentVariable is the name of the agent variable in the main function.
-	txnVariable       string                  // txnVariable is the name of the transaction variable in the current scope.
-	object            traceobject.TraceObject // object is the object that contains the transaction, along with helper functions for how to utilize it.
+	main             bool                    // main indicates that the current state is for a main function.
+	definedTxn       bool                    // definedTxn indicates that a transaction has been defined from an agent application in the current scope.
+	async            bool                    // async indicates that the current function is an async function.
+	needsSegment     bool                    // needsSegment indicates that a segment should be created for the current function.
+	addTracingParam  bool                    // addTracingParam indicates that a tracing parameter should be added to the current function.
+	agentVariable    string                  // agentVariable is the name of the agent variable in the main function.
+	txnVariable      string                  // txnVariable is the name of the transaction variable in the current scope.
+	object           traceobject.TraceObject // object is the object that contains the transaction, along with helper functions for how to utilize it.
+	funcLitVariables map[string]*dst.FuncLit // funcLitVariables is a map of function literals that have been created in the current scope.
 }
 
 // Main creates a new State object for tracing a main function.
 // We know the agent must be initialized in the main function.
 //
 // The agentVariable is the name of the agent variable in the main function.
+// The trace object will always be a transaction in this case, since we have to
+//
+//	start a transaction in the main function.
 func Main(agentVariable string) *State {
 	return &State{
-		main:          true,
-		agentVariable: agentVariable,
-		txnVariable:   codegen.DefaultTransactionVariable,
-		object:        traceobject.NewTransaction(),
-	}
-}
-
-// FunctionCall creates a trace state for tracing a function call.
-func (tc *State) FunctionCall() *State {
-	return &State{
-		txnVariable:  tc.txnVariable,
-		object:       tc.object,
-		needsSegment: true,
-	}
-}
-
-// FunctionCall creates a trace state for tracing a function call.
-func (tc *State) Goroutine() *State {
-	return &State{
-		txnVariable:  tc.txnVariable,
-		object:       tc.object,
-		needsSegment: true,
-		async:        true,
+		main:             true,
+		agentVariable:    agentVariable,
+		txnVariable:      codegen.DefaultTransactionVariable,
+		object:           traceobject.NewTransaction(),
+		funcLitVariables: make(map[string]*dst.FuncLit),
 	}
 }
 
 // FunctionBody creates a trace state for tracing a function body.
-func FunctionBody(transactionVariable string) *State {
+func FunctionBody(transactionVariable string, obj ...traceobject.TraceObject) *State {
+	var object traceobject.TraceObject
+	if len(obj) > 0 {
+		object = obj[0]
+	} else {
+		object = traceobject.NewTransaction()
+	}
+
 	return &State{
-		txnVariable: transactionVariable,
-		object:      traceobject.NewTransaction(),
+		txnVariable:      transactionVariable,
+		object:           object,
+		funcLitVariables: make(map[string]*dst.FuncLit),
+	}
+}
+
+// functionCall creates a trace state for tracing a function call
+// that is being made from the scope of the current function.
+func (tc *State) functionCall(obj traceobject.TraceObject) *State {
+	return &State{
+		txnVariable:     tc.txnVariable,
+		object:          obj,
+		main:            false,
+		needsSegment:    true,
+		addTracingParam: true,
+	}
+}
+
+// FunctionCall creates a trace state for tracing an async function call
+// that is being made from the scope of the current function.
+func (tc *State) goroutine(obj traceobject.TraceObject) *State {
+	return &State{
+		txnVariable:     tc.txnVariable,
+		object:          obj,
+		needsSegment:    true,
+		addTracingParam: true,
+		async:           true,
 	}
 }
 
 // CreateSegment creates a segment for the current function if needed.
 // Calling this will add a defer statement to the function declaration that will create a segment as the first
 // statement in the function.
-func (tc *State) CreateSegment(decl *dst.FuncDecl) (string, bool) {
-	if !tc.needsSegment || tc.main {
-		return "", false
+func (tc *State) CreateSegment(node dst.Node) (string, bool) {
+	switch decl := node.(type) {
+	case *dst.FuncDecl:
+		if !tc.needsSegment || tc.main {
+			return "", false
+		}
+
+		name := decl.Name.Name
+		if tc.async {
+			name = fmt.Sprintf("async %s", name)
+		}
+
+		codegen.PrependStatementToFunctionDecl(decl, codegen.DeferSegment(name, tc.TransactionVariable()))
+		return codegen.NewRelicAgentImportPath, true
+	case *dst.FuncLit:
+		// function lits should alwas get a segment
+		name := "function literal"
+		if tc.async {
+			name = "async " + name
+		}
+
+		codegen.PrependStatementToFunctionLit(decl, codegen.DeferSegment(name, tc.TransactionVariable()))
+		return codegen.NewRelicAgentImportPath, true
 	}
 
-	name := decl.Name.Name
-	if tc.async {
-		name = fmt.Sprintf("async %s", name)
-	}
-
-	codegen.PrependStatementToFunctionDecl(decl, codegen.DeferSegment(name, tc.TransactionVariable()))
-	return codegen.NewRelicAgentImportPath, true
+	return "", false
 }
 
 // WrapWithTransaction creates a transaction in the line before the current cursor position if all of these contidions are met:
@@ -104,8 +137,7 @@ func (tc *State) IsMain() bool {
 
 // TransactionVariable returns the name of the transaction variable.
 func (tc *State) TransactionVariable() string {
-	if !tc.main && tc.txnVariable == "" {
-		tc.assignTxnVariable = true
+	if tc.main || tc.txnVariable == "" {
 		tc.txnVariable = codegen.DefaultTransactionVariable
 	}
 	return tc.txnVariable
@@ -130,8 +162,37 @@ func (tc *State) AgentVariable() string {
 //  1. If the function takes an argument of the same type as the tracing object, we will pass as that type.
 //  2. If the function takes an argument of type context.Context, we will inject the transaction into the passed context.
 //  3. If neither case 1 or case 2 is met, a *newrelic.Transaction will be passed as the last argument of the function.
-func (tc *State) AddToCall(pkg *decorator.Package, call *dst.CallExpr, async bool) string {
-	return tc.object.AddToCall(pkg, call, tc.txnVariable, async)
+func (tc *State) AddToCall(pkg *decorator.Package, call *dst.CallExpr, async bool) (*State, string) {
+	obj, goGet := tc.object.AddToCall(pkg, call, tc.txnVariable, async)
+
+	if async {
+		return tc.goroutine(obj), goGet
+	}
+	return tc.functionCall(obj), goGet
+}
+
+// FuncDeclaration creates a trace state for a function declaration.
+func (tc *State) FuncLiteralDeclaration(pkg *decorator.Package, lit *dst.FuncLit) *State {
+	return tc.functionCall(tc.object)
+}
+
+// NoticeFuncLiteralAssignment is called when a function literal is assigned to a variable.
+func (tc *State) NoticeFuncLiteralAssignment(pkg *decorator.Package, variable dst.Expr, lit *dst.FuncLit) {
+	variableString := util.WriteExpr(variable, pkg)
+	if variableString == "" {
+		return
+	}
+	tc.funcLitVariables[variableString] = lit
+}
+
+func (tc *State) GetFuncLitVariable(pkg *decorator.Package, variable dst.Expr) (*dst.FuncLit, bool) {
+	variableString := util.WriteExpr(variable, pkg)
+	if variableString == "" {
+		return nil, false
+	}
+
+	lit, ok := tc.funcLitVariables[variableString]
+	return lit, ok
 }
 
 // AddToFunctionDecl adds a parameter to pass a New Relic transaction to a function declaration if needed.
@@ -146,37 +207,37 @@ func (tc *State) AddToCall(pkg *decorator.Package, call *dst.CallExpr, async boo
 //  1. If the function takes an argument of the same type as the tracing object, we will pass as that type.
 //  2. If the function takes an argument of type context.Context, we will inject the transaction into the passed context.
 //  3. If neither case 1 or case 2 is met, a *newrelic.Transaction will be passed as the last argument of the function.
-func (tc *State) AddToFunctionDecl(pkg *decorator.Package, decl *dst.FuncDecl) string {
-	return tc.object.AddToFuncDecl(pkg, decl)
-}
+func (tc *State) AddParameterToDeclaration(pkg *decorator.Package, node dst.Node) string {
+	if tc.addTracingParam {
+		switch decl := node.(type) {
+		case *dst.FuncDecl:
+			obj, goGet := tc.object.AddToFuncDecl(pkg, decl)
+			tc.object = obj
+			return goGet
+		case *dst.FuncLit:
+			obj, goGet := tc.object.AddToFuncLit(pkg, decl)
+			tc.object = obj
+			return goGet
+		}
+	}
 
-// AddToFunctionDecl adds a parameter to pass a New Relic transaction to a function declaration if needed.
-// It MUST be passed the decorator package for the package the function call is being made in.
-//
-// This function returns a string for any library that needs to be imported with go get before
-// the code will compile.
-//
-// This function will update the call expression in place. The object containing the transaction
-// that is passed to the function will depend on what parameters the function takes, and what is
-// being passed. In general, the rules for what is passed are:
-//  1. If the function takes an argument of the same type as the tracing object, we will pass as that type.
-//  2. If the function takes an argument of type context.Context, we will inject the transaction into the passed context.
-//  3. If neither case 1 or case 2 is met, a *newrelic.Transaction will be passed as the last argument of the function.
-func (tc *State) AddToFunctionLiteral(pkg *decorator.Package, lit *dst.FuncLit) string {
-	return tc.object.AddToFuncLit(pkg, lit)
+	return ""
 }
 
 // AssignTransactionVariable assigns the transaction variable to a new variable that will always be the default transaction variable name.
 // It will handle all the conditional checking for you, and will only add a transaction assignment if needed.
 // In some cases, this may require a library to be installed, and it will return the import path for that library.
-func (tc *State) AssignTransactionVariable(decl *dst.FuncDecl) string {
-	if tc.assignTxnVariable {
-		stmt, imp := tc.object.AssignTransactionVariable(codegen.DefaultTransactionVariable)
-		if stmt != nil {
-			tc.txnVariable = codegen.DefaultTransactionVariable
+func (tc *State) AssignTransactionVariable(node dst.Node) string {
+	stmt, imp := tc.object.AssignTransactionVariable(codegen.DefaultTransactionVariable)
+	if stmt != nil {
+		tc.txnVariable = codegen.DefaultTransactionVariable
+		switch decl := node.(type) {
+		case *dst.FuncDecl:
 			codegen.PrependStatementToFunctionDecl(decl, stmt)
-			return imp
+		case *dst.FuncLit:
+			codegen.PrependStatementToFunctionLit(decl, stmt)
 		}
+		return imp
 	}
 
 	return ""
