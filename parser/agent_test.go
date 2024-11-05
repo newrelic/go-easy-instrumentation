@@ -1,53 +1,12 @@
 package parser
 
 import (
-	"go/types"
 	"testing"
 
 	"github.com/dave/dst"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/stretchr/testify/assert"
 )
-
-func Test_isNamedError(t *testing.T) {
-	type args struct {
-		n *types.Named
-	}
-	tests := []struct {
-		name string
-		args args
-		want bool
-	}{
-		{
-			name: "Test is named error",
-			args: args{
-				n: types.NewNamed(types.NewTypeName(0, nil, "error", nil), nil, nil),
-			},
-			want: true,
-		},
-		{
-			name: "Test is not error",
-			args: args{
-				n: types.NewNamed(types.NewTypeName(0, nil, "foo", nil), nil, nil),
-			},
-			want: false,
-		},
-		{
-			name: "Nil Named Error",
-			args: args{
-				n: nil,
-			},
-			want: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := isNamedError(tt.args.n); got != tt.want {
-				t.Errorf("isNamedError() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 
 func Test_isNewRelicMethod(t *testing.T) {
 	type args struct {
@@ -212,7 +171,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer panicRecovery(t)
-			got := testStatefulTracingFunction(t, tt.code, NoticeError, true)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentMain)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
@@ -267,6 +226,117 @@ func main() {
 
 	nrTxn := NewRelicAgent.StartTransaction("myFunc")
 	myFunc(nrTxn)
+	nrTxn.End()
+
+	NewRelicAgent.Shutdown(5 * time.Second)
+}
+`,
+		},
+		{
+			name: "re-assigns transaction variable when repeated",
+			code: `package main
+
+import "net/http"
+
+func myFunc() {
+	_, err := http.Get("http://example.com")
+	if err != nil {
+		panic(err)
+	}
+}
+
+func main() {
+	myFunc()
+	myFunc()
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myFunc(nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("myFunc").End()
+	_, err := http.Get("http://example.com")
+	if err != nil {
+		nrTxn.NoticeError(err)
+		panic(err)
+	}
+}
+
+func main() {
+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if err != nil {
+		panic(err)
+	}
+
+	nrTxn := NewRelicAgent.StartTransaction("myFunc")
+	myFunc(nrTxn)
+	nrTxn.End()
+	nrTxn = NewRelicAgent.StartTransaction("myFunc")
+	myFunc(nrTxn)
+	nrTxn.End()
+
+	NewRelicAgent.Shutdown(5 * time.Second)
+}
+`,
+		},
+		{
+			name: "pass transaction into context if possible",
+			code: `package main
+
+import (
+	"context"
+	"net/http"
+	"time"
+)
+
+func myFunc(ctx context.Context) {
+	_, err := http.Get("http://example.com")
+	if err != nil {
+		panic(err)
+	}
+}
+
+func main() {
+	ctx := context.Background()
+	myFunc(ctx)
+}
+`,
+			expect: `package main
+
+import (
+	"context"
+	"net/http"
+	"time"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myFunc(ctx context.Context) {
+	nrTxn := newrelic.FromContext(ctx)
+
+	defer nrTxn.StartSegment("myFunc").End()
+	_, err := http.Get("http://example.com")
+	if err != nil {
+		nrTxn.NoticeError(err)
+		panic(err)
+	}
+}
+
+func main() {
+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if err != nil {
+		panic(err)
+	}
+
+	ctx := context.Background()
+	nrTxn := NewRelicAgent.StartTransaction("myFunc")
+	myFunc(newrelic.NewContext(ctx, nrTxn))
 	nrTxn.End()
 
 	NewRelicAgent.Shutdown(5 * time.Second)

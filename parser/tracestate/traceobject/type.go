@@ -16,7 +16,7 @@ type TraceObject interface {
 	// to the function being invoked in the call.
 	//
 	// If an import needs to be added to support the changes made, it will be returned as a string.
-	AddToCall(pkg *decorator.Package, call *dst.CallExpr, variableName string, async bool) string
+	AddToCall(pkg *decorator.Package, call *dst.CallExpr, variableName string, async bool) (TraceObject, string)
 
 	// AddToFuncDecl adds a trace object to a function declaration as a parameter, so that
 	// trace objects can be passed in calls to this function.
@@ -24,7 +24,7 @@ type TraceObject interface {
 	// Make sure that the package passed is from the same package that the function is defined in.
 	//
 	// If an import needs to be added to support the changes made, it will be returned as a string.
-	AddToFuncDecl(pkg *decorator.Package, decl *dst.FuncDecl) string
+	AddToFuncDecl(pkg *decorator.Package, decl *dst.FuncDecl) (TraceObject, string)
 
 	// AddToFuncLit adds a trace object to a function literal definition as a parameter, so that
 	// trace objects can be passed in calls to this function literal.
@@ -32,7 +32,7 @@ type TraceObject interface {
 	// Make sure that the package passed is from the same package that the function literal is defined in.
 	//
 	// If an import needs to be added to support the changes made, it will be returned as a string.
-	AddToFuncLit(pkg *decorator.Package, lit *dst.FuncLit) string
+	AddToFuncLit(pkg *decorator.Package, lit *dst.FuncLit) (TraceObject, string)
 
 	// AssignTransactionVariable fetches the transaction from the trace object and assigns it to a variable
 	//
