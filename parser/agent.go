@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"fmt"
 	"go/token"
 	"go/types"
 	"slices"
@@ -198,6 +197,14 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 					return false
 				}
 
+				// add an empty line beore the return statement for readability
+				nodeVal.Decorations().Before = dst.EmptyLine
+
+				// if this is the first element in the slice, it will be the top of the function
+				if c.Index() == 0 {
+					newSmts[0].Decorations().Before = dst.NewLine
+				}
+
 				for _, stmt := range newSmts {
 					c.InsertBefore(stmt)
 				}
@@ -228,24 +235,38 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 			}
 		}
 	case *dst.AssignStmt:
-		// if the call was traced, ignore the assigned error because it will be captured in the upstream
-		// function body
+		// avoid capturing errors that were already captured upstream
 		if functionCallWasTraced {
 			return false
 		}
+		// if the call was traced, ignore the assigned error because it will be captured in the upstream
+		// function body
 		errExpr := findErrorVariable(nodeVal, pkg)
-		if errExpr != nil {
-			fmt.Printf("%+v %s %s\n", nodeVal.Lhs, nodeVal.Tok.String(), util.WriteExpr(nodeVal.Rhs[0], pkg))
-			if manager.errorCache.GetExpression() != nil {
-				stmt := manager.errorCache.GetStatement()
-				comment.Warn(pkg, stmt, "Unchecked Error, please consult New Relic documentation on error capture")
-				manager.errorCache.Clear()
-			}
-
-			// Always load the error into the cache
-			fmt.Println("loaded into cache: ", errExpr)
-			manager.errorCache.Load(errExpr, nodeVal)
+		if errExpr == nil {
+			return false
 		}
+
+		if manager.errorCache.GetExpression() != nil {
+			stmt := manager.errorCache.GetStatement()
+			comment.Warn(pkg, stmt, "Unchecked Error, please consult New Relic documentation on error capture")
+			manager.errorCache.Clear()
+		}
+
+		// Always load the error into the cache
+		var errStmt dst.Stmt
+		errStmt = nodeVal
+
+		// its possible that this error is not in a block statment
+		// if thats the case, we should attempt to add our comment to something that is.
+		if c.Index() < 0 {
+			parent := c.Parent()
+			parentStmt, ok := parent.(dst.Stmt)
+			if ok {
+				errStmt = parentStmt
+			}
+		}
+		manager.errorCache.Load(errExpr, errStmt)
+
 	}
 	return false
 }

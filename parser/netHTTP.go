@@ -319,43 +319,8 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 			case httpHandleFunc, httpMuxHandle:
 				if len(callExpr.Args) == 2 {
 					// Instrument handle funcs
-					oldArgs := callExpr.Args
-					if tracing.AgentVariable() != "" {
-						callExpr.Args = []dst.Expr{
-							&dst.CallExpr{
-								Fun: &dst.Ident{
-									Name: "WrapHandleFunc",
-									Path: codegen.NewRelicAgentImportPath,
-								},
-								Args: []dst.Expr{
-									&dst.Ident{
-										Name: tracing.AgentVariable(),
-									},
-									oldArgs[0],
-									oldArgs[1],
-								},
-							},
-						}
-					} else {
-						callExpr.Args = []dst.Expr{
-							&dst.CallExpr{
-								Fun: &dst.Ident{
-									Name: "WrapHandleFunc",
-									Path: codegen.NewRelicAgentImportPath,
-								},
-								Args: []dst.Expr{
-									&dst.CallExpr{
-										Fun: &dst.SelectorExpr{
-											X:   dst.NewIdent(tracing.TransactionVariable()),
-											Sel: dst.NewIdent("Application"),
-										},
-									},
-									oldArgs[0],
-									oldArgs[1],
-								},
-							},
-						}
-					}
+					codegen.WrapHttpHandle(tracing.AgentVariable(), callExpr)
+
 					wasModified = true
 					manager.addImport(codegen.NewRelicAgentImportPath)
 					return false

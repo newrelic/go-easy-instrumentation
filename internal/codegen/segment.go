@@ -7,13 +7,13 @@ import (
 	"github.com/dave/dst"
 )
 
-func DeferSegment(segmentName, txnVarName string) *dst.DeferStmt {
+func DeferSegment(segmentName string, transactionVariable dst.Expr) *dst.DeferStmt {
 	return &dst.DeferStmt{
 		Call: &dst.CallExpr{
 			Fun: &dst.SelectorExpr{
 				X: &dst.CallExpr{
 					Fun: &dst.SelectorExpr{
-						X: dst.NewIdent(txnVarName),
+						X: transactionVariable,
 						Sel: &dst.Ident{
 							Name: "StartSegment",
 						},
@@ -30,10 +30,15 @@ func DeferSegment(segmentName, txnVarName string) *dst.DeferStmt {
 				},
 			},
 		},
+		Decs: dst.DeferStmtDecorations{
+			NodeDecs: dst.NodeDecs{
+				After: dst.EmptyLine,
+			},
+		},
 	}
 }
 
-func StartExternalSegment(request dst.Expr, txnVar, segmentVar string, nodeDecs *dst.NodeDecs) *dst.AssignStmt {
+func StartExternalSegment(request, txnVariable dst.Expr, segmentVar string, nodeDecs *dst.NodeDecs) *dst.AssignStmt {
 	// copy all preceeding decorations from the previous node
 	decs := dst.AssignStmtDecorations{}
 	if nodeDecs != nil {
@@ -59,7 +64,7 @@ func StartExternalSegment(request dst.Expr, txnVar, segmentVar string, nodeDecs 
 					Path: NewRelicAgentImportPath,
 				},
 				Args: []dst.Expr{
-					dst.NewIdent(txnVar),
+					txnVariable,
 					dst.Clone(request).(dst.Expr),
 				},
 			},

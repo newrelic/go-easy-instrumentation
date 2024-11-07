@@ -5,13 +5,20 @@ import (
 	"go/token"
 
 	"github.com/dave/dst"
-	"github.com/dave/dst/decorator"
-	"github.com/newrelic/go-easy-instrumentation/internal/util"
 )
 
 const (
 	DefaultTransactionVariable = "nrTxn"
 )
+
+func GetApplication(transactionVariableName string) dst.Expr {
+	return &dst.CallExpr{
+		Fun: &dst.SelectorExpr{
+			X:   dst.NewIdent(transactionVariableName),
+			Sel: dst.NewIdent("Application"),
+		},
+	}
+}
 
 func EndTransaction(transactionVariableName string) *dst.ExprStmt {
 	return &dst.ExprStmt{
@@ -24,7 +31,7 @@ func EndTransaction(transactionVariableName string) *dst.ExprStmt {
 	}
 }
 
-func TxnAsParameter(txnName string) *dst.Field {
+func NewTransactionParameter(txnName string) *dst.Field {
 	return &dst.Field{
 		Names: []*dst.Ident{
 			{
@@ -42,10 +49,9 @@ func TxnAsParameter(txnName string) *dst.Field {
 
 // TxnNewGoroutine returns a call to txn.NewGoroutine()
 func TxnNewGoroutine(transaction dst.Expr) *dst.CallExpr {
-	txnClone := dst.Clone(transaction).(dst.Expr)
 	return &dst.CallExpr{
 		Fun: &dst.SelectorExpr{
-			X: txnClone,
+			X: dst.Clone(transaction).(dst.Expr),
 			Sel: &dst.Ident{
 				Name: "NewGoroutine",
 			},
@@ -107,21 +113,17 @@ func TxnFromContext(txnVariable string, contextObject dst.Expr) *dst.AssignStmt 
 	}
 }
 
-// returns true if a node contains a call to `txn.NewGoroutine()`
-func ContainsTxnNewGoroutine(pkg *decorator.Package, node dst.Node) bool {
-	found := false
-	dst.Inspect(node, func(node dst.Node) bool {
-		sel, ok := node.(*dst.SelectorExpr)
-		t := util.TypeOf(sel.X, pkg)
-		if ok && t != nil && sel.Sel.Name == "NewGoroutine" && t.String() == "*newrelic.Transaction" {
-			found = true
-			return false
-		}
-
-		return true
-	})
-
-	return found
+// TxnFromContextExpression returns a call to `newrelic.FromContext(contextObject)`
+func TxnFromContextExpression(contextObject dst.Expr) dst.Expr {
+	return &dst.CallExpr{
+		Fun: &dst.Ident{
+			Name: "FromContext",
+			Path: NewRelicAgentImportPath,
+		},
+		Args: []dst.Expr{
+			dst.Clone(contextObject).(dst.Expr),
+		},
+	}
 }
 
 // TransactionParameter returns a field definition for a function parameter that is a *newrelic.Transaction

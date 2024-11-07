@@ -11,22 +11,30 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 )
 
-func IfErrorNotNilNoticeError(errExpr dst.Expr, txnName string) *dst.IfStmt {
+// IfErrorNotNilNoticeError creates an if statement that checks if the errorVariable is not nil, and calls notice error if its not nil
+//
+// Example:
+//
+//	if err != nil {
+//		txn.NoticeError(err)
+//	}
+func IfErrorNotNilNoticeError(errorVariable, transactionVariable dst.Expr) *dst.IfStmt {
 	return &dst.IfStmt{
 		Cond: &dst.BinaryExpr{
-			X:  dst.Clone(errExpr).(dst.Expr),
+			X:  dst.Clone(errorVariable).(dst.Expr),
 			Op: token.NEQ,
 			Y:  dst.NewIdent("nil"),
 		},
 		Body: &dst.BlockStmt{
 			List: []dst.Stmt{
-				NoticeError(dst.Clone(errExpr).(dst.Expr), txnName, nil),
+				NoticeError(dst.Clone(errorVariable).(dst.Expr), transactionVariable, nil),
 			},
 		},
 	}
 }
 
-func NoticeError(errExpr dst.Expr, txnName string, stmtBlock dst.Stmt) *dst.ExprStmt {
+// NoticeError Generates a statement that calls txn.NoticeError(err)
+func NoticeError(errExpr, transactionVariable dst.Expr, stmtBlock dst.Stmt) *dst.ExprStmt {
 	var decs dst.ExprStmtDecorations
 	// copy all decs below the current statement into this statement
 	if stmtBlock != nil {
@@ -39,9 +47,7 @@ func NoticeError(errExpr dst.Expr, txnName string, stmtBlock dst.Stmt) *dst.Expr
 	return &dst.ExprStmt{
 		X: &dst.CallExpr{
 			Fun: &dst.SelectorExpr{
-				X: &dst.Ident{
-					Name: txnName,
-				},
+				X: transactionVariable,
 				Sel: &dst.Ident{
 					Name: "NoticeError",
 				},
@@ -52,7 +58,11 @@ func NoticeError(errExpr dst.Expr, txnName string, stmtBlock dst.Stmt) *dst.Expr
 	}
 }
 
-func CaptureErrorReturnCallExpression(pkg *decorator.Package, call *dst.CallExpr, transactionVariable string) ([]dst.Stmt, []dst.Expr) {
+// CaptureErrorReturnCallExpression checks if the return values of a function call is an error, and generates code to assign the return values to variables,
+// check if the error is not nil, and call txn.NoticeError(err) if the error is not nil.
+// It returns the statements that need to be added to the tree, and the expressions that are assigned to the return values of the function call.
+// The list of expressions can be used to replace the expression in the return statement.
+func CaptureErrorReturnCallExpression(pkg *decorator.Package, call *dst.CallExpr, transactionVariable dst.Expr) ([]dst.Stmt, []dst.Expr) {
 	t := util.TypeOf(call, pkg)
 	if t == nil {
 		return nil, nil

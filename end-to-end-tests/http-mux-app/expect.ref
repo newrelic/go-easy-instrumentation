@@ -21,7 +21,7 @@
  	flag.StringVar(&listenAddr, "listen-addr", ":5000", "server listen address")
  	flag.Parse()
  
-@@ -31,26 +38,34 @@
+@@ -31,26 +38,36 @@
  	logger.Println("Server is starting...")
  
  	router := http.NewServeMux()
@@ -34,7 +34,10 @@
 +	router.Handle(newrelic.WrapHandleFunc(NewRelicAgent, "/healthz", healthz(nrTxn)))
 +	nrTxn.End()
  
- 	nextRequestID := func() string {
+-	nextRequestID := func() string {
++	nextRequestID := func(nrTxn *newrelic.Transaction) string {
++		defer nrTxn.StartSegment("function literal").End()
++
  		return fmt.Sprintf("%d", time.Now().UnixNano())
  	}
  
@@ -59,21 +62,7 @@
  	go func() {
  		<-quit
  		logger.Println("Server is shutting down...")
-@@ -61,6 +59,7 @@
- 
- 		server.SetKeepAlivesEnabled(false)
- 		if err := server.Shutdown(ctx); err != nil {
-+			nrTxn.NoticeError(err)
- 			logger.Fatalf("Could not gracefully shutdown the server: %v\n", err)
- 		}
- 		close(done)
-@@ -69,14 +68,18 @@
- 	logger.Println("Server is ready to handle requests at", listenAddr)
- 	atomic.StoreInt32(&healthy, 1)
- 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-+		nrTxn.NoticeError(err)
- 		logger.Fatalf("Could not listen on %s: %v\n", listenAddr, err)
- 	}
+@@ -74,9 +75,13 @@
  
  	<-done
  	logger.Println("Server stopped")
@@ -84,26 +73,29 @@
 -func index() http.Handler {
 +func index(nrTxn *newrelic.Transaction) http.Handler {
 +	defer nrTxn.StartSegment("index").End()
++
  	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
  		if r.URL.Path != "/" {
  			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-@@ -89,7 +85,8 @@
+@@ -89,7 +92,9 @@
  	})
  }
  
 -func healthz() http.Handler {
 +func healthz(nrTxn *newrelic.Transaction) http.Handler {
 +	defer nrTxn.StartSegment("healthz").End()
++
  	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
  		if atomic.LoadInt32(&healthy) == 1 {
  			w.WriteHeader(http.StatusNoContent)
-@@ -99,7 +96,8 @@
+@@ -99,7 +104,9 @@
  	})
  }
  
 -func logging(logger *log.Logger) func(http.Handler) http.Handler {
 +func logging(logger *log.Logger, nrTxn *newrelic.Transaction) func(http.Handler) http.Handler {
 +	defer nrTxn.StartSegment("logging").End()
++
  	return func(next http.Handler) http.Handler {
  		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
  			defer func() {

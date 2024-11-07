@@ -115,7 +115,7 @@ func Test_endTransaction(t *testing.T) {
 	}
 }
 
-func Test_txnAsParameter(t *testing.T) {
+func Test_NewTransactionParameter(t *testing.T) {
 	type args struct {
 		txnName string
 	}
@@ -146,7 +146,7 @@ func Test_txnAsParameter(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := TxnAsParameter(tt.args.txnName)
+			got := NewTransactionParameter(tt.args.txnName)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -269,7 +269,7 @@ func Test_generateNoticeError(t *testing.T) {
 				}
 			}
 
-			got := NoticeError(tt.args.errExpr, tt.args.txnName, stmtBlock)
+			got := NoticeError(tt.args.errExpr, dst.NewIdent(tt.args.txnName), stmtBlock)
 			if tt.args.nodeDecs != nil {
 				assert.Equal(t, tt.args.nodeDecs.After, stmtBlock.Decs.After, "whitespace after stmtblock should not be modified")
 				assert.Equal(t, tt.args.nodeDecs.End, stmtBlock.Decs.End, "comment after stmtblock should not be modified")

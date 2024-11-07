@@ -63,7 +63,7 @@ func Test_endExternalSegment(t *testing.T) {
 func Test_startExternalSegment(t *testing.T) {
 	type args struct {
 		request    dst.Expr
-		txnVar     string
+		txnVar     dst.Expr
 		segmentVar string
 		nodeDecs   *dst.NodeDecs
 	}
@@ -76,7 +76,7 @@ func Test_startExternalSegment(t *testing.T) {
 			name: "start_external_segment",
 			args: args{
 				request:    &dst.Ident{Name: "r", Path: HttpImportPath},
-				txnVar:     "txn",
+				txnVar:     dst.NewIdent("txn"),
 				segmentVar: "example",
 				nodeDecs: &dst.NodeDecs{
 					Before: dst.NewLine,
@@ -207,12 +207,17 @@ func Test_deferSegment(t *testing.T) {
 						},
 					},
 				},
+				Decs: dst.DeferStmtDecorations{
+					NodeDecs: dst.NodeDecs{
+						After: dst.EmptyLine,
+					},
+				},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := DeferSegment(tt.args.segmentName, tt.args.txnVarName)
+			got := DeferSegment(tt.args.segmentName, dst.NewIdent(tt.args.txnVarName))
 			assert.Equal(t, tt.want, got)
 		})
 	}

@@ -11,9 +11,16 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate/traceobject"
 )
 
-// State stores the current state of the tracing process.
+// State stores the current state of the tracing process in the scope of a current function. Each function should
+// be passed its own unique state object in oreder to preserve indepence between functions, and correctness.
+// The state object will keep track of the current transaction variable, agent variable, and other stateful information
+// about how instrumentation is being added and utilized in the scope of the current function.
+//
+// When creating a state, a TraceObject should be passed. This object identifies the way the transaction is being passed
+// to the function, and takes care of how to correctly handle it.
 type State struct {
 	main             bool                    // main indicates that the current state is for a main function.
+	txnUsed          bool                    // txnUsed indicates that the transaction variable has been used in the current scope.
 	definedTxn       bool                    // definedTxn indicates that a transaction has been defined from an agent application in the current scope.
 	async            bool                    // async indicates that the current function is an async function.
 	needsSegment     bool                    // needsSegment indicates that a segment should be created for the current function.
@@ -34,6 +41,7 @@ type State struct {
 func Main(agentVariable string) *State {
 	return &State{
 		main:             true,
+		needsSegment:     false,
 		agentVariable:    agentVariable,
 		txnVariable:      codegen.DefaultTransactionVariable,
 		object:           traceobject.NewTransaction(),
@@ -84,13 +92,14 @@ func (tc *State) goroutine(obj traceobject.TraceObject) *State {
 // CreateSegment creates a segment for the current function if needed.
 // Calling this will add a defer statement to the function declaration that will create a segment as the first
 // statement in the function.
+// This function will return the import path for the library that needs to be installed if a segment is created.
+// The second return value will be true if a segment was created.
 func (tc *State) CreateSegment(node dst.Node) (string, bool) {
+	if !tc.needsSegment || tc.main {
+		return "", false
+	}
 	switch decl := node.(type) {
 	case *dst.FuncDecl:
-		if !tc.needsSegment || tc.main {
-			return "", false
-		}
-
 		name := decl.Name.Name
 		if tc.async {
 			name = fmt.Sprintf("async %s", name)
@@ -136,17 +145,23 @@ func (tc *State) IsMain() bool {
 }
 
 // TransactionVariable returns the name of the transaction variable.
-func (tc *State) TransactionVariable() string {
+func (tc *State) TransactionVariable() dst.Expr {
 	if tc.main || tc.txnVariable == "" {
 		tc.txnVariable = codegen.DefaultTransactionVariable
 	}
-	return tc.txnVariable
+
+	tc.txnUsed = true
+	return dst.NewIdent(tc.txnVariable)
 }
 
 // AgentVariable returns the name of the agent variable.
 // This may return an empty string if no agent variable is in scope.
-func (tc *State) AgentVariable() string {
-	return tc.agentVariable
+func (tc *State) AgentVariable() dst.Expr {
+	if tc.agentVariable != "" {
+		return dst.NewIdent(tc.agentVariable)
+	}
+
+	return codegen.GetApplication(tc.txnVariable)
 }
 
 // AddToCall passes a New Relic transaction, or an object that contains one, to a function call.
@@ -163,12 +178,15 @@ func (tc *State) AgentVariable() string {
 //  2. If the function takes an argument of type context.Context, we will inject the transaction into the passed context.
 //  3. If neither case 1 or case 2 is met, a *newrelic.Transaction will be passed as the last argument of the function.
 func (tc *State) AddToCall(pkg *decorator.Package, call *dst.CallExpr, async bool) (*State, string) {
-	obj, goGet := tc.object.AddToCall(pkg, call, tc.txnVariable, async)
+	callReturn := tc.object.AddToCall(pkg, call, tc.txnVariable, async)
+	if callReturn.NeedsTx {
+		tc.txnUsed = true
+	}
 
 	if async {
-		return tc.goroutine(obj), goGet
+		return tc.goroutine(callReturn.TraceObject), callReturn.Import
 	}
-	return tc.functionCall(obj), goGet
+	return tc.functionCall(callReturn.TraceObject), callReturn.Import
 }
 
 // FuncDeclaration creates a trace state for a function declaration.
@@ -185,6 +203,8 @@ func (tc *State) NoticeFuncLiteralAssignment(pkg *decorator.Package, variable ds
 	tc.funcLitVariables[variableString] = lit
 }
 
+// GetFuncLitVariable returns a function literal that was assigned to a variable in the scope of this function.
+// TODO: Move this functionality to manager.
 func (tc *State) GetFuncLitVariable(pkg *decorator.Package, variable dst.Expr) (*dst.FuncLit, bool) {
 	variableString := util.WriteExpr(variable, pkg)
 	if variableString == "" {
@@ -228,13 +248,26 @@ func (tc *State) AddParameterToDeclaration(pkg *decorator.Package, node dst.Node
 // It will handle all the conditional checking for you, and will only add a transaction assignment if needed.
 // In some cases, this may require a library to be installed, and it will return the import path for that library.
 func (tc *State) AssignTransactionVariable(node dst.Node) string {
+	// we dont need to assign this if nothing ever invoked the transaction
+	if !tc.txnUsed {
+		return ""
+	}
+
 	stmt, imp := tc.object.AssignTransactionVariable(codegen.DefaultTransactionVariable)
 	if stmt != nil {
 		tc.txnVariable = codegen.DefaultTransactionVariable
+
+		// check that a segment was added, so we can fix the formatting
 		switch decl := node.(type) {
 		case *dst.FuncDecl:
+			if tc.needsSegment {
+				codegen.CreateStatementBlock(false, stmt, decl.Body.List[0])
+			}
 			codegen.PrependStatementToFunctionDecl(decl, stmt)
 		case *dst.FuncLit:
+			if tc.needsSegment {
+				codegen.CreateStatementBlock(false, stmt, decl.Body.List[0])
+			}
 			codegen.PrependStatementToFunctionLit(decl, stmt)
 		}
 		return imp
