@@ -1083,6 +1083,99 @@ func main() {
 	}
 }
 
+func TestInstrumentDownstreamHandler(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "handle funcs downstream of main get detected",
+			code: `package main
+
+import "net/http"
+
+func myHelperFunction(url string) error {
+	_, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	err := myHelperFunction("http://example.com")
+	if err != nil {
+		panic(err)
+	}
+	w.Write([]byte("hello world"))
+}
+
+func setUpHandlers() {
+	http.HandleFunc("/", myHandler)
+}
+
+func main() {
+	setUpHandlers()
+	http.ListenAndServe(":8080", nil)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func myHelperFunction(url string) error {
+	_, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func myHandler(w http.ResponseWriter, r *http.Request) {
+	err := myHelperFunction("http://example.com")
+	if err != nil {
+		panic(err)
+	}
+	w.Write([]byte("hello world"))
+}
+
+func setUpHandlers(nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("setUpHandlers").End()
+
+	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/", myHandler))
+}
+
+func main() {
+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if err != nil {
+		panic(err)
+	}
+
+	nrTxn := NewRelicAgent.StartTransaction("setUpHandlers")
+	setUpHandlers(nrTxn)
+	nrTxn.End()
+	http.ListenAndServe(":8080", nil)
+
+	NewRelicAgent.Shutdown(5 * time.Second)
+}
+`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentMain, WrapNestedHandleFunction)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
 func TestDownstreamTracingFromHandleFunction(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -1127,6 +1220,7 @@ import (
 
 func myHelperFunction(url string, nrTxn *newrelic.Transaction) error {
 	defer nrTxn.StartSegment("myHelperFunction").End()
+
 	_, err := http.Get(url)
 	if err != nil {
 		nrTxn.NoticeError(err)
@@ -1186,6 +1280,7 @@ import (
 
 func myHelperFunction(url string, nrTxn *newrelic.Transaction) bool {
 	defer nrTxn.StartSegment("myHelperFunction").End()
+
 	if url == "http://error.com" {
 		return false
 	}
@@ -1251,6 +1346,7 @@ import (
 
 func myHelperFunction(url string, wg *sync.WaitGroup, nrTxn *newrelic.Transaction) {
 	defer nrTxn.StartSegment("async myHelperFunction").End()
+
 	defer wg.Done()
 	_, err := http.Get(url)
 	if err != nil {
@@ -1332,6 +1428,7 @@ import (
 
 func myHelperFunction(url string, nrTxn *newrelic.Transaction) error {
 	defer nrTxn.StartSegment("myHelperFunction").End()
+
 	_, err := http.Get(url)
 	if err != nil {
 		nrTxn.NoticeError(err)
@@ -1347,10 +1444,10 @@ func myHandler(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(nrTxn *newrelic.Transaction) {
 			defer nrTxn.StartSegment("async function literal").End()
+
 			defer wg.Done()
 			err := myHelperFunction("http://example.com", nrTxn)
 			if err != nil {
-				nrTxn.NoticeError(err)
 				panic(err)
 			}
 			req, err := http.NewRequest("GET", "http://example.com", nil)

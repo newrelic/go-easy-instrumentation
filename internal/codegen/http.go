@@ -23,6 +23,27 @@ func HttpRequestContext() dst.Expr {
 	}
 }
 
+// WrapHttpHandle does an in place edit of a call expression to http.HandleFunc
+//
+// agentVariable should be passed from tracestate.State and WILL NOT BE CLONED
+func WrapHttpHandle(agentVariable dst.Expr, handle *dst.CallExpr) {
+	oldArgs := handle.Args
+
+	handle.Args = []dst.Expr{
+		&dst.CallExpr{
+			Fun: &dst.Ident{
+				Name: "WrapHandleFunc",
+				Path: NewRelicAgentImportPath,
+			},
+			Args: []dst.Expr{
+				agentVariable,
+				oldArgs[0],
+				oldArgs[1],
+			},
+		},
+	}
+}
+
 func RoundTripper(clientVariable dst.Expr, spacingAfter dst.SpaceType) *dst.AssignStmt {
 	return &dst.AssignStmt{
 		Lhs: []dst.Expr{
@@ -56,7 +77,7 @@ func RoundTripper(clientVariable dst.Expr, spacingAfter dst.SpaceType) *dst.Assi
 
 // adds a transaction to the HTTP request context object by creating a line of code that injects it
 // equal to calling: newrelic.RequestWithTransactionContext()
-func WrapRequestContext(request dst.Expr, txnVar string, nodeDecs *dst.NodeDecs) *dst.AssignStmt {
+func WrapRequestContext(request dst.Expr, txnVariable dst.Expr, nodeDecs *dst.NodeDecs) *dst.AssignStmt {
 	// Copy all decs above prior statement into this one
 	decs := dst.AssignStmtDecorations{}
 	if nodeDecs != nil {
@@ -81,7 +102,7 @@ func WrapRequestContext(request dst.Expr, txnVar string, nodeDecs *dst.NodeDecs)
 				},
 				Args: []dst.Expr{
 					dst.Clone(request).(dst.Expr),
-					dst.NewIdent(txnVar),
+					txnVariable,
 				},
 			},
 		},

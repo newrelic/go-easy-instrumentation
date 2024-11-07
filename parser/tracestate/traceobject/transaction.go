@@ -19,34 +19,59 @@ func NewTransaction() *Transaction {
 	return &Transaction{}
 }
 
+func transactionReturn() AddToCallReturn {
+	return AddToCallReturn{
+		TraceObject: NewTransaction(),
+		Import:      codegen.NewRelicAgentImportPath,
+		NeedsTx:     true,
+	}
+}
+
+func isTransactionArgument(arg dst.Expr, transactionVariable string) bool {
+	ident, ok := arg.(*dst.Ident)
+	if !ok {
+		return false
+	}
+
+	if ident.Name == transactionVariable {
+		return true
+	}
+
+	return false
+}
+
 // AddToCall adds the transaction as an argument to the function call.
 // If async is true, the transaction will cloned by calling NewGoroutine().
-func (txn *Transaction) AddToCall(pkg *decorator.Package, call *dst.CallExpr, transactionVariable string, async bool) (TraceObject, string) {
+func (txn *Transaction) AddToCall(pkg *decorator.Package, call *dst.CallExpr, transactionVariable string, async bool) AddToCallReturn {
 	for i, arg := range call.Args {
 		typ := util.TypeOf(arg, pkg)
 
 		// check if this function contains a transaction argument
-		ident, ok := arg.(*dst.Ident)
-		if ok && ident.Name == transactionVariable {
-			return NewTransaction(), codegen.NewRelicAgentImportPath
+		if isTransactionArgument(arg, transactionVariable) {
+			return transactionReturn()
 		}
 
 		// if the call already contains a context, inject a transaction into it rather than adding an argument
 		if typ != nil && typ.String() == contextType {
 			call.Args[i] = codegen.WrapContextExpression(arg, transactionVariable, async)
-			return NewContext(), codegen.NewRelicAgentImportPath
+			return AddToCallReturn{
+				TraceObject: NewContext(),
+				Import:      codegen.NewRelicAgentImportPath,
+				NeedsTx:     true,
+			}
 		}
 	}
 
 	// if we got this far, we did not find a suitable arguent in the function call
 	// so we need to add it
+	var transactionExpr dst.Expr
+	transactionExpr = dst.NewIdent(transactionVariable)
 	if async {
-		call.Args = append(call.Args, codegen.TxnNewGoroutine(dst.NewIdent(transactionVariable)))
-	} else {
-		call.Args = append(call.Args, dst.NewIdent(transactionVariable))
+		transactionExpr = codegen.TxnNewGoroutine(transactionExpr)
 	}
 
-	return NewTransaction(), codegen.NewRelicAgentImportPath
+	call.Args = append(call.Args, transactionExpr)
+	return transactionReturn()
 }
 
 func getTracingParameter(pkg *decorator.Package, params []*dst.Field) (TraceObject, string) {
@@ -58,7 +83,7 @@ func getTracingParameter(pkg *decorator.Package, params []*dst.Field) (TraceObje
 
 		typ := util.TypeOf(param.Type, pkg)
 		if typ != nil && typ.String() == contextType {
-			return NewContext(), ""
+			return &Context{contextParameterName: param.Names[0].Name}, ""
 		}
 	}
 
@@ -72,7 +97,7 @@ func (txn *Transaction) AddToFuncDecl(pkg *decorator.Package, decl *dst.FuncDecl
 		return obj, goGet
 	}
 
-	decl.Type.Params.List = append(decl.Type.Params.List, codegen.TxnAsParameter(codegen.DefaultTransactionVariable))
+	decl.Type.Params.List = append(decl.Type.Params.List, codegen.NewTransactionParameter(codegen.DefaultTransactionVariable))
 	return txn, codegen.NewRelicAgentImportPath
 }
 
@@ -83,7 +108,7 @@ func (txn *Transaction) AddToFuncLit(pkg *decorator.Package, lit *dst.FuncLit) (
 		return obj, goGet
 	}
 
-	lit.Type.Params.List = append(lit.Type.Params.List, codegen.TxnAsParameter(codegen.DefaultTransactionVariable))
+	lit.Type.Params.List = append(lit.Type.Params.List, codegen.NewTransactionParameter(codegen.DefaultTransactionVariable))
 	return txn, codegen.NewRelicAgentImportPath
 }
 

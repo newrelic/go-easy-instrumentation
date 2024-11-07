@@ -4,28 +4,24 @@ import "github.com/dave/dst"
 
 const DefaultContextParameter = "ctx"
 
-// TransferTransactionToContext creates an expression that transfers a transaction from one context to another.
-func TransferTransactionToContext(contextWithTransaction dst.Expr, contextWithoutTransaction dst.Expr) dst.Expr {
+// NewContextExpression creates an expression that creates a new context
+// this is protected from using the same object, and will always clone inputs
+func NewContextExpression(context dst.Expr, transaction dst.Expr) dst.Expr {
 	return &dst.CallExpr{
 		Fun: &dst.Ident{
 			Name: "NewContext",
 			Path: NewRelicAgentImportPath,
 		},
 		Args: []dst.Expr{
-			dst.Clone(contextWithoutTransaction).(dst.Expr),
-			&dst.CallExpr{
-				Fun: &dst.Ident{
-					Name: "FromContext",
-					Path: NewRelicAgentImportPath,
-				},
-				Args: []dst.Expr{
-					dst.Clone(contextWithTransaction).(dst.Expr),
-				},
-			},
+			dst.Clone(context).(dst.Expr),
+			dst.Clone(transaction).(dst.Expr),
 		},
 	}
 }
 
+// WrapContextExpression creates an expression that injects a context with a transaction
+// if async is true, the transaction will be cloned by calling NewGoroutine()
+// this is protected from using the same object, and will always clone inputs
 func WrapContextExpression(context dst.Expr, transaction string, async bool) dst.Expr {
 	var txn dst.Expr
 	txn = dst.NewIdent(transaction)
@@ -44,6 +40,7 @@ func WrapContextExpression(context dst.Expr, transaction string, async bool) dst
 	}
 }
 
+// ContextParameter creates a field for a context parameter
 func ContextParameter(name string) *dst.Field {
 	return &dst.Field{
 		Names: []*dst.Ident{

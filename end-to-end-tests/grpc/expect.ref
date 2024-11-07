@@ -1,6 +1,6 @@
 --- a/client/client.go
 +++ b/client/client.go
-@@ -6,24 +6,30 @@
+@@ -6,24 +6,34 @@
  import (
  	"context"
  	"fmt"
@@ -15,9 +15,10 @@
  	"google.golang.org/grpc"
  )
  
--func doUnaryUnary(ctx context.Context, client sampleapp.SampleApplicationClient) {
-+func doUnaryUnary(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
+ func doUnaryUnary(ctx context.Context, client sampleapp.SampleApplicationClient) {
++	nrTxn := newrelic.FromContext(ctx)
 +	defer nrTxn.StartSegment("doUnaryUnary").End()
++
  	msg, err := client.DoUnaryUnary(ctx, &sampleapp.Message{Text: "Hello DoUnaryUnary"})
  	if err != nil {
 +		nrTxn.NoticeError(err)
@@ -26,16 +27,17 @@
  	fmt.Println(msg.Text)
  }
  
--func doUnaryStream(ctx context.Context, client sampleapp.SampleApplicationClient) {
-+func doUnaryStream(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
+ func doUnaryStream(ctx context.Context, client sampleapp.SampleApplicationClient) {
++	nrTxn := newrelic.FromContext(ctx)
 +	defer nrTxn.StartSegment("doUnaryStream").End()
++
  	stream, err := client.DoUnaryStream(ctx, &sampleapp.Message{Text: "Hello DoUnaryStream"})
  	if err != nil {
 +		nrTxn.NoticeError(err)
  		panic(err)
  	}
  	for {
-@@ -32,19 +24,23 @@
+@@ -32,6 +26,7 @@
  			break
  		}
  		if err != nil {
@@ -43,24 +45,24 @@
  			panic(err)
  		}
  		fmt.Println(msg.Text)
- 	}
+@@ -39,11 +34,16 @@
  }
  
--func doStreamUnary(ctx context.Context, client sampleapp.SampleApplicationClient) {
-+func doStreamUnary(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
+ func doStreamUnary(ctx context.Context, client sampleapp.SampleApplicationClient) {
++	nrTxn := newrelic.FromContext(ctx)
 +	defer nrTxn.StartSegment("doStreamUnary").End()
++
  	stream, err := client.DoStreamUnary(ctx)
  	if err != nil {
 +		nrTxn.NoticeError(err)
  		panic(err)
  	}
  	for i := 0; i < 3; i++ {
++		// NR WARN: Unchecked Error, please consult New Relic documentation on error capture
  		if err := stream.Send(&sampleapp.Message{Text: "Hello DoStreamUnary"}); err != nil {
-+			nrTxn.NoticeError(err)
  			if err == io.EOF {
  				break
- 			}
-@@ -53,18 +37,22 @@
+@@ -53,18 +48,25 @@
  	}
  	msg, err := stream.CloseAndRecv()
  	if err != nil {
@@ -70,9 +72,10 @@
  	fmt.Println(msg.Text)
  }
  
--func doStreamStream(ctx context.Context, client sampleapp.SampleApplicationClient) {
-+func doStreamStream(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
+ func doStreamStream(ctx context.Context, client sampleapp.SampleApplicationClient) {
++	nrTxn := newrelic.FromContext(ctx)
 +	defer nrTxn.StartSegment("doStreamStream").End()
++
  	stream, err := client.DoStreamStream(ctx)
  	if err != nil {
 +		nrTxn.NoticeError(err)
@@ -81,11 +84,12 @@
  	waitc := make(chan struct{})
 -	go func() {
 +	go func(nrTxn *newrelic.Transaction) {
-+		defer nrTxn.StartSegment("async literal").End()
++		defer nrTxn.StartSegment("async function literal").End()
++
  		for {
  			msg, err := stream.Recv()
  			if err == io.EOF {
-@@ -72,13 +50,15 @@
+@@ -72,12 +63,15 @@
  				return
  			}
  			if err != nil {
@@ -97,26 +101,22 @@
 -	}()
 +	}(nrTxn.NewGoroutine())
  	for i := 0; i < 3; i++ {
++		// NR WARN: Unchecked Error, please consult New Relic documentation on error capture
++		// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors
  		if err := stream.Send(&sampleapp.Message{Text: "Hello DoStreamStream"}); err != nil {
-+			nrTxn.NoticeError(err)
  			panic(err)
  		}
- 	}
-@@ -86,18 +60,27 @@
- 	<-waitc
+@@ -87,6 +76,9 @@
  }
  
--func doClientCalls(ctx context.Context, client sampleapp.SampleApplicationClient) {
--	doUnaryUnary(ctx, client)
--	doUnaryStream(ctx, client)
--	doStreamUnary(ctx, client)
--	doStreamStream(ctx, client)
-+func doClientCalls(ctx context.Context, client sampleapp.SampleApplicationClient, nrTxn *newrelic.Transaction) {
+ func doClientCalls(ctx context.Context, client sampleapp.SampleApplicationClient) {
++	nrTxn := newrelic.FromContext(ctx)
 +	defer nrTxn.StartSegment("doClientCalls").End()
-+	doUnaryUnary(ctx, client, nrTxn)
-+	doUnaryStream(ctx, client, nrTxn)
-+	doStreamUnary(ctx, client, nrTxn)
-+	doStreamStream(ctx, client, nrTxn)
++
+ 	doUnaryUnary(ctx, client)
+ 	doUnaryStream(ctx, client)
+ 	doStreamUnary(ctx, client)
+@@ -94,8 +86,15 @@
  }
  
  func main() {
@@ -131,17 +131,14 @@
 +		grpc.WithStreamInterceptor(nrgrpc.StreamClientInterceptor),
  	)
  	if err != nil {
-+		nrTxn.NoticeError(err)
  		panic(err)
- 	}
- 	defer conn.Close()
-@@ -105,5 +81,9 @@
+@@ -105,5 +102,9 @@
  	client := sampleapp.NewSampleApplicationClient(conn)
  	ctx := context.Background()
  
 -	doClientCalls(ctx, client)
 +	nrTxn := NewRelicAgent.StartTransaction("doClientCalls")
-+	doClientCalls(ctx, client, nrTxn)
++	doClientCalls(newrelic.NewContext(ctx, nrTxn), client)
 +	nrTxn.End()
 +
 +	NewRelicAgent.Shutdown(5 * time.Second)
@@ -164,13 +161,13 @@
  	"google.golang.org/grpc"
  )
  
-@@ -18,16 +17,20 @@
- type Server struct{}
+@@ -19,15 +18,21 @@
  
  // processMessage processes each incoming Message.
--func processMessage(ctx context.Context, msg *sampleapp.Message) error {
-+func processMessage(ctx context.Context, msg *sampleapp.Message, nrTxn *newrelic.Transaction) error {
+ func processMessage(ctx context.Context, msg *sampleapp.Message) error {
++	nrTxn := newrelic.FromContext(ctx)
 +	defer nrTxn.StartSegment("processMessage").End()
++
  	fmt.Printf("Message received: %s\n", msg.Text)
  	return nil
  }
@@ -180,14 +177,14 @@
 -	processMessage(ctx, msg)
 +	nrTxn := newrelic.FromContext(ctx)
 +
-+	processMessage(ctx, msg, nrTxn)
++	processMessage(newrelic.NewContext(ctx, nrTxn), msg)
  	err := msg.XXX_Unmarshal(nil)
  	if err != nil {
 +		nrTxn.NoticeError(err)
  		return &sampleapp.Message{Text: "DoUnaryUnary Error"}, err
  	}
  	return &sampleapp.Message{Text: "Hello from DoUnaryUnary"}, nil
-@@ -74,12 +69,23 @@
+@@ -74,12 +71,22 @@
  }
  
  func main() {
@@ -198,7 +195,6 @@
 +
  	lis, err := net.Listen("tcp", "localhost:8080")
  	if err != nil {
-+		nrTxn.NoticeError(err)
  		panic(err)
  	}
 -	grpcServer := grpc.NewServer()

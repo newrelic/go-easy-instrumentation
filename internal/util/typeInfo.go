@@ -1,7 +1,10 @@
 package util
 
 import (
+	"bytes"
+	"fmt"
 	"go/ast"
+	"go/printer"
 	"go/token"
 	"go/types"
 
@@ -109,4 +112,23 @@ func IsError(t types.Type) bool {
 
 	o := name.Obj()
 	return o != nil && o.Pkg() == nil && o.Name() == "error"
+}
+
+func PrintNode(pkg *decorator.Package, node dst.Node) string {
+	if node == nil || pkg == nil {
+		return ""
+	}
+
+	astNode := pkg.Decorator.Ast.Nodes[node]
+	if astNode == nil {
+		return fmt.Sprintf("%+v", node)
+	}
+
+	buf := &bytes.Buffer{}
+	err := printer.Fprint(buf, pkg.Fset, astNode)
+	if err != nil {
+		return fmt.Sprintf("%+v", astNode)
+	}
+
+	return buf.String()
 }

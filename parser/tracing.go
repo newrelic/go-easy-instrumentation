@@ -58,13 +58,10 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 		TopLevelFunctionChanged = true
 	}
 
-	assignmentImport := tracing.AssignTransactionVariable(node)
-	manager.addImport(assignmentImport)
-
 	outputNode := dstutil.Apply(node, func(c *dstutil.Cursor) bool {
 		n := c.Node()
 		switch v := n.(type) {
-		case *dst.BlockStmt:
+		case *dst.BlockStmt, *dst.ForStmt:
 			return true
 		case *dst.GoStmt:
 			if tracing.IsMain() {
@@ -85,6 +82,12 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 				c.Replace(v)
 
 				TopLevelFunctionChanged = true
+
+				// Return false so that the func literal body is not traced again.
+				// This prevents any of the children of this node from being traversed,
+				// and we already traced this func lit by calling TraceFunction on it recursively.
+				return false
+
 			default:
 				rootPkg := manager.currentPackage
 				invInfo := manager.getPackageFunctionInvocation(v.Call, tracing)
@@ -152,6 +155,10 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 		}
 		return true
 	}, nil)
+
+	// Add an assignment for txn Variable if needed
+	assignmentImport := tracing.AssignTransactionVariable(node)
+	manager.addImport(assignmentImport)
 
 	// Check if error cache is still full, if so add unchecked error warning
 	if manager.errorCache.GetExpression() != nil {

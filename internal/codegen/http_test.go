@@ -66,7 +66,7 @@ func Test_injectRoundTripper(t *testing.T) {
 func Test_addTxnToRequestContext(t *testing.T) {
 	type args struct {
 		request  dst.Expr
-		txnVar   string
+		txnVar   dst.Expr
 		nodeDecs *dst.NodeDecs
 	}
 	tests := []struct {
@@ -81,7 +81,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 					Name: "r",
 					Path: HttpImportPath,
 				},
-				txnVar: "txn",
+				txnVar: dst.NewIdent("txn"),
 				nodeDecs: &dst.NodeDecs{
 					Before: dst.NewLine,
 					Start:  []string{"// this is a comment"},
