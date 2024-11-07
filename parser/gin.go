@@ -66,34 +66,42 @@ func ginFunctionCall(node dst.Node, pkg *decorator.Package) (string, bool) {
 	return "", false
 }
 
-func ginAnonymousFunction(node dst.Node, manager *InstrumentationManager, c *dstutil.Cursor) (*dst.FuncLit, bool, string) {
-
+func ginAnonymousFunction(node dst.Node, manager *InstrumentationManager) (*dst.FuncLit, bool, string) {
+	anonFuncCount := 1
 	switch v := node.(type) {
 	case *dst.ExprStmt:
 		if call, ok := v.X.(*dst.CallExpr); ok {
 			if sel, ok := call.Fun.(*dst.SelectorExpr); ok {
 				if ident, ok := sel.X.(*dst.Ident); ok {
+					// Check if the GET call belongs to the gin router. Ensures no other GET functions are instrumented
 					if sel.Sel.Name == "GET" && manager.facts.GetFact(ident.Name) == facts.GinRouter {
 						anonFunctionRoute := ""
 						for _, arg := range call.Args {
+							// Get the route name from the anonymous function
 							if util.TypeOf(arg, manager.getDecoratorPackage()).Underlying() == types.Typ[types.String] {
 								anonFunctionRoute = arg.(*dst.BasicLit).Value
 								anonFunctionRoute = anonFunctionRoute[:1] + anonFunctionRoute[2:]
 							}
 							if funcLit, ok := arg.(*dst.FuncLit); ok {
-								// check if the function has a single argument
+								// Check if the anonymous function has a single argument of type *gin.Context
 								if len(funcLit.Type.Params.List) == 1 {
-									// check if the argument is a pointer to a *gin.Context
 									if starExpr, ok := funcLit.Type.Params.List[0].Type.(*dst.StarExpr); ok {
-										// print arg name
 										ctxName := funcLit.Type.Params.List[0].Names[0].Name
 										if ident, ok := starExpr.X.(*dst.Ident); ok {
 											if ident.Name == "Context" && ident.Path == GinImportPath {
 												path := util.PackagePath(ident, manager.getDecoratorPackage())
 												if path == codegen.GinImportPath {
-													comment.Warn(manager.getDecoratorPackage(), v, "Since the handler function name is used as the transaction name,", "anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
+													// If mulitple anonymous functions are present, append a number to the segment name
+													if anonFuncCount > 1 {
+														if len(anonFunctionRoute) > 1 && anonFunctionRoute[0] == '"' && anonFunctionRoute[len(anonFunctionRoute)-1] == '"' {
+															anonFunctionRoute = anonFunctionRoute[1 : len(anonFunctionRoute)-1]
+														}
+														anonFunctionRoute = fmt.Sprintf("\"%s-%d\"", anonFunctionRoute, anonFuncCount)
+													} else {
+														comment.Warn(manager.getDecoratorPackage(), v, "Since the handler function name is used as the transaction name,", "anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
+													}
 													funcLit.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(defaultTxnName, ctxName), codegen.DeferStartSegment(defaultTxnName, anonFunctionRoute)}, funcLit.Body.List...)
-													return funcLit, true, ctxName
+													anonFuncCount++
 												}
 											}
 										}
@@ -112,9 +120,7 @@ func ginAnonymousFunction(node dst.Node, manager *InstrumentationManager, c *dst
 
 func FindAnonymousFunctions(manager *InstrumentationManager, c *dstutil.Cursor) {
 	currentNode := c.Node()
-	if funcLit, ok, _ := ginAnonymousFunction(currentNode, manager, c); ok {
-		fmt.Println("Found anonymous function", funcLit)
-	}
+	ginAnonymousFunction(currentNode, manager)
 }
 
 func InstrumentGinMiddleware(manager *InstrumentationManager, c *dstutil.Cursor) {
