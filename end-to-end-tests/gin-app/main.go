@@ -4,6 +4,7 @@
 package main
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -37,7 +38,15 @@ func endpoint404(c *gin.Context) {
 		return
 	}
 }
+func doSomething() {
+	fmt.Println("hi")
+	_, err := http.Get("https://example.com")
+	if err != nil {
+		slog.Error(err.Error())
+		return
+	}
 
+}
 func main() {
 
 	router := gin.Default()
@@ -46,6 +55,12 @@ func main() {
 	router.GET("/logic", endpointlogic)
 	router.GET("/anon", func(c *gin.Context) {
 		c.Writer.WriteString("anonymous function handler")
+		a := func() {
+			doSomething()
+		}
+		a()
+		a()
+		a()
 		// test call
 		_, err := http.Get("https://example.com")
 		if err != nil {

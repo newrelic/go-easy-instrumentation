@@ -1,2 +1,3 @@
 *.diff
 *tmp*
+end-to-end-tests/gin-examples

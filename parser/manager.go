@@ -8,14 +8,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/gopackages"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
+	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/errorcache"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
 )
 
@@ -23,10 +26,9 @@ import (
 // its tracing status.
 //
 // Please access this object's data through methods rather than directly manipulating it.
-type tracedFunction struct {
-	traced      bool
-	requiresTxn bool
-	body        *dst.FuncDecl
+type tracedFunctionDecl struct {
+	traced bool
+	body   *dst.FuncDecl
 }
 
 type tracingFunctions struct {
@@ -50,9 +52,9 @@ type InstrumentationManager struct {
 
 // PackageManager contains state relevant to tracing within a single package.
 type PackageState struct {
-	pkg          *decorator.Package         // the package being instrumented
-	tracedFuncs  map[string]*tracedFunction // maintains state of tracing for functions within the package
-	importsAdded map[string]bool            // tracks imports added to the package
+	pkg          *decorator.Package             // the package being instrumented
+	tracedFuncs  map[string]*tracedFunctionDecl // maintains state of tracing for functions within the package
+	importsAdded map[string]bool                // tracks imports added to the package
 }
 
 // NewInstrumentationManager initializes an InstrumentationManager cache for a given package.
@@ -77,7 +79,7 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	for _, pkg := range pkgs {
 		manager.packages[pkg.ID] = &PackageState{
 			pkg:          pkg,
-			tracedFuncs:  map[string]*tracedFunction{},
+			tracedFuncs:  map[string]*tracedFunctionDecl{},
 			importsAdded: map[string]bool{},
 		}
 	}
@@ -116,6 +118,9 @@ func (m *InstrumentationManager) setPackage(pkgName string) {
 }
 
 func (m *InstrumentationManager) addImport(path string) {
+	if path == "" {
+		return
+	}
 	state, ok := m.packages[m.currentPackage]
 	if ok {
 		state.importsAdded[path] = true
@@ -153,7 +158,7 @@ func (m *InstrumentationManager) getPackageName() string {
 	return m.currentPackage
 }
 
-// CreateFunctionDeclaration creates a tracking object for a function declaration that can be used
+// createFunctionDeclaration creates a tracking object for a function declaration that can be used
 // to find tracing locations. This is for initializing and set up only.
 func (m *InstrumentationManager) createFunctionDeclaration(decl *dst.FuncDecl) {
 	state, ok := m.packages[m.currentPackage]
@@ -163,7 +168,7 @@ func (m *InstrumentationManager) createFunctionDeclaration(decl *dst.FuncDecl) {
 
 	_, ok = state.tracedFuncs[decl.Name.Name]
 	if !ok {
-		state.tracedFuncs[decl.Name.Name] = &tracedFunction{
+		state.tracedFuncs[decl.Name.Name] = &tracedFunctionDecl{
 			body: decl,
 		}
 	}
@@ -189,7 +194,9 @@ type invocationInfo struct {
 
 // GetPackageFunctionInvocation returns the name of the function being invoked, and the expression containing the call
 // where that invocation occurs if a function is declared in this package.
-func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *invocationInfo {
+//
+// If the node does not contain a function call made to a function declared in this application, this method will return nil.
+func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node, state *tracestate.State) *invocationInfo {
 	var invInfo *invocationInfo
 
 	dst.Inspect(node, func(n dst.Node) bool {
@@ -198,67 +205,38 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node) *in
 			return false
 		case *dst.CallExpr:
 			call := v
-			functionCallIdent, ok := call.Fun.(*dst.Ident)
+			_, ok := state.GetFuncLitVariable(m.getDecoratorPackage(), call.Fun)
 			if ok {
-				path := functionCallIdent.Path
-				if path == "" {
-					path = m.getPackageName()
-				}
-				_, ok := m.packages[path]
-				if ok {
-					invInfo = &invocationInfo{
-						functionName: functionCallIdent.Name,
-						packageName:  path,
-						call:         call,
-					}
-					return false
+				invInfo = &invocationInfo{
+					functionName: "Function Literal",
+					packageName:  m.getPackageName(),
+					call:         call,
 				}
 			}
+			functionCallIdent, ok := call.Fun.(*dst.Ident)
+			if !ok {
+				return true
+			}
+			path := functionCallIdent.Path
+			if path == "" {
+				path = m.getPackageName()
+			}
+			pkg, ok := m.packages[path]
+			if ok && pkg.tracedFuncs[functionCallIdent.Name] != nil {
+				invInfo = &invocationInfo{
+					functionName: functionCallIdent.Name,
+					packageName:  path,
+					call:         call,
+				}
+				return false
+			}
+
 			return true
 		}
 		return true
 	})
 
 	return invInfo
-}
-
-// AddTxnArgumentToFuncDecl adds a transaction argument to the declaration of a function. This marks that function as needing a transaction,
-// and can be looked up by name to know that the last argument is a transaction.
-func (m *InstrumentationManager) addTxnArgumentToFunctionDecl(decl *dst.FuncDecl, txnVarName string) {
-	if decl == nil {
-		return
-	}
-
-	if decl.Type.Params == nil {
-		decl.Type.Params = &dst.FieldList{
-			List: []*dst.Field{{
-				Names: []*dst.Ident{dst.NewIdent(txnVarName)},
-				Type: &dst.StarExpr{
-					X: &dst.SelectorExpr{
-						X:   dst.NewIdent("newrelic"),
-						Sel: dst.NewIdent("Transaction"),
-					},
-				},
-			}},
-		}
-	} else {
-		decl.Type.Params.List = append(decl.Type.Params.List, &dst.Field{
-			Names: []*dst.Ident{dst.NewIdent(txnVarName)},
-			Type: &dst.StarExpr{
-				X: &dst.SelectorExpr{
-					X:   dst.NewIdent("newrelic"),
-					Sel: dst.NewIdent("Transaction"),
-				},
-			},
-		})
-	}
-	state, ok := m.packages[m.currentPackage]
-	if ok {
-		fn, ok := state.tracedFuncs[decl.Name.Name]
-		if ok {
-			fn.requiresTxn = true
-		}
-	}
 }
 
 // IsTracingComplete returns true if a function has all the tracing it needs added to it.
@@ -275,51 +253,6 @@ func (m *InstrumentationManager) shouldInstrumentFunction(inv *invocationInfo) b
 		}
 	}
 
-	return false
-}
-
-// conatinsTransactionArgument returns true if a function call contains a transaction argument.
-// This function works for async functions as well.
-func containsTransactionArgument(call *dst.CallExpr, txnName string) bool {
-	if call == nil || call.Args == nil {
-		return false
-	}
-
-	for _, arg := range call.Args {
-		switch v := arg.(type) {
-		case *dst.Ident:
-			if v.Name == txnName {
-				return true
-			}
-		case *dst.CallExpr:
-			sel, ok := v.Fun.(*dst.SelectorExpr)
-			if ok {
-				if sel.Sel.Name == "NewGoroutine" {
-					ident, ok := sel.X.(*dst.Ident)
-					if ok && ident.Name == txnName {
-						return true
-					}
-				}
-			}
-		}
-	}
-	return false
-}
-
-// RequiresTransactionArgument returns true if a modified function needs a transaction as an argument.
-// This can be used to check if transactions should be passed by callers.
-func (m *InstrumentationManager) requiresTransactionArgument(inv *invocationInfo, txnVariableName string) bool {
-	if inv == nil {
-		return false
-	}
-
-	state, ok := m.packages[m.currentPackage]
-	if ok {
-		v, ok := state.tracedFuncs[inv.functionName]
-		if ok && !containsTransactionArgument(inv.call, txnVariableName) {
-			return v.requiresTxn
-		}
-	}
 	return false
 }
 
@@ -438,7 +371,13 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, dependencyScans 
 
 	for packageName, pkg := range manager.packages {
 		manager.setPackage(packageName)
+
 		for _, file := range pkg.pkg.Syntax {
+			pos := util.Position(file, pkg.pkg)
+			if pos != nil && strings.Contains(pos.Filename, ".pb.go") {
+				continue
+			}
+
 			for _, decl := range file.Decls {
 				if fn, isFn := decl.(*dst.FuncDecl); isFn {
 					manager.createFunctionDeclaration(fn)

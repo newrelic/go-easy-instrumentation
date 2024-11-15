@@ -7,6 +7,19 @@ import (
 	"github.com/dave/dst"
 )
 
+const (
+	DefaultTransactionVariable = "nrTxn"
+)
+
+func GetApplication(transactionVariableExpression dst.Expr) dst.Expr {
+	return &dst.CallExpr{
+		Fun: &dst.SelectorExpr{
+			X:   dst.Clone(transactionVariableExpression).(dst.Expr),
+			Sel: dst.NewIdent("Application"),
+		},
+	}
+}
+
 func EndTransaction(transactionVariableName string) *dst.ExprStmt {
 	return &dst.ExprStmt{
 		X: &dst.CallExpr{
@@ -18,7 +31,7 @@ func EndTransaction(transactionVariableName string) *dst.ExprStmt {
 	}
 }
 
-func TxnAsParameter(txnName string) *dst.Field {
+func NewTransactionParameter(txnName string) *dst.Field {
 	return &dst.Field{
 		Names: []*dst.Ident{
 			{
@@ -34,12 +47,11 @@ func TxnAsParameter(txnName string) *dst.Field {
 	}
 }
 
-func TxnNewGoroutine(txnVarName string) *dst.CallExpr {
+// TxnNewGoroutine returns a call to txn.NewGoroutine()
+func TxnNewGoroutine(transaction dst.Expr) *dst.CallExpr {
 	return &dst.CallExpr{
 		Fun: &dst.SelectorExpr{
-			X: &dst.Ident{
-				Name: txnVarName,
-			},
+			X: dst.Clone(transaction).(dst.Expr),
 			Sel: &dst.Ident{
 				Name: "NewGoroutine",
 			},
@@ -74,32 +86,6 @@ func StartTransaction(appVariableName, transactionVariableName, transactionName 
 	}
 }
 
-func NoticeError(errExpr dst.Expr, txnName string, stmtBlock dst.Stmt) *dst.ExprStmt {
-	var decs dst.ExprStmtDecorations
-	// copy all decs below the current statement into this statement
-	if stmtBlock != nil {
-		decs.Before = stmtBlock.Decorations().Before
-		decs.Start = stmtBlock.Decorations().Start
-		stmtBlock.Decorations().Before = dst.None
-		stmtBlock.Decorations().Start.Clear()
-	}
-
-	return &dst.ExprStmt{
-		X: &dst.CallExpr{
-			Fun: &dst.SelectorExpr{
-				X: &dst.Ident{
-					Name: txnName,
-				},
-				Sel: &dst.Ident{
-					Name: "NoticeError",
-				},
-			},
-			Args: []dst.Expr{errExpr},
-		},
-		Decs: decs,
-	}
-}
-
 func TxnFromContext(txnVariable string, contextObject dst.Expr) *dst.AssignStmt {
 	return &dst.AssignStmt{
 		Decs: dst.AssignStmtDecorations{
@@ -122,6 +108,36 @@ func TxnFromContext(txnVariable string, contextObject dst.Expr) *dst.AssignStmt 
 				Args: []dst.Expr{
 					dst.Clone(contextObject).(dst.Expr),
 				},
+			},
+		},
+	}
+}
+
+// TxnFromContextExpression returns a call to `newrelic.FromContext(contextObject)`
+func TxnFromContextExpression(contextObject dst.Expr) dst.Expr {
+	return &dst.CallExpr{
+		Fun: &dst.Ident{
+			Name: "FromContext",
+			Path: NewRelicAgentImportPath,
+		},
+		Args: []dst.Expr{
+			dst.Clone(contextObject).(dst.Expr),
+		},
+	}
+}
+
+// TransactionParameter returns a field definition for a function parameter that is a *newrelic.Transaction
+func TransactionParameter(parameterName string) *dst.Field {
+	return &dst.Field{
+		Names: []*dst.Ident{
+			{
+				Name: parameterName,
+			},
+		},
+		Type: &dst.StarExpr{
+			X: &dst.Ident{
+				Name: "Transaction",
+				Path: "newrelic",
 			},
 		},
 	}

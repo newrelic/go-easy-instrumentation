@@ -25,10 +25,9 @@ func ginMiddlewareCall(node dst.Node) (*dst.CallExpr, bool, string) {
 		if len(v.Rhs) == 1 {
 			if call, ok := v.Rhs[0].(*dst.CallExpr); ok {
 				if ident, ok := call.Fun.(*dst.Ident); ok {
-					if ident.Name == "Default" && ident.Path == GinImportPath {
+					if ident.Name == "Default" || ident.Name == "New" && ident.Path == GinImportPath {
 						if v.Lhs != nil {
 							return call, true, v.Lhs[0].(*dst.Ident).Name
-
 						}
 
 					}
@@ -43,13 +42,12 @@ func ginFunctionCall(node dst.Node, pkg *decorator.Package) (string, bool) {
 	switch v := node.(type) {
 	case *dst.FuncDecl:
 		if v.Name != nil {
-			// Loop through the args and check for *gin.Context
+			// Loop through the args and check for gin.Context
 			for _, arg := range v.Type.Params.List {
 				if len(arg.Names) != 1 {
 					return "", false
 				}
 				ctxName := arg.Names[0].Name
-
 				if ident, ok := arg.Type.(*dst.StarExpr); ok {
 					if argument, ok := ident.X.(*dst.Ident); ok {
 						if argument.Name == "Context" && argument.Path == GinImportPath {
@@ -66,53 +64,65 @@ func ginFunctionCall(node dst.Node, pkg *decorator.Package) (string, bool) {
 	return "", false
 }
 
+func checkForGinContext(funcLit *dst.FuncLit, manager *InstrumentationManager) (string, bool) {
+	if starExpr, ok := funcLit.Type.Params.List[0].Type.(*dst.StarExpr); ok {
+		ctxName := funcLit.Type.Params.List[0].Names[0].Name
+		if ident, ok := starExpr.X.(*dst.Ident); ok {
+			if ident.Name == "Context" && ident.Path == GinImportPath {
+				path := util.PackagePath(ident, manager.getDecoratorPackage())
+				if path == codegen.GinImportPath {
+					return ctxName, true
+				}
+			}
+		}
+	}
+	return "", false
+}
+
+// Casts the anonymous function as a call expression. This allows us to loop through the arguments to capture route names
+func isGinRoute(v *dst.ExprStmt, manager *InstrumentationManager) (*dst.CallExpr, bool) {
+	if call, ok := v.X.(*dst.CallExpr); ok {
+		if sel, ok := call.Fun.(*dst.SelectorExpr); ok {
+			if ident, ok := sel.X.(*dst.Ident); ok {
+				// Check if the GET call belongs to the gin router. Ensures no other GET functions are instrumented
+				if sel.Sel.Name == "GET" || sel.Sel.Name == "POST" || sel.Sel.Name == "PUT" || sel.Sel.Name == "DELETE" && manager.facts.GetFact(ident.Name) == facts.GinRouter {
+					return call, true
+				}
+			}
+		}
+	}
+	return nil, false
+}
 func ginAnonymousFunction(node dst.Node, manager *InstrumentationManager) (*dst.FuncLit, bool, string) {
 	anonFuncCount := 1
 	switch v := node.(type) {
 	case *dst.ExprStmt:
-		if call, ok := v.X.(*dst.CallExpr); ok {
-			if sel, ok := call.Fun.(*dst.SelectorExpr); ok {
-				if ident, ok := sel.X.(*dst.Ident); ok {
-					// Check if the GET call belongs to the gin router. Ensures no other GET functions are instrumented
-					if sel.Sel.Name == "GET" && manager.facts.GetFact(ident.Name) == facts.GinRouter {
-						anonFunctionRoute := ""
-						for _, arg := range call.Args {
-							// Get the route name from the anonymous function
-							if util.TypeOf(arg, manager.getDecoratorPackage()).Underlying() == types.Typ[types.String] {
-								anonFunctionRoute = arg.(*dst.BasicLit).Value
-								anonFunctionRoute = anonFunctionRoute[:1] + anonFunctionRoute[2:]
+		if call, ok := isGinRoute(v, manager); ok {
+			anonFunctionRoute := ""
+			for _, arg := range call.Args {
+				// Get the route name from the anonymous function
+				if util.TypeOf(arg, manager.getDecoratorPackage()).Underlying() == types.Typ[types.String] {
+					anonFunctionRoute = arg.(*dst.BasicLit).Value
+				}
+				// If the argument is a function literal, we need to add instrumentation
+				if funcLit, ok := arg.(*dst.FuncLit); ok {
+					ctxName, isGinFunc := checkForGinContext(funcLit, manager)
+					if isGinFunc {
+						// If mulitple anonymous functions are present, append a number to the segment name so the user can have unique names for each segment
+						if anonFuncCount > 1 {
+							if len(anonFunctionRoute) > 1 && anonFunctionRoute[0] == '"' && anonFunctionRoute[len(anonFunctionRoute)-1] == '"' {
+								anonFunctionRoute = anonFunctionRoute[1 : len(anonFunctionRoute)-1]
 							}
-							if funcLit, ok := arg.(*dst.FuncLit); ok {
-								// Check if the anonymous function has a single argument of type *gin.Context
-								if len(funcLit.Type.Params.List) == 1 {
-									if starExpr, ok := funcLit.Type.Params.List[0].Type.(*dst.StarExpr); ok {
-										ctxName := funcLit.Type.Params.List[0].Names[0].Name
-										if ident, ok := starExpr.X.(*dst.Ident); ok {
-											if ident.Name == "Context" && ident.Path == GinImportPath {
-												path := util.PackagePath(ident, manager.getDecoratorPackage())
-												if path == codegen.GinImportPath {
-													// If mulitple anonymous functions are present, append a number to the segment name
-													if anonFuncCount > 1 {
-														if len(anonFunctionRoute) > 1 && anonFunctionRoute[0] == '"' && anonFunctionRoute[len(anonFunctionRoute)-1] == '"' {
-															anonFunctionRoute = anonFunctionRoute[1 : len(anonFunctionRoute)-1]
-														}
-														anonFunctionRoute = fmt.Sprintf("\"%s-%d\"", anonFunctionRoute, anonFuncCount)
-													} else {
-														comment.Warn(manager.getDecoratorPackage(), v, "Since the handler function name is used as the transaction name,", "anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
-													}
-													funcLit.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(defaultTxnName, ctxName), codegen.DeferStartSegment(defaultTxnName, anonFunctionRoute)}, funcLit.Body.List...)
-													anonFuncCount++
-												}
-											}
-										}
-									}
-								}
-							}
+							anonFunctionRoute = fmt.Sprintf("\"%s-%d\"", anonFunctionRoute, anonFuncCount)
+						} else if !manager.anonymousFunctionWarning {
+							manager.anonymousFunctionWarning = true
+							comment.Warn(manager.getDecoratorPackage(), v, "Since the handler function name is used as the transaction name,", "anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
 						}
+						funcLit.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(defaultTxnName, ctxName), codegen.DeferStartSegment(defaultTxnName, anonFunctionRoute)}, funcLit.Body.List...)
+						anonFuncCount++
 					}
 				}
 			}
-
 		}
 	}
 	return nil, false, ""
@@ -133,9 +143,7 @@ func InstrumentGinMiddleware(manager *InstrumentationManager, c *dstutil.Cursor)
 		if err != nil {
 			fmt.Println("Error adding fact: ", err)
 		}
-
 		c.InsertAfter(codegen.NrGinMiddleware(call, routerName, manager.agentVariableName))
-
 	}
 }
 
