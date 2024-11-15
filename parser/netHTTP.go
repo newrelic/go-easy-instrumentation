@@ -10,6 +10,7 @@ import (
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
 const (
@@ -150,10 +151,10 @@ func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor
 	n := c.Node()
 	fn, isFn := n.(*dst.FuncDecl)
 	if isFn && isHttpHandler(fn, manager.getDecoratorPackage()) {
-		txnName := defaultTxnName
-		newFn, ok := TraceFunction(manager, fn, TraceDownstreamFunction(txnName), noSegment())
+		txnName := codegen.DefaultTransactionVariable
+		newFn, ok := TraceFunction(manager, fn, tracestate.FunctionBody(txnName))
 		if ok {
-			defineTxnFromCtx(newFn, txnName) // pass the transaction
+			defineTxnFromCtx(newFn.(*dst.FuncDecl), txnName) // pass the transaction
 		}
 	}
 }
@@ -193,6 +194,11 @@ func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 	switch node.(type) {
 	case *dst.AssignStmt, *dst.ExprStmt:
 		dst.Inspect(node, func(n dst.Node) bool {
+			_, block := n.(*dst.BlockStmt)
+			if block {
+				return false
+			}
+
 			c, ok := n.(*dst.CallExpr)
 			if ok {
 				ident, ok := c.Fun.(*dst.Ident)
@@ -233,11 +239,17 @@ func getHttpResponseVariable(manager *InstrumentationManager, stmt dst.Stmt) dst
 	pkg := manager.getDecoratorPackage()
 	dst.Inspect(stmt, func(n dst.Node) bool {
 		switch v := n.(type) {
+		case *dst.BlockStmt:
+			return false
 		case *dst.AssignStmt:
 			for _, expr := range v.Lhs {
-				astExpr := pkg.Decorator.Ast.Nodes[expr].(ast.Expr)
-				t := pkg.TypesInfo.TypeOf(astExpr).String()
-				if t == "*net/http.Response" {
+				astExpr := pkg.Decorator.Ast.Nodes[expr]
+				if astExpr == nil {
+					return true
+				}
+
+				t := pkg.TypesInfo.TypeOf(astExpr.(ast.Expr))
+				if t != nil && t.String() == "*net/http.Response" {
 					expression = expr
 					return false
 				}
@@ -250,7 +262,7 @@ func getHttpResponseVariable(manager *InstrumentationManager, stmt dst.Stmt) dst
 
 // ExternalHttpCall finds and instruments external net/http calls to the method http.Do.
 // It returns true if a modification was made
-func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	if c.Index() < 0 {
 		return false
 	}
@@ -258,6 +270,8 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 	var call *dst.CallExpr
 	dst.Inspect(stmt, func(n dst.Node) bool {
 		switch v := n.(type) {
+		case *dst.BlockStmt:
+			return false
 		case *dst.CallExpr:
 			if getNetHttpMethod(v, pkg) == httpDo {
 				call = v
@@ -272,7 +286,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 		if clientVar == httpDefaultClientVariable {
 			// create external segment to wrap calls made with default client
 			segmentName := "externalSegment"
-			c.InsertBefore(codegen.StartExternalSegment(requestObject, tracing.txnVariable, segmentName, stmt.Decorations()))
+			c.InsertBefore(codegen.StartExternalSegment(requestObject, tracing.TransactionVariable(), segmentName, stmt.Decorations()))
 			c.InsertAfter(codegen.EndExternalSegment(segmentName, stmt.Decorations()))
 			responseVar := getHttpResponseVariable(manager, stmt)
 			manager.addImport(codegen.NewRelicAgentImportPath)
@@ -281,7 +295,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 			}
 			return true
 		} else {
-			c.InsertBefore(codegen.WrapRequestContext(requestObject, tracing.txnVariable, stmt.Decorations()))
+			c.InsertBefore(codegen.WrapRequestContext(requestObject, tracing.TransactionVariable(), stmt.Decorations()))
 			manager.addImport(codegen.NewRelicAgentImportPath)
 			return true
 		}
@@ -291,11 +305,13 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 
 // WrapHandleFunction is a function that wraps net/http.HandeFunc() declarations inside of functions
 // that are being traced by a transaction.
-func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracingState) bool {
+func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	wasModified := false
 	pkg := manager.getDecoratorPackage()
 	dst.Inspect(stmt, func(n dst.Node) bool {
 		switch v := n.(type) {
+		case *dst.BlockStmt:
+			return false
 		case *dst.CallExpr:
 			callExpr := v
 			funcName := getNetHttpMethod(callExpr, pkg)
@@ -303,43 +319,8 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 			case httpHandleFunc, httpMuxHandle:
 				if len(callExpr.Args) == 2 {
 					// Instrument handle funcs
-					oldArgs := callExpr.Args
-					if tracing.GetAgentVariable() != "" {
-						callExpr.Args = []dst.Expr{
-							&dst.CallExpr{
-								Fun: &dst.Ident{
-									Name: "WrapHandleFunc",
-									Path: codegen.NewRelicAgentImportPath,
-								},
-								Args: []dst.Expr{
-									&dst.Ident{
-										Name: tracing.GetAgentVariable(),
-									},
-									oldArgs[0],
-									oldArgs[1],
-								},
-							},
-						}
-					} else {
-						callExpr.Args = []dst.Expr{
-							&dst.CallExpr{
-								Fun: &dst.Ident{
-									Name: "WrapHandleFunc",
-									Path: codegen.NewRelicAgentImportPath,
-								},
-								Args: []dst.Expr{
-									&dst.CallExpr{
-										Fun: &dst.SelectorExpr{
-											X:   dst.NewIdent(tracing.GetTransactionVariable()),
-											Sel: dst.NewIdent("Application"),
-										},
-									},
-									oldArgs[0],
-									oldArgs[1],
-								},
-							},
-						}
-					}
+					codegen.WrapHttpHandle(tracing.AgentVariable(), callExpr)
+
 					wasModified = true
 					manager.addImport(codegen.NewRelicAgentImportPath)
 					return false

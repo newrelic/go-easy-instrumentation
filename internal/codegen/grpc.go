@@ -71,7 +71,7 @@ func NrGrpcStreamClientInterceptor(call *dst.CallExpr) *dst.CallExpr {
 	}
 }
 
-func NrGrpcUnaryServerInterceptor(agentVariableName string, call *dst.CallExpr) *dst.CallExpr {
+func NrGrpcUnaryServerInterceptor(agentVariable dst.Expr, call *dst.CallExpr) *dst.CallExpr {
 	decs := getCallExpressionArgumentSpacing(call)
 	return &dst.CallExpr{
 		Fun: &dst.Ident{
@@ -85,7 +85,7 @@ func NrGrpcUnaryServerInterceptor(agentVariableName string, call *dst.CallExpr) 
 					Path: NrgrpcImportPath,
 				},
 				Args: []dst.Expr{
-					dst.NewIdent(agentVariableName),
+					agentVariable,
 				},
 			},
 		},
@@ -95,7 +95,7 @@ func NrGrpcUnaryServerInterceptor(agentVariableName string, call *dst.CallExpr) 
 	}
 }
 
-func NrGrpcStreamServerInterceptor(agentVariableName string, call *dst.CallExpr) *dst.CallExpr {
+func NrGrpcStreamServerInterceptor(agentVariable dst.Expr, call *dst.CallExpr) *dst.CallExpr {
 	decs := getCallExpressionArgumentSpacing(call)
 	return &dst.CallExpr{
 		Fun: &dst.Ident{
@@ -109,7 +109,7 @@ func NrGrpcStreamServerInterceptor(agentVariableName string, call *dst.CallExpr)
 					Path: NrgrpcImportPath,
 				},
 				Args: []dst.Expr{
-					dst.NewIdent(agentVariableName),
+					agentVariable,
 				},
 			},
 		},

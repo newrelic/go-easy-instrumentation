@@ -13,7 +13,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/guess"
 	"github.com/dave/dst/dstutil"
-	"github.com/newrelic/go-easy-instrumentation/parser/facts"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -135,9 +135,9 @@ func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTra
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 	node := pkg.Syntax[0].Decls[1]
-	tracingState := TraceMain("app", "txn")
+	tracingState := tracestate.Main("app")
 	if downstream {
-		tracingState = TraceDownstreamFunction("txn")
+		tracingState = tracestate.FunctionBody("txn")
 	}
 
 	dstutil.Apply(node, nil, func(c *dstutil.Cursor) bool {
@@ -159,7 +159,7 @@ func testStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTra
 	return buf.String()
 }
 
-func testStatelessTracingFunction(t *testing.T, code string, tracingFunc StatelessTracingFunction, facts ...facts.Entry) string {
+func testStatelessTracingFunction(t *testing.T, code string, tracingFunc StatelessTracingFunction, statefulTracingFuncs ...StatefulTracingFunction) string {
 	id, err := pseudo_uuid()
 	if err != nil {
 		t.Fatal(err)
@@ -174,11 +174,8 @@ func testStatelessTracingFunction(t *testing.T, code string, tracingFunc Statele
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 
-	for _, fact := range facts {
-		err := manager.facts.AddFact(fact)
-		if err != nil {
-			t.Fatalf("unable to add fact %s: %v", fact, err)
-		}
+	for _, statefulTracingFunc := range statefulTracingFuncs {
+		manager.tracingFunctions.stateful = append(manager.tracingFunctions.stateful, statefulTracingFunc)
 	}
 
 	err = manager.InstrumentApplication(tracingFunc)
