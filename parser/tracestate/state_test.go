@@ -262,3 +262,35 @@ func TestState_TransactionVariable(t *testing.T) {
 		})
 	}
 }
+
+func TestState_AgentVariable(t *testing.T) {
+	tests := []struct {
+		name  string
+		state *State
+		want  dst.Expr
+	}{
+		{
+			name:  "Main Method",
+			state: Main("foo"),
+			want:  dst.NewIdent("foo"),
+		},
+		{
+			name:  "Function Body",
+			state: FunctionBody(codegen.DefaultTransactionVariable, traceobject.NewTransaction()),
+			want:  codegen.GetApplication(dst.NewIdent(codegen.DefaultTransactionVariable)),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.state.AgentVariable()
+			if got == nil {
+				t.Fatalf("State.TransactionVariable() = nil, want a transaction variable expression")
+			}
+			if !tt.state.IsMain() && !tt.state.txnUsed {
+				t.Errorf("AgentVariable() should set txnUsed to true when not in main, got %t", tt.state.txnUsed)
+			}
+
+			assert.Equal(t, tt.want, got, "expected transaction variable")
+		})
+	}
+}
