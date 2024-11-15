@@ -11,10 +11,10 @@ const (
 	DefaultTransactionVariable = "nrTxn"
 )
 
-func GetApplication(transactionVariableName string) dst.Expr {
+func GetApplication(transactionVariableExpression dst.Expr) dst.Expr {
 	return &dst.CallExpr{
 		Fun: &dst.SelectorExpr{
-			X:   dst.NewIdent(transactionVariableName),
+			X:   dst.Clone(transactionVariableExpression).(dst.Expr),
 			Sel: dst.NewIdent("Application"),
 		},
 	}

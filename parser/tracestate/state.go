@@ -161,7 +161,7 @@ func (tc *State) AgentVariable() dst.Expr {
 		return dst.NewIdent(tc.agentVariable)
 	}
 
-	return codegen.GetApplication(tc.txnVariable)
+	return codegen.GetApplication(tc.TransactionVariable())
 }
 
 // AddToCall passes a New Relic transaction, or an object that contains one, to a function call.
