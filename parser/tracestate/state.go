@@ -69,11 +69,12 @@ func FunctionBody(transactionVariable string, obj ...traceobject.TraceObject) *S
 // that is being made from the scope of the current function.
 func (tc *State) functionCall(obj traceobject.TraceObject) *State {
 	return &State{
-		txnVariable:     tc.txnVariable,
-		object:          obj,
-		main:            false,
-		needsSegment:    true,
-		addTracingParam: true,
+		txnVariable:      tc.txnVariable,
+		object:           obj,
+		main:             false,
+		needsSegment:     true,
+		addTracingParam:  true,
+		funcLitVariables: make(map[string]*dst.FuncLit),
 	}
 }
 
@@ -81,11 +82,12 @@ func (tc *State) functionCall(obj traceobject.TraceObject) *State {
 // that is being made from the scope of the current function.
 func (tc *State) goroutine(obj traceobject.TraceObject) *State {
 	return &State{
-		txnVariable:     tc.txnVariable,
-		object:          obj,
-		needsSegment:    true,
-		addTracingParam: true,
-		async:           true,
+		txnVariable:      tc.txnVariable,
+		object:           obj,
+		needsSegment:     true,
+		addTracingParam:  true,
+		async:            true,
+		funcLitVariables: make(map[string]*dst.FuncLit),
 	}
 }
 
@@ -246,6 +248,9 @@ func (tc *State) AddParameterToDeclaration(pkg *decorator.Package, node dst.Node
 
 // AssignTransactionVariable assigns the transaction variable to a new variable that will always be the default transaction variable name.
 // It will handle all the conditional checking for you, and will only add a transaction assignment if needed.
+// The expression to assign the transaciton variable will be added in place into the body of the node passed, which must be
+// a function declaration or a function literal.
+//
 // In some cases, this may require a library to be installed, and it will return the import path for that library.
 func (tc *State) AssignTransactionVariable(node dst.Node) string {
 	// we dont need to assign this if nothing ever invoked the transaction
@@ -260,12 +265,12 @@ func (tc *State) AssignTransactionVariable(node dst.Node) string {
 		// check that a segment was added, so we can fix the formatting
 		switch decl := node.(type) {
 		case *dst.FuncDecl:
-			if tc.needsSegment {
+			if tc.needsSegment && len(decl.Body.List) > 0 {
 				codegen.CreateStatementBlock(false, stmt, decl.Body.List[0])
 			}
 			codegen.PrependStatementToFunctionDecl(decl, stmt)
 		case *dst.FuncLit:
-			if tc.needsSegment {
+			if tc.needsSegment && len(decl.Body.List) > 0 {
 				codegen.CreateStatementBlock(false, stmt, decl.Body.List[0])
 			}
 			codegen.PrependStatementToFunctionLit(decl, stmt)
