@@ -11,5 +11,9 @@
 	{
 		"name": "grpc app",
 		"dir": "end-to-end-tests/grpc"
+	},
+	{
+		"name": "errors",
+		"dir": "end-to-end-tests/errors"
 	}
 ]}
