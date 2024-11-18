@@ -31,6 +31,7 @@ func EndTransaction(transactionVariableName string) *dst.ExprStmt {
 	}
 }
 
+// NewTransactionParameter returns a field definition for a transaction parameter
 func NewTransactionParameter(txnName string) *dst.Field {
 	return &dst.Field{
 		Names: []*dst.Ident{
@@ -122,23 +123,6 @@ func TxnFromContextExpression(contextObject dst.Expr) dst.Expr {
 		},
 		Args: []dst.Expr{
 			dst.Clone(contextObject).(dst.Expr),
-		},
-	}
-}
-
-// TransactionParameter returns a field definition for a function parameter that is a *newrelic.Transaction
-func TransactionParameter(parameterName string) *dst.Field {
-	return &dst.Field{
-		Names: []*dst.Ident{
-			{
-				Name: parameterName,
-			},
-		},
-		Type: &dst.StarExpr{
-			X: &dst.Ident{
-				Name: "Transaction",
-				Path: "newrelic",
-			},
 		},
 	}
 }
