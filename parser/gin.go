@@ -11,6 +11,7 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
 const (
@@ -118,7 +119,9 @@ func ginAnonymousFunction(node dst.Node, manager *InstrumentationManager) (*dst.
 							manager.anonymousFunctionWarning = true
 							comment.Warn(manager.getDecoratorPackage(), v, "Since the handler function name is used as the transaction name,", "anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
 						}
-						funcLit.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(defaultTxnName, ctxName), codegen.DeferStartSegment(defaultTxnName, anonFunctionRoute)}, funcLit.Body.List...)
+						txnName := codegen.DefaultTransactionVariable
+
+						funcLit.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(txnName, ctxName), codegen.DeferStartSegment(txnName, anonFunctionRoute)}, funcLit.Body.List...)
 						anonFuncCount++
 					}
 				}
@@ -134,27 +137,55 @@ func FindAnonymousFunctions(manager *InstrumentationManager, c *dstutil.Cursor) 
 }
 
 func InstrumentGinMiddleware(manager *InstrumentationManager, c *dstutil.Cursor) {
-	currentNode := c.Node()
-	if call, ok, routerName := ginMiddlewareCall(currentNode); ok {
-		err := manager.facts.AddFact(facts.Entry{
-			Name: routerName,
-			Fact: facts.GinRouter,
-		})
-		if err != nil {
-			fmt.Println("Error adding fact: ", err)
+	mainFunctionNode := c.Node()
+	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
+		// only inject go agent into the main.main function
+		if decl.Name.Name == "main" {
+			// Loop through all the statements in the main function
+			state := tracestate.Main(manager.agentVariableName)
+
+			for i, stmt := range decl.Body.List {
+				// Check if any return true for ginMiddlewareCall
+				if call, ok, routerName := ginMiddlewareCall(stmt); ok {
+					// Append at the current stmt location
+					decl.Body.List = append(decl.Body.List[:i+1], append([]dst.Stmt{codegen.NrGinMiddleware(call, routerName, state.AgentVariable())}, decl.Body.List[i+1:]...)...)
+					return
+				}
+			}
+
+		} else {
+			for i, stmt := range decl.Body.List {
+				state := tracestate.FunctionBody(codegen.DefaultTransactionVariable)
+				// Check if any return true for ginMiddlewareCall
+				if call, ok, routerName := ginMiddlewareCall(stmt); ok {
+					decl.Body.List = append(decl.Body.List[:i+1], append([]dst.Stmt{codegen.NrGinMiddleware(call, routerName, state.AgentVariable())}, decl.Body.List[i+1:]...)...)
+					return
+				}
+			}
+
 		}
-		c.InsertAfter(codegen.NrGinMiddleware(call, routerName, manager.agentVariableName))
 	}
+}
+
+// txnFromCtx injects a line of code that extracts a transaction from the context into the body of a function
+func defineTxnFromGinCtx(fn *dst.FuncDecl, txnVariable string, ctxName string) {
+	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
+	stmts[0] = codegen.TxnFromGinContext(txnVariable, ctxName)
+	for i, stmt := range fn.Body.List {
+		stmts[i+1] = stmt
+	}
+	fn.Body.List = stmts
 }
 
 func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 	currentNode := c.Node()
 	if ctxName, ok := ginFunctionCall(currentNode, manager.getDecoratorPackage()); ok {
 		funcDecl := currentNode.(*dst.FuncDecl)
-		decl, ok := TraceFunction(manager, funcDecl, TraceDownstreamFunction(defaultTxnName))
+		txnName := codegen.DefaultTransactionVariable
+
+		_, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(txnName))
 		if ok {
-			decl.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(defaultTxnName, ctxName)}, decl.Body.List...)
-			c.Replace(decl)
+			defineTxnFromGinCtx(funcDecl, txnName, ctxName)
 		}
 	}
 }

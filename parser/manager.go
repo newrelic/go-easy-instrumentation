@@ -39,15 +39,16 @@ type tracingFunctions struct {
 
 // InstrumentationManager maintains state relevant to tracing across all files, packages and functions.
 type InstrumentationManager struct {
-	appName           string
-	agentVariableName string
-	userAppPath       string // path to the user's application as provided by the user
-	diffFile          string
-	currentPackage    string
-	tracingFunctions  tracingFunctions
-	facts             facts.Keeper
-	packages          map[string]*PackageState // stores stateful information on packages by ID
-	errorCache        errorcache.ErrorCache    // stores error handling status for functions
+	appName                  string
+	agentVariableName        string
+	userAppPath              string // path to the user's application as provided by the user
+	diffFile                 string
+	currentPackage           string
+	tracingFunctions         tracingFunctions
+	facts                    facts.Keeper
+	packages                 map[string]*PackageState // stores stateful information on packages by ID
+	errorCache               errorcache.ErrorCache    // stores error handling status for functions
+	anonymousFunctionWarning bool
 }
 
 // PackageManager contains state relevant to tracing within a single package.
