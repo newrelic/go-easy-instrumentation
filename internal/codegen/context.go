@@ -41,7 +41,7 @@ func WrapContextExpression(context dst.Expr, transaction string, async bool) dst
 }
 
 // ContextParameter creates a field for a context parameter
-func ContextParameter(name string) *dst.Field {
+func NewContextParameter(name string) *dst.Field {
 	return &dst.Field{
 		Names: []*dst.Ident{
 			dst.NewIdent(name),

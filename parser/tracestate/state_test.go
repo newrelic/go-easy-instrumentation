@@ -153,6 +153,102 @@ func TestState_AddToCall(t *testing.T) {
 	}
 }
 
+func TestState_AddParameterToDeclaration(t *testing.T) {
+	knownContext := codegen.NewContextParameter("ctx")
+	astContext := &ast.Field{Names: []*ast.Ident{{Name: "ctx"}}, Type: &ast.Ident{Name: "Context"}}
+	defaultDecorator := &decorator.Package{
+		Decorator: &decorator.Decorator{
+			Map: decorator.Map{
+				Ast: decorator.AstMap{
+					Nodes: map[dst.Node]ast.Node{
+						knownContext:      astContext,
+						knownContext.Type: astContext.Type,
+					},
+				},
+			},
+		},
+		Package: &packages.Package{
+			TypesInfo: &types.Info{
+				Types: map[ast.Expr]types.TypeAndValue{
+					astContext.Type: {
+						Type: types.NewNamed(types.NewTypeName(0, types.NewPackage("context", "context"), "Context", nil), nil, nil),
+					},
+				},
+			},
+		},
+	}
+
+	createTestFunction := func(params ...*dst.Field) dst.Node {
+		fun := &dst.FuncDecl{Name: &dst.Ident{Name: "foo"}, Type: &dst.FuncType{Params: &dst.FieldList{List: []*dst.Field{}}}, Body: &dst.BlockStmt{}}
+		for _, param := range params {
+			fun.Type.Params.List = append(fun.Type.Params.List, param)
+		}
+		return fun
+	}
+
+	type args struct {
+		pkg  *decorator.Package
+		node dst.Node
+	}
+	tests := []struct {
+		name       string
+		args       args
+		state      *State
+		wantImport string
+		expect     dst.Node
+	}{
+		{
+			name: "empty function declaration in function call",
+			args: args{
+				pkg:  defaultDecorator,
+				node: createTestFunction(),
+			},
+			state:      FunctionBody(codegen.DefaultTransactionVariable, traceobject.NewTransaction()).functionCall(traceobject.NewTransaction()),
+			wantImport: codegen.NewRelicAgentImportPath,
+			expect:     createTestFunction(codegen.NewTransactionParameter(codegen.DefaultTransactionVariable)),
+		},
+		{
+			name: "function declaration with ctx in function call",
+			args: args{
+				pkg:  defaultDecorator,
+				node: createTestFunction(knownContext),
+			},
+			state:      FunctionBody(codegen.DefaultTransactionVariable, traceobject.NewContext()).functionCall(traceobject.NewContext()),
+			wantImport: "",
+			expect:     createTestFunction(knownContext),
+		},
+		{
+			name: "empty function declaration in Main",
+			args: args{
+				pkg:  defaultDecorator,
+				node: createTestFunction(),
+			},
+			state:      Main(codegen.DefaultTransactionVariable),
+			wantImport: "",
+			expect:     createTestFunction(),
+		},
+		{
+			name: "empty function declaration in function body",
+			args: args{
+				pkg:  defaultDecorator,
+				node: createTestFunction(),
+			},
+			state:      FunctionBody(codegen.DefaultTransactionVariable),
+			wantImport: "",
+			expect:     createTestFunction(),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.state.AddParameterToDeclaration(tt.args.pkg, tt.args.node)
+			if got != tt.wantImport {
+				t.Errorf("State.AddParameterToDeclaration() import string = \"%v\", want \"%v\"", got, tt.wantImport)
+			}
+			assert.Equal(t, tt.expect, tt.args.node, "expected node after adding parameter")
+		})
+	}
+}
+
 func TestState_CreateSegment(t *testing.T) {
 	type args struct {
 		node dst.Node
@@ -201,7 +297,7 @@ func TestState_CreateSegment(t *testing.T) {
 				Type: &dst.FuncType{
 					Params: &dst.FieldList{
 						List: []*dst.Field{
-							codegen.ContextParameter("ctx"),
+							codegen.NewContextParameter("ctx"),
 						},
 					},
 				},
@@ -219,7 +315,7 @@ func TestState_CreateSegment(t *testing.T) {
 					Type: &dst.FuncType{
 						Params: &dst.FieldList{
 							List: []*dst.Field{
-								codegen.ContextParameter("ctx"),
+								codegen.NewContextParameter("ctx"),
 							},
 						},
 					},
@@ -237,7 +333,7 @@ func TestState_CreateSegment(t *testing.T) {
 					Type: &dst.FuncType{
 						Params: &dst.FieldList{
 							List: []*dst.Field{
-								codegen.ContextParameter("ctx"),
+								codegen.NewContextParameter("ctx"),
 							},
 						},
 					},
@@ -255,7 +351,7 @@ func TestState_CreateSegment(t *testing.T) {
 				Type: &dst.FuncType{
 					Params: &dst.FieldList{
 						List: []*dst.Field{
-							codegen.ContextParameter("ctx"),
+							codegen.NewContextParameter("ctx"),
 						},
 					},
 				},
