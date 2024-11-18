@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"go/token"
 	"go/types"
 	"slices"
@@ -222,6 +223,9 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 			}
 		}
 	case *dst.IfStmt:
+		if nodeVal.Init != nil {
+			NoticeError(manager, nodeVal.Init, c, tracing, functionCallWasTraced)
+		}
 		if shouldNoticeError(stmt, pkg, tracing) {
 			errExpr := manager.errorCache.GetExpression()
 			if errExpr != nil {
@@ -235,6 +239,10 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 			}
 		}
 	case *dst.AssignStmt:
+		if c.Index() < 0 {
+			return false
+		}
+
 		// avoid capturing errors that were already captured upstream
 		if functionCallWasTraced {
 			return false
@@ -246,9 +254,10 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 			return false
 		}
 
-		if manager.errorCache.GetExpression() != nil {
+		cachedErrExpr := manager.errorCache.GetExpression()
+		if cachedErrExpr != nil {
 			stmt := manager.errorCache.GetStatement()
-			comment.Warn(pkg, stmt, "Unchecked Error, please consult New Relic documentation on error capture")
+			comment.Warn(pkg, stmt, fmt.Sprintf("Unchecked Error \"%s\", please consult New Relic documentation on error capture", util.WriteExpr(cachedErrExpr, pkg)))
 			manager.errorCache.Clear()
 		}
 
@@ -266,7 +275,6 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 			}
 		}
 		manager.errorCache.Load(errExpr, errStmt)
-
 	}
 	return false
 }
