@@ -10,7 +10,7 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
-	"github.com/newrelic/go-easy-instrumentation/parser/facts"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
 const (
@@ -70,49 +70,34 @@ func ginAnonymousFunction(node dst.Node, manager *InstrumentationManager) (*dst.
 	anonFuncCount := 1
 	switch v := node.(type) {
 	case *dst.ExprStmt:
-		if call, ok := v.X.(*dst.CallExpr); ok {
-			if sel, ok := call.Fun.(*dst.SelectorExpr); ok {
-				if ident, ok := sel.X.(*dst.Ident); ok {
-					// Check if the GET call belongs to the gin router. Ensures no other GET functions are instrumented
-					if sel.Sel.Name == "GET" && manager.facts.GetFact(ident.Name) == facts.GinRouter {
-						anonFunctionRoute := ""
-						for _, arg := range call.Args {
-							// Get the route name from the anonymous function
-							if util.TypeOf(arg, manager.getDecoratorPackage()).Underlying() == types.Typ[types.String] {
-								anonFunctionRoute = arg.(*dst.BasicLit).Value
-								anonFunctionRoute = anonFunctionRoute[:1] + anonFunctionRoute[2:]
+		if call, ok := isGinRoute(v, manager); ok {
+			anonFunctionRoute := ""
+			for _, arg := range call.Args {
+				// Get the route name from the anonymous function
+				if util.TypeOf(arg, manager.getDecoratorPackage()).Underlying() == types.Typ[types.String] {
+					anonFunctionRoute = arg.(*dst.BasicLit).Value
+				}
+				// If the argument is a function literal, we need to add instrumentation
+				if funcLit, ok := arg.(*dst.FuncLit); ok {
+					ctxName, isGinFunc := checkForGinContext(funcLit, manager)
+					if isGinFunc {
+						// If mulitple anonymous functions are present, append a number to the segment name so the user can have unique names for each segment
+						if anonFuncCount > 1 {
+							if len(anonFunctionRoute) > 1 && anonFunctionRoute[0] == '"' && anonFunctionRoute[len(anonFunctionRoute)-1] == '"' {
+								anonFunctionRoute = anonFunctionRoute[1 : len(anonFunctionRoute)-1]
 							}
-							if funcLit, ok := arg.(*dst.FuncLit); ok {
-								// Check if the anonymous function has a single argument of type *gin.Context
-								if len(funcLit.Type.Params.List) == 1 {
-									if starExpr, ok := funcLit.Type.Params.List[0].Type.(*dst.StarExpr); ok {
-										ctxName := funcLit.Type.Params.List[0].Names[0].Name
-										if ident, ok := starExpr.X.(*dst.Ident); ok {
-											if ident.Name == "Context" && ident.Path == GinImportPath {
-												path := util.PackagePath(ident, manager.getDecoratorPackage())
-												if path == codegen.GinImportPath {
-													// If mulitple anonymous functions are present, append a number to the segment name
-													if anonFuncCount > 1 {
-														if len(anonFunctionRoute) > 1 && anonFunctionRoute[0] == '"' && anonFunctionRoute[len(anonFunctionRoute)-1] == '"' {
-															anonFunctionRoute = anonFunctionRoute[1 : len(anonFunctionRoute)-1]
-														}
-														anonFunctionRoute = fmt.Sprintf("\"%s-%d\"", anonFunctionRoute, anonFuncCount)
-													} else {
-														comment.Warn(manager.getDecoratorPackage(), v, "Since the handler function name is used as the transaction name,", "anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
-													}
-													funcLit.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(defaultTxnName, ctxName), codegen.DeferStartSegment(defaultTxnName, anonFunctionRoute)}, funcLit.Body.List...)
-													anonFuncCount++
-												}
-											}
-										}
-									}
-								}
-							}
+							anonFunctionRoute = fmt.Sprintf("\"%s-%d\"", anonFunctionRoute, anonFuncCount)
+						} else if !manager.anonymousFunctionWarning {
+							manager.anonymousFunctionWarning = true
+							comment.Warn(manager.getDecoratorPackage(), v, "Since the handler function name is used as the transaction name,", "anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
 						}
+						txnName := codegen.DefaultTransactionVariable
+
+						funcLit.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(txnName, ctxName), codegen.DeferStartSegment(txnName, anonFunctionRoute)}, funcLit.Body.List...)
+						anonFuncCount++
 					}
 				}
 			}
-
 		}
 	}
 	return nil, false, ""
@@ -124,29 +109,55 @@ func FindAnonymousFunctions(manager *InstrumentationManager, c *dstutil.Cursor) 
 }
 
 func InstrumentGinMiddleware(manager *InstrumentationManager, c *dstutil.Cursor) {
-	currentNode := c.Node()
-	if call, ok, routerName := ginMiddlewareCall(currentNode); ok {
-		err := manager.facts.AddFact(facts.Entry{
-			Name: routerName,
-			Fact: facts.GinRouter,
-		})
-		if err != nil {
-			fmt.Println("Error adding fact: ", err)
+	mainFunctionNode := c.Node()
+	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
+		// only inject go agent into the main.main function
+		if decl.Name.Name == "main" {
+			// Loop through all the statements in the main function
+			state := tracestate.Main(manager.agentVariableName)
+
+			for i, stmt := range decl.Body.List {
+				// Check if any return true for ginMiddlewareCall
+				if call, ok, routerName := ginMiddlewareCall(stmt); ok {
+					// Append at the current stmt location
+					decl.Body.List = append(decl.Body.List[:i+1], append([]dst.Stmt{codegen.NrGinMiddleware(call, routerName, state.AgentVariable())}, decl.Body.List[i+1:]...)...)
+					return
+				}
+			}
+
+		} else {
+			for i, stmt := range decl.Body.List {
+				state := tracestate.FunctionBody(codegen.DefaultTransactionVariable)
+				// Check if any return true for ginMiddlewareCall
+				if call, ok, routerName := ginMiddlewareCall(stmt); ok {
+					decl.Body.List = append(decl.Body.List[:i+1], append([]dst.Stmt{codegen.NrGinMiddleware(call, routerName, state.AgentVariable())}, decl.Body.List[i+1:]...)...)
+					return
+				}
+			}
+
 		}
-
-		c.InsertAfter(codegen.NrGinMiddleware(call, routerName, manager.agentVariableName))
-
 	}
+}
+
+// txnFromCtx injects a line of code that extracts a transaction from the context into the body of a function
+func defineTxnFromGinCtx(fn *dst.FuncDecl, txnVariable string, ctxName string) {
+	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
+	stmts[0] = codegen.TxnFromGinContext(txnVariable, ctxName)
+	for i, stmt := range fn.Body.List {
+		stmts[i+1] = stmt
+	}
+	fn.Body.List = stmts
 }
 
 func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 	currentNode := c.Node()
 	if ctxName, ok := ginFunctionCall(currentNode, manager.getDecoratorPackage()); ok {
 		funcDecl := currentNode.(*dst.FuncDecl)
-		decl, ok := TraceFunction(manager, funcDecl, TraceDownstreamFunction(defaultTxnName))
+		txnName := codegen.DefaultTransactionVariable
+
+		_, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(txnName))
 		if ok {
-			decl.Body.List = append([]dst.Stmt{codegen.TxnFromGinContext(defaultTxnName, ctxName)}, decl.Body.List...)
-			c.Replace(decl)
+			defineTxnFromGinCtx(funcDecl, txnName, ctxName)
 		}
 	}
 }
