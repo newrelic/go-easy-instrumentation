@@ -30,20 +30,27 @@ As part of the analysis, this tool may invoke `go get` or other Go language tool
 
 The scope of what this tool can instrument in your application is limited to these actions:
 
- - Capturing errors in any function wrapped or traced by a transaction
- - Tracing locally defined functions that are invoked in the application's `main()` method with a transaction
- - Tracing async functions and function literals with an async segment
- - Wrapping HTTP handlers
- - Injecting distributed tracing into external traffic
+ - A best effort to capture errors at the root cause
+ - Tracing locally defined synchronous functions that are invoked in the application's `main()` method with a transaction. Note that we will not attempt to trace async code in the main method due to issues of complexity, and will instead prompt you to manually instrument this code at your own discretion.
+ - Starting tracing from entrypoints into your application with instrumentation from one of the supported libraries
+ - Injecting distributed tracing into external traffic with one of the supported libraries
 
-**ONLY** the following Go packages and libraries are currently supported:
+## Supported Libraries
+The following libraries are supported for automatic instrumentation. Listed below are the minimum version of this tool needed to support each library, however it is always recommended that you upgrade to the latest version of this tool since there are a number of improvements in instrumentation coverage and quality that you would otherwise miss out on.
 
-  - standard library
-  - net/http
+| Library Name | Minimum Version |
+| ------------ | --------- |
+| net/http     | 0.1.0 |
+| gRPC         | 0.2.0 |
+| Gin          | coming |
 
 ## Installation
 
 Before you start the installation steps below, make sure you have a version of Go installed that is within the support window for the current [Go programming language lifecycle](https://endoflife.date/go).
+
+Installation Steps have been moved to: https://docs.newrelic.com/docs/apm/agents/go-agent/installation/install-automation-new-relic-go/#go-easy-install
+
+### Building from source for development
 
 1. Clone this repository to a directory on your system. For example:
     ```sh
@@ -57,6 +64,25 @@ Before you start the installation steps below, make sure you have a version of G
     ```sh
     go mod tidy
     ```
+4. Build and run from the root of the repo:
+    ```
+    go run . -path $MY_APP
+    ```
+
+### Manually Run Unit Tests
+Unit tests can be run from the root of this repository with this command:
+```sh
+go test ./...
+```
+
+### Manually Run End To End Suite
+The end to end suite is designed to run easily on a developer's local machine. To run this suite, run this command from the root directory of this repository:
+```sh
+./end-to-end-tests/testrunner
+```
+
+To modify which tests get run, modify the `end-to-end-tests/testcases.json` file in your local development environment. 
+
 ## Generate instrumentation suggestions
 
 For detailed instructions on how to generate instrumentation suggestions, see our documentation at [docs.newrelic.com](https://docs/apm/agents/go-agent/installation/install-automation-new-relic-go/#generate-suggestions).
