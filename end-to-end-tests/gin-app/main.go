@@ -4,78 +4,30 @@
 package main
 
 import (
-	"fmt"
-	"log/slog"
-	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/newrelic/go-agent/v3/integrations/nrgin"
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
-func anotherFunction() {
-	// dummy http request
-	_, err := http.Get("https://example.com")
-
-	if err != nil {
-		slog.Error(err.Error())
-		return
-	}
-}
-func endpointlogic(c *gin.Context) {
-	c.Writer.WriteHeader(404)
-	c.Writer.WriteString("returning 404")
-	// dummy http request
-	anotherFunction()
-}
-
-func endpoint404(c *gin.Context) {
-	c.Writer.WriteHeader(404)
-	c.Writer.WriteString("returning 404")
-	// dummy http request
-	_, err := http.Get("https://example.com")
-
-	if err != nil {
-		slog.Error(err.Error())
-		return
-	}
-}
-func doSomething() {
-	fmt.Println("hi")
-	_, err := http.Get("https://example.com")
-	if err != nil {
-		slog.Error(err.Error())
-		return
-	}
-
-}
-func main() {
+func setupRouter(nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("setupRouter").End()
 
 	router := gin.Default()
-
-	router.GET("/404", endpoint404)
-	router.GET("/logic", endpointlogic)
-	router.GET("/anon", func(c *gin.Context) {
-		c.Writer.WriteString("anonymous function handler")
-		a := func() {
-			doSomething()
-		}
-		a()
-		a()
-		a()
-		// test call
-		_, err := http.Get("https://example.com")
-		if err != nil {
-			slog.Error(err.Error())
-			return
-		}
-	},
-		func(c *gin.Context) {
-			c.Writer.WriteString("anonymous function handler - second function")
-			// test call
-			_, err := http.Get("https://example.com")
-			if err != nil {
-				slog.Error(err.Error())
-				return
-			}
-		})
+	router.Use(nrgin.Middleware(nrTxn.Application()))
 	router.Run(":8000")
+}
+
+func main() {
+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if err != nil {
+		panic(err)
+	}
+
+	nrTxn := NewRelicAgent.StartTransaction("setupRouter")
+	setupRouter(nrTxn)
+	nrTxn.End()
+
+	NewRelicAgent.Shutdown(5 * time.Second)
 }

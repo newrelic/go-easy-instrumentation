@@ -30,7 +30,6 @@ func ginMiddlewareCall(node dst.Node) (*dst.CallExpr, bool, string) {
 						if v.Lhs != nil {
 							return call, true, v.Lhs[0].(*dst.Ident).Name
 						}
-
 					}
 				}
 			}
