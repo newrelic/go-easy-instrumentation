@@ -1,0 +1,60 @@
+--- a/main.go
++++ b/main.go
+@@ -8,11 +8,16 @@
+ 
+ 	"github.com/gin-contrib/static"
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+-func NewRouter() *gin.Engine {
++func NewRouter(nrTxn *newrelic.Transaction) *gin.Engine {
++	defer nrTxn.StartSegment("NewRouter").End()
++
+ 	// Set the router as the default one shipped with Gin
+ 	router := gin.Default()
++	router.Use(nrgin.Middleware(nrTxn.Application()))
+ 	expectedHost := "localhost:8080"
+ 
+ 	// Setup Security Headers
+@@ -37,7 +38,9 @@
+ 	// Setup route group for the API
+ 	api := router.Group("/api")
+ 	{
+-		apiHandler := func(c *gin.Context) {
++		apiHandler := func(c *gin.Context, nrTxn *newrelic.Transaction) {
++			defer nrTxn.StartSegment("function literal").End()
++
+ 			c.JSON(http.StatusOK, gin.H{
+ 				"message": "Uniform API",
+ 			})
+@@ -50,6 +53,10 @@
+ }
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
+ 
+ 	httpPort := os.Getenv("API_PORT")
+ 	if httpPort == "" {
+@@ -57,7 +64,9 @@
+ 	}
+ 
+ 	// Initialize router
+-	router := NewRouter()
++	nrTxn := NewRelicAgent.StartTransaction("NewRouter")
++	router := NewRouter(nrTxn)
++	nrTxn.End()
+ 
+ 	// Create server with timeout
+ 	srv := &http.Server{
+@@ -70,4 +79,6 @@
+ 	if err := srv.ListenAndServe(); err != nil {
+ 		log.Printf("Failed to start server: %v", err)
+ 	}
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

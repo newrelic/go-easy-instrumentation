@@ -1,0 +1,88 @@
+--- a/main.go
++++ b/main.go
+@@ -7,6 +7,8 @@
+ 	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ // It keeps a list of clients those are currently attached
+@@ -29,11 +31,23 @@
+ type ClientChan chan string
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	router := gin.Default()
+ 
++	router.Use(nrgin.Middleware(NewRelicAgent))
++
+ 	// Initialize new streaming server
+-	stream := NewServer()
++	nrTxn := NewRelicAgent.StartTransaction("NewServer")
++	stream := NewServer(nrTxn)
++	nrTxn.End()
+ 
++	// NR INFO: go-easy-instrumentation doesn't support tracing goroutines in a main method; please instrument manually.
++	// https://docs.newrelic.com/docs/apm/agents/go-agent/instrumentation/instrument-go-transactions/#goroutines
++	//
+ 	// We are streaming current time to clients in the interval 10 seconds
+ 	go func() {
+ 		for {
+@@ -51,9 +61,17 @@
+ 		"admin": "admin123", // username : admin, password : admin123
+ 	}))
+ 
++	// NR WARN: Since the handler function name is used as the transaction name,
++	// anonymous functions do not get usefully named.
++	// We encourage transforming anonymous functions into named functions
++	//
+ 	// Authorized client can stream the event
+ 	// Add event-streaming headers
+-	authorized.GET("/stream", HeadersMiddleware(), stream.serveHTTP(), func(c *gin.Context) {
++	nrTxn = NewRelicAgent.StartTransaction("HeadersMiddleware")
++	authorized.GET("/stream", HeadersMiddleware(nrTxn), stream.serveHTTP(), func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("/stream").End()
+ 		v, ok := c.Get("clientChan")
+ 		if !ok {
+ 			return
+@@ -71,15 +87,20 @@
+ 			return false
+ 		})
+ 	})
++	nrTxn.End()
+ 
+ 	// Parse Static files
+ 	router.StaticFile("/", "./public/index.html")
+ 
+ 	router.Run(":8085")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+ 
+ // Initialize event and Start procnteessing requests
+-func NewServer() (event *Event) {
++func NewServer(nrTxn *newrelic.Transaction) (event *Event) {
++	defer nrTxn.StartSegment("NewServer").End()
++
+ 	event = &Event{
+ 		Message:       make(chan string),
+ 		NewClients:    make(chan chan string),
+@@ -136,7 +149,9 @@
+ 	}
+ }
+ 
+-func HeadersMiddleware() gin.HandlerFunc {
++func HeadersMiddleware(nrTxn *newrelic.Transaction) gin.HandlerFunc {
++	defer nrTxn.StartSegment("HeadersMiddleware").End()
++
+ 	return func(c *gin.Context) {
+ 		c.Writer.Header().Set("Content-Type", "text/event-stream")
+ 		c.Writer.Header().Set("Cache-Control", "no-cache")

@@ -1,0 +1,45 @@
+--- a/main.go
++++ b/main.go
+@@ -3,8 +3,11 @@
+ import (
+ 	"html/template"
+ 	"log"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ var html = template.Must(template.New("https").Parse(`
+@@ -20,11 +21,23 @@
+ `))
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	r := gin.Default()
++	r.Use(nrgin.Middleware(NewRelicAgent))
+ 	r.Static("/assets", "./assets")
+ 	r.SetHTMLTemplate(html)
+ 
++	// NR WARN: Since the handler function name is used as the transaction name,
++	// anonymous functions do not get usefully named.
++	// We encourage transforming anonymous functions into named functions
+ 	r.GET("/", func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("/").End()
+ 		if pusher := c.Writer.Pusher(); pusher != nil {
+ 			// use pusher.Push() to do server push
+ 			if err := pusher.Push("/assets/app.js", nil); err != nil {
+@@ -38,4 +46,6 @@
+ 
+ 	// Listen and Server in https://127.0.0.1:8080
+ 	r.RunTLS(":8080", "./testdata/server.pem", "./testdata/server.key")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

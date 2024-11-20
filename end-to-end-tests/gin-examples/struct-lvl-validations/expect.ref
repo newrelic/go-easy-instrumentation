@@ -1,0 +1,46 @@
+--- a/server.go
++++ b/server.go
+@@ -2,10 +2,13 @@
+ 
+ import (
+ 	"net/http"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
+ 	"github.com/gin-gonic/gin/binding"
+ 	validator "github.com/go-playground/validator/v10"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ // User contains user information.
+@@ -37,18 +36,29 @@
+ }
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	route := gin.Default()
+ 
++	route.Use(nrgin.Middleware(NewRelicAgent))
++
+ 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+ 		v.RegisterStructValidation(UserStructLevelValidation, User{})
+ 	}
+ 
+ 	route.POST("/user", validateUser)
+ 	route.Run(":8085")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+ 
+ func validateUser(c *gin.Context) {
+ 	var u User
++	// NR WARN: Unchecked Error, please consult New Relic documentation on error capture
++	// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors
+ 	if err := c.ShouldBindJSON(&u); err == nil {
+ 		c.JSON(http.StatusOK, gin.H{"message": "User validation successful."})
+ 	} else {

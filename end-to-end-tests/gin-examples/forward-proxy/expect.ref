@@ -1,0 +1,75 @@
+--- a/main.go
++++ b/main.go
+@@ -5,13 +5,23 @@
+ 	"net/http"
+ 	"net/http/httputil"
+ 	"net/url"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	r := gin.Default()
+ 
++	r.Use(nrgin.Middleware(NewRelicAgent))
++
+ 	r.Use(ForwardMid)
+ 
+ 	// Create a catchall route
+@@ -20,20 +23,25 @@
+ 	if err := r.Run(":8888"); err != nil {
+ 		panic(err)
+ 	}
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+ 
+ func ForwardMid(c *gin.Context) {
++	nrTxn := nrgin.Transaction(c)
++
+ 	// !!! adapt to your request header set
+ 	if v, ok := c.Request.Header["Forward"]; ok {
+ 		if v[0] == "ok" {
+ 			resp, err := http.DefaultTransport.RoundTrip(c.Request)
+ 			if err != nil {
++				nrTxn.NoticeError(err)
+ 				http.Error(c.Writer, err.Error(), http.StatusServiceUnavailable)
+ 				c.Abort()
+ 				return
+ 			}
+ 			defer resp.Body.Close()
+-			copyHeader(c.Writer.Header(), resp.Header)
++			copyHeader(c.Writer.Header(), resp.Header, nrTxn)
+ 			c.Writer.WriteHeader(resp.StatusCode)
+ 			io.Copy(c.Writer, resp.Body)
+ 			c.Abort()
+@@ -44,7 +39,9 @@
+ 	c.Next()
+ }
+ 
+-func copyHeader(dst, src http.Header) {
++func copyHeader(dst, src http.Header, nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("copyHeader").End()
++
+ 	for k, vv := range src {
+ 		for _, v := range vv {
+ 			dst.Add(k, v)
+@@ -55,7 +52,9 @@
+ func Reverse(c *gin.Context) {
+ 	remote, _ := url.Parse("http://xxx.xxx.xxx")
+ 	proxy := httputil.NewSingleHostReverseProxy(remote)
+-	proxy.Director = func(req *http.Request) {
++	proxy.Director = func(req *http.Request, nrTxn *newrelic.Transaction) {
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		req.Header = c.Request.Header
+ 		req.Host = remote.Host
+ 		req.URL.Host = remote.Host

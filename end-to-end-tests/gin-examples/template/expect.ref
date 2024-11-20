@@ -1,0 +1,44 @@
+--- a/main.go
++++ b/main.go
+@@ -7,6 +7,8 @@
+ 	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func formatAsDate(t time.Time) string {
+@@ -15,18 +17,32 @@
+ }
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	router := gin.Default()
++	router.Use(nrgin.Middleware(NewRelicAgent))
+ 	router.Delims("{[{", "}]}")
+ 	router.SetFuncMap(template.FuncMap{
+ 		"formatAsDate": formatAsDate,
+ 	})
+ 	router.LoadHTMLFiles("./testdata/raw.tmpl")
+ 
++	// NR WARN: Since the handler function name is used as the transaction name,
++	// anonymous functions do not get usefully named.
++	// We encourage transforming anonymous functions into named functions
+ 	router.GET("/raw", func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("/raw").End()
+ 		c.HTML(http.StatusOK, "raw.tmpl", gin.H{
+ 			"now": time.Date(2017, 0o7, 0o1, 0, 0, 0, 0, time.UTC),
+ 		})
+ 	})
+ 
+ 	router.Run(":8080")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

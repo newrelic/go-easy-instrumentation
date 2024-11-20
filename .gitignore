@@ -1,3 +1,4 @@
 *.diff
 *tmp*
-end-to-end-tests/gin-examples
+remove-gin-tests.sh
+run-gin-tests.sh

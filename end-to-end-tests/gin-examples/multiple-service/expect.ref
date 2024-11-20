@@ -1,0 +1,86 @@
+--- a/main.go
++++ b/main.go
+@@ -6,15 +6,26 @@
+ 	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ 	"golang.org/x/sync/errgroup"
+ )
+ 
+ var g errgroup.Group
+ 
+-func router01() http.Handler {
++func router01(nrTxn *newrelic.Transaction) http.Handler {
++	defer nrTxn.StartSegment("router01").End()
++
+ 	e := gin.New()
++	e.Use(nrgin.Middleware(nrTxn.Application()))
+ 	e.Use(gin.Recovery())
++	// NR WARN: Since the handler function name is used as the transaction name,
++	// anonymous functions do not get usefully named.
++	// We encourage transforming anonymous functions into named functions
+ 	e.GET("/", func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("/").End()
+ 		c.JSON(
+ 			http.StatusOK,
+ 			gin.H{
+@@ -27,10 +30,16 @@
+ 	return e
+ }
+ 
+-func router02() http.Handler {
++func router02(nrTxn *newrelic.Transaction) http.Handler {
++	defer nrTxn.StartSegment("router02").End()
++
+ 	e := gin.New()
++	e.Use(nrgin.Middleware(nrTxn.Application()))
+ 	e.Use(gin.Recovery())
+ 	e.GET("/", func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("/").End()
+ 		c.JSON(
+ 			http.StatusOK,
+ 			gin.H{
+@@ -44,19 +50,28 @@
+ }
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
++	nrTxn := NewRelicAgent.StartTransaction("router01")
+ 	server01 := &http.Server{
+ 		Addr:         ":8080",
+-		Handler:      router01(),
++		Handler:      router01(nrTxn),
+ 		ReadTimeout:  5 * time.Second,
+ 		WriteTimeout: 10 * time.Second,
+ 	}
++	nrTxn.End()
+ 
++	nrTxn = NewRelicAgent.StartTransaction("router02")
+ 	server02 := &http.Server{
+ 		Addr:         ":8081",
+-		Handler:      router02(),
++		Handler:      router02(nrTxn),
+ 		ReadTimeout:  5 * time.Second,
+ 		WriteTimeout: 10 * time.Second,
+ 	}
++	nrTxn.End()
+ 
+ 	g.Go(func() error {
+ 		return server01.ListenAndServe()
+@@ -69,4 +73,6 @@
+ 	if err := g.Wait(); err != nil {
+ 		log.Fatal(err)
+ 	}
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

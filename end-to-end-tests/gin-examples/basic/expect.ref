@@ -1,0 +1,85 @@
+--- a/main.go
++++ b/main.go
+@@ -2,30 +2,53 @@
+ 
+ import (
+ 	"net/http"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ var db = make(map[string]string)
+ 
+-func setupRouter() *gin.Engine {
++func setupRouter(nrTxn *newrelic.Transaction) *gin.Engine {
++	defer nrTxn.StartSegment("setupRouter").End()
++
+ 	// Disable Console Color
+ 	// gin.DisableConsoleColor()
+ 	r := gin.Default()
+ 
++	r.Use(nrgin.Middleware(nrTxn.Application()))
++
++	// NR WARN: Since the handler function name is used as the transaction name,
++	// anonymous functions do not get usefully named.
++	// We encourage transforming anonymous functions into named functions
++	//
+ 	// Ping test
+ 	r.GET("/ping", func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("/ping").End()
+ 		c.String(http.StatusOK, "pong")
+ 	})
+ 	// two test
+ 	r.GET("/", func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("/").End()
+ 		c.String(http.StatusOK, "pong")
+ 	}, func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("/-2").End()
+ 		c.String(http.StatusOK, "second function")
+ 	})
+ 
+ 	// Get user value
+ 	r.GET("/user/:name", func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("/user/:name").End()
+ 		user := c.Params.ByName("name")
+ 		value, ok := db[user]
+ 		if ok {
+@@ -57,6 +57,9 @@
+ 	  	-d '{"value":"bar"}'
+ 	*/
+ 	authorized.POST("admin", func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++
++		defer nrTxn.StartSegment("admin").End()
+ 		user := c.MustGet(gin.AuthUserKey).(string)
+ 
+ 		// Parse JSON
+@@ -74,7 +77,16 @@
+ }
+ 
+ func main() {
+-	r := setupRouter()
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
++	nrTxn := NewRelicAgent.StartTransaction("setupRouter")
++	r := setupRouter(nrTxn)
++	nrTxn.End()
+ 	// Listen and Server in 0.0.0.0:8080
+ 	r.Run(":8080")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

@@ -1,0 +1,208 @@
+--- a/main.go
++++ b/main.go
+@@ -3,33 +3,56 @@
+ import (
+ 	"fmt"
+ 	"runtime"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
+-	ConfigRuntime()
+-	StartWorkers()
+-	StartGin()
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
++	nrTxn := NewRelicAgent.StartTransaction("ConfigRuntime")
++	ConfigRuntime(nrTxn)
++	nrTxn.End()
++	nrTxn = NewRelicAgent.StartTransaction("StartWorkers")
++	StartWorkers(nrTxn)
++	nrTxn.End()
++	nrTxn = NewRelicAgent.StartTransaction("StartGin")
++	StartGin(nrTxn)
++	nrTxn.End()
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+ 
+ // ConfigRuntime sets the number of operating system threads.
+-func ConfigRuntime() {
++func ConfigRuntime(nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("ConfigRuntime").End()
++
+ 	nuCPU := runtime.NumCPU()
+ 	runtime.GOMAXPROCS(nuCPU)
+ 	fmt.Printf("Running with %d CPUs\n", nuCPU)
+ }
+ 
+ // StartWorkers start starsWorker by goroutine.
+-func StartWorkers() {
+-	go statsWorker()
++func StartWorkers(nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("StartWorkers").End()
++
++	go statsWorker(nrTxn.NewGoroutine())
+ }
+ 
+ // StartGin starts gin web server with setting router.
+-func StartGin() {
++func StartGin(nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("StartGin").End()
++
+ 	gin.SetMode(gin.ReleaseMode)
+ 
+ 	router := gin.New()
++	router.Use(nrgin.Middleware(nrTxn.Application()))
+ 	router.Use(rateLimit, gin.Recovery())
+ 	router.LoadHTMLGlob("resources/*.templ.html")
+ 	router.Static("/static", "resources/static")
+--- a/rooms.go
++++ b/rooms.go
+@@ -1,21 +1,30 @@
+ package main
+ 
+-import "github.com/dustin/go-broadcast"
++import (
++	"github.com/dustin/go-broadcast"
++	"github.com/newrelic/go-agent/v3/newrelic"
++)
+ 
+ var roomChannels = make(map[string]broadcast.Broadcaster)
+ 
+-func openListener(roomid string) chan interface{} {
++func openListener(roomid string, nrTxn *newrelic.Transaction) chan interface{} {
++	defer nrTxn.StartSegment("openListener").End()
++
+ 	listener := make(chan interface{})
+-	room(roomid).Register(listener)
++	room(roomid, nrTxn).Register(listener)
+ 	return listener
+ }
+ 
+-func closeListener(roomid string, listener chan interface{}) {
+-	room(roomid).Unregister(listener)
++func closeListener(roomid string, listener chan interface{}, nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("closeListener").End()
++
++	room(roomid, nrTxn).Unregister(listener)
+ 	close(listener)
+ }
+ 
+-func room(roomid string) broadcast.Broadcaster {
++func room(roomid string, nrTxn *newrelic.Transaction) broadcast.Broadcaster {
++	defer nrTxn.StartSegment("room").End()
++
+ 	b, ok := roomChannels[roomid]
+ 	if !ok {
+ 		b = broadcast.NewBroadcaster(10)
+--- a/routes.go
++++ b/routes.go
+@@ -9,6 +9,7 @@
+ 	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
+ )
+ 
+ func rateLimit(c *gin.Context) {
+@@ -47,6 +48,8 @@
+ }
+ 
+ func roomPOST(c *gin.Context) {
++	nrTxn := nrgin.Transaction(c)
++
+ 	roomid := c.Param("roomid")
+ 	nick := c.Query("nick")
+ 	message := c.PostForm("message")
+@@ -67,17 +70,19 @@
+ 		"message": html.EscapeString(message),
+ 	}
+ 	messages.Add("inbound", 1)
+-	room(roomid).Submit(post)
++	room(roomid, nrTxn).Submit(post)
+ 	c.JSON(http.StatusOK, post)
+ }
+ 
+ func streamRoom(c *gin.Context) {
++	nrTxn := nrgin.Transaction(c)
++
+ 	roomid := c.Param("roomid")
+-	listener := openListener(roomid)
++	listener := openListener(roomid, nrTxn)
+ 	ticker := time.NewTicker(1 * time.Second)
+ 	users.Add("connected", 1)
+ 	defer func() {
+-		closeListener(roomid, listener)
++		closeListener(roomid, listener, nrTxn)
+ 		ticker.Stop()
+ 		users.Add("disconnected", 1)
+ 	}()
+@@ -88,7 +85,7 @@
+ 			messages.Add("outbound", 1)
+ 			c.SSEvent("message", msg)
+ 		case <-ticker.C:
+-			c.SSEvent("stats", Stats())
++			c.SSEvent("stats", Stats(nrTxn))
+ 		}
+ 		return true
+ 	})
+--- a/stats.go
++++ b/stats.go
+@@ -6,6 +6,7 @@
+ 	"time"
+ 
+ 	"github.com/manucorporat/stats"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ var (
+@@ -16,7 +17,9 @@
+ 	savedStats map[string]uint64
+ )
+ 
+-func statsWorker() {
++func statsWorker(nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("async statsWorker").End()
++
+ 	c := time.Tick(1 * time.Second)
+ 	var lastMallocs uint64
+ 	var lastFrees uint64
+@@ -33,7 +36,7 @@
+ 			"Frees":      stats.Frees - lastFrees,
+ 			"Inbound":    uint64(messages.Get("inbound")),
+ 			"Outbound":   uint64(messages.Get("outbound")),
+-			"Connected":  connectedUsers(),
++			"Connected":  connectedUsers(nrTxn),
+ 		}
+ 		lastMallocs = stats.Mallocs
+ 		lastFrees = stats.Frees
+@@ -42,7 +45,9 @@
+ 	}
+ }
+ 
+-func connectedUsers() uint64 {
++func connectedUsers(nrTxn *newrelic.Transaction) uint64 {
++	defer nrTxn.StartSegment("connectedUsers").End()
++
+ 	connected := users.Get("connected") - users.Get("disconnected")
+ 	if connected < 0 {
+ 		return 0
+@@ -51,7 +56,9 @@
+ }
+ 
+ // Stats returns savedStats data.
+-func Stats() map[string]uint64 {
++func Stats(nrTxn *newrelic.Transaction) map[string]uint64 {
++	defer nrTxn.StartSegment("Stats").End()
++
+ 	mutexStats.RLock()
+ 	defer mutexStats.RUnlock()
+ 
