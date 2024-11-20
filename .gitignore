@@ -2,3 +2,4 @@
 *tmp*
 remove-gin-tests.sh
 run-gin-tests.sh
+.vscode
