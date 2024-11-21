@@ -50,7 +50,7 @@
  }
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++ NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("gin - multiple services"), newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}

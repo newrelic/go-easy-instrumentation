@@ -11,5 +11,13 @@
 	{
 		"name": "grpc app",
 		"dir": "end-to-end-tests/grpc"
+	},
+	{
+		"name": "gin - basic",
+		"dir": "end-to-end-tests/gin-examples/basic"
+	},
+	{
+		"name": "gin - multiple services",
+		"dir": "end-to-end-tests/gin-examples/multiple-service"
 	}
 ]}

@@ -93,6 +93,7 @@ func isGinRoute(v *dst.ExprStmt, manager *InstrumentationManager) (*dst.CallExpr
 	}
 	return nil, false
 }
+
 func ginAnonymousFunction(node dst.Node, manager *InstrumentationManager) (*dst.FuncLit, bool, string) {
 	anonFuncCount := 1
 	switch v := node.(type) {
@@ -130,11 +131,20 @@ func ginAnonymousFunction(node dst.Node, manager *InstrumentationManager) (*dst.
 	return nil, false, ""
 }
 
-func FindAnonymousFunctions(manager *InstrumentationManager, c *dstutil.Cursor) {
-	currentNode := c.Node()
-	ginAnonymousFunction(currentNode, manager)
+// defineTxnFromGinCtx injects a line of code that extracts a transaction from the gin context into the function body
+func defineTxnFromGinCtx(fn *dst.FuncDecl, txnVariable string, ctxName string) {
+	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
+	stmts[0] = codegen.TxnFromGinContext(txnVariable, ctxName)
+	for i, stmt := range fn.Body.List {
+		stmts[i+1] = stmt
+	}
+	fn.Body.List = stmts
 }
 
+// Stateless Tracing Functions
+// ////////////////////////////////////////////
+
+// InstrumentGinMiddleware adds the New Relic middleware to the gin router call
 func InstrumentGinMiddleware(manager *InstrumentationManager, c *dstutil.Cursor) {
 	mainFunctionNode := c.Node()
 	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
@@ -166,16 +176,14 @@ func InstrumentGinMiddleware(manager *InstrumentationManager, c *dstutil.Cursor)
 	}
 }
 
-// txnFromCtx injects a line of code that extracts a transaction from the context into the body of a function
-func defineTxnFromGinCtx(fn *dst.FuncDecl, txnVariable string, ctxName string) {
-	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
-	stmts[0] = codegen.TxnFromGinContext(txnVariable, ctxName)
-	for i, stmt := range fn.Body.List {
-		stmts[i+1] = stmt
-	}
-	fn.Body.List = stmts
+func FindAnonymousFunctions(manager *InstrumentationManager, c *dstutil.Cursor) {
+	currentNode := c.Node()
+	ginAnonymousFunction(currentNode, manager)
 }
 
+// InstrumentGinFunction verifies gin function calls and initiates tracing.
+// If tracing was added, then defineTxnFromGinCtx is called to inject the transaction
+// into the function body via the gin context
 func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 	currentNode := c.Node()
 	if ctxName, ok := ginFunctionCall(currentNode, manager.getDecoratorPackage()); ok {

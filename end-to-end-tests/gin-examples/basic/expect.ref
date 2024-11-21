@@ -70,7 +70,7 @@
  
  func main() {
 -	r := setupRouter()
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++     NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("gin - basic"), newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}
