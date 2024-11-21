@@ -45,7 +45,7 @@
  			panic(err)
  		}
  		fmt.Println(msg.Text)
-@@ -39,11 +34,16 @@
+@@ -39,12 +34,17 @@
  }
  
  func doStreamUnary(ctx context.Context, client sampleapp.SampleApplicationClient) {
@@ -58,11 +58,12 @@
  		panic(err)
  	}
  	for i := 0; i < 3; i++ {
-+		// NR WARN: Unchecked Error, please consult New Relic documentation on error capture
  		if err := stream.Send(&sampleapp.Message{Text: "Hello DoStreamUnary"}); err != nil {
++			nrTxn.NoticeError(err)
  			if err == io.EOF {
  				break
-@@ -53,18 +48,25 @@
+ 			}
+@@ -53,18 +47,25 @@
  	}
  	msg, err := stream.CloseAndRecv()
  	if err != nil {
@@ -89,7 +90,7 @@
  		for {
  			msg, err := stream.Recv()
  			if err == io.EOF {
-@@ -72,12 +63,15 @@
+@@ -72,13 +62,15 @@
  				return
  			}
  			if err != nil {
@@ -101,12 +102,12 @@
 -	}()
 +	}(nrTxn.NewGoroutine())
  	for i := 0; i < 3; i++ {
-+		// NR WARN: Unchecked Error, please consult New Relic documentation on error capture
-+		// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors
  		if err := stream.Send(&sampleapp.Message{Text: "Hello DoStreamStream"}); err != nil {
++			nrTxn.NoticeError(err)
  			panic(err)
  		}
-@@ -87,6 +76,9 @@
+ 	}
+@@ -87,6 +73,9 @@
  }
  
  func doClientCalls(ctx context.Context, client sampleapp.SampleApplicationClient) {
@@ -116,7 +117,7 @@
  	doUnaryUnary(ctx, client)
  	doUnaryStream(ctx, client)
  	doStreamUnary(ctx, client)
-@@ -94,8 +86,15 @@
+@@ -94,8 +83,15 @@
  }
  
  func main() {
@@ -132,7 +133,7 @@
  	)
  	if err != nil {
  		panic(err)
-@@ -105,5 +102,9 @@
+@@ -105,5 +99,9 @@
  	client := sampleapp.NewSampleApplicationClient(conn)
  	ctx := context.Background()
  
