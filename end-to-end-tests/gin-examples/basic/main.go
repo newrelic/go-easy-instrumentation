@@ -16,6 +16,12 @@ func setupRouter() *gin.Engine {
 	// Ping test
 	r.GET("/ping", func(c *gin.Context) {
 		c.String(http.StatusOK, "pong")
+		// make a dummy request and err check
+		_, err := http.Get("http://localhost:8080/ping")
+		if err != nil {
+			c.String(http.StatusInternalServerError, "error")
+			return
+		}
 	})
 	// two test
 	r.GET("/", func(c *gin.Context) {

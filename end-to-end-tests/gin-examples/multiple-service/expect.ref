@@ -1,6 +1,6 @@
 --- a/main.go
 +++ b/main.go
-@@ -6,15 +6,26 @@
+@@ -6,15 +6,25 @@
  	"time"
  
  	"github.com/gin-gonic/gin"
@@ -18,13 +18,13 @@
  	e := gin.New()
 +	e.Use(nrgin.Middleware(nrTxn.Application()))
  	e.Use(gin.Recovery())
-+	// NR WARN: Since the handler function name is used as the transaction name,
-+	// anonymous functions do not get usefully named.
-+	// We encourage transforming anonymous functions into named functions
- 	e.GET("/", func(c *gin.Context) {
+-	e.GET("/", func(c *gin.Context) {
++	e.GET("/", func(c *gin.Context) { // NR WARN: Since the handler function name is used as the transaction name,
++		// anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/").End()
  		c.JSON(
  			http.StatusOK,
  			gin.H{
@@ -41,8 +41,8 @@
  	e.Use(gin.Recovery())
  	e.GET("/", func(c *gin.Context) {
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/").End()
  		c.JSON(
  			http.StatusOK,
  			gin.H{
@@ -50,7 +50,7 @@
  }
  
  func main() {
-+ NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("gin - multiple services"), newrelic.ConfigFromEnvironment())
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("gin - multiple services"), newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}

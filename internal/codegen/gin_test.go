@@ -60,7 +60,7 @@ func Test_NrGinMiddleware(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NrGinMiddleware(tt.args.call, tt.args.routerName, tt.args.agentVariableName); !reflect.DeepEqual(got, tt.want) {
+			if got := NrGinMiddleware(tt.args.routerName, tt.args.agentVariableName); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NrGinMiddleware() = %v, want %v", got, tt.want)
 			}
 		})
@@ -84,11 +84,6 @@ func Test_TxnFromGinContext(t *testing.T) {
 				ctxName:     "c",
 			},
 			want: &dst.AssignStmt{
-				Decs: dst.AssignStmtDecorations{
-					NodeDecs: dst.NodeDecs{
-						After: dst.EmptyLine,
-					},
-				},
 				Lhs: []dst.Expr{
 					&dst.Ident{
 						Name: "nrTxn",
@@ -115,58 +110,6 @@ func Test_TxnFromGinContext(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := TxnFromGinContext(tt.args.txnVariable, tt.args.ctxName); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("TxnFromGinContext() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_DeferStartSegment(t *testing.T) {
-	type args struct {
-		txnVariable string
-		route       string
-	}
-	tests := []struct {
-		name string
-		args args
-		want *dst.DeferStmt
-	}{
-		{
-			name: "defer start segment",
-			args: args{
-				txnVariable: "txn",
-				route:       `"api/route"`,
-			},
-			want: &dst.DeferStmt{
-				Call: &dst.CallExpr{
-					Fun: &dst.SelectorExpr{
-						X: &dst.CallExpr{
-							Fun: &dst.SelectorExpr{
-								X: &dst.Ident{
-									Name: "txn",
-								},
-								Sel: &dst.Ident{
-									Name: "StartSegment",
-								},
-							},
-							Args: []dst.Expr{
-								&dst.BasicLit{
-									Kind:  token.STRING,
-									Value: `"api/route"`,
-								},
-							},
-						},
-						Sel: &dst.Ident{
-							Name: "End",
-						},
-					},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := DeferStartSegment(tt.args.txnVariable, tt.args.route); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("DeferStartSegment() = %v, want %v", got, tt.want)
 			}
 		})
 	}

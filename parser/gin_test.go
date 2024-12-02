@@ -27,14 +27,24 @@ func TestInstrumentGinRouter(t *testing.T) {
 			expect: `package main
 
 import (
+	"time"
+
 	"github.com/gin-gonic/gin"
 	"github.com/newrelic/go-agent/v3/integrations/nrgin"
+	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 func main() {
+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if err != nil {
+		panic(err)
+	}
+
 	router := gin.Default()
 	router.Use(nrgin.Middleware(NewRelicAgent))
 	router.Run(":8000")
+
+	NewRelicAgent.Shutdown(5 * time.Second)
 }
 `,
 		},
@@ -91,15 +101,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer panicRecovery(t)
-			traceApp := ""
-			if tt.name == "detect and trace gin router in setup function" {
-				traceApp = testStatelessTracingFunction(t, tt.code, InstrumentMain)
-
-			} else {
-				traceApp = tt.code
-			}
-
-			got := testStatelessTracingFunction(t, traceApp, InstrumentGinMiddleware)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentMain, InstrumentGinMiddleware)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
@@ -150,13 +152,12 @@ import (
 
 func main() {
 	router := gin.Default()
-	// NR WARN: Since the handler function name is used as the transaction name,
-	// anonymous functions do not get usefully named.
-	// We encourage transforming anonymous functions into named functions
-	router.GET("/anon", func(c *gin.Context) {
+	router.GET("/anon", func(c *gin.Context) { // NR WARN: Since the handler function name is used as the transaction name,
+		// anonymous functions do not get usefully named.
+		// We encourage transforming anonymous functions into named functions
 		nrTxn := nrgin.Transaction(c)
+		defer nrTxn.StartSegment("function literal").End()
 
-		defer nrTxn.StartSegment("/anon").End()
 		c.Writer.WriteString("anonymous function handler")
 		_, err := http.Get("https://example.com")
 		if err != nil {
@@ -165,8 +166,8 @@ func main() {
 	},
 		func(c *gin.Context) {
 			nrTxn := nrgin.Transaction(c)
+			defer nrTxn.StartSegment("function literal").End()
 
-			defer nrTxn.StartSegment("/anon-2").End()
 			c.Writer.WriteString("anonymous function handler - second function")
 			_, err := http.Get("https://example.com")
 			if err != nil {
@@ -181,7 +182,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, FindAnonymousFunctions)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentGinFunction)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
@@ -231,7 +232,6 @@ import (
 
 func HandleGinFunction(c *gin.Context) {
 	nrTxn := nrgin.Transaction(c)
-
 	c.Writer.WriteString("anonymous function handler")
 	// test call
 	_, err := http.Get("https://example.com")
