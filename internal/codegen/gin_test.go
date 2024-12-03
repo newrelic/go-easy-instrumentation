@@ -103,6 +103,11 @@ func Test_TxnFromGinContext(t *testing.T) {
 						},
 					},
 				},
+				Decs: dst.AssignStmtDecorations{
+					NodeDecs: dst.NodeDecs{
+						Before: dst.NewLine,
+					},
+				},
 			},
 		},
 	}
