@@ -4,7 +4,7 @@ type Fact uint8
 
 const (
 	// maximumFactValue is the value of the highest currently known Fact.
-	maximumFactValue = 3
+	maximumFactValue = 2
 
 	// None is the default value for Fact.
 	// Getting a Fact of type None means there are no facts for the given key.
@@ -15,9 +15,6 @@ const (
 
 	// GrpcServerStream is a Fact that represents a gRPC server stream object.
 	GrpcServerStream Fact = 2
-
-	// GinRouter is a Fact that represents a Gin router object.
-	GinRouter Fact = 3
 )
 
 func (f Fact) String() string {
@@ -28,8 +25,6 @@ func (f Fact) String() string {
 		return "GrpcServer"
 	case GrpcServerStream:
 		return "GrpcServerStream"
-	case GinRouter:
-		return "GinRouter"
 	default:
 		return "Unknown"
 	}
