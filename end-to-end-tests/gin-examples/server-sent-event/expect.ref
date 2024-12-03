@@ -34,22 +34,18 @@
  	// We are streaming current time to clients in the interval 10 seconds
  	go func() {
  		for {
-@@ -51,9 +61,17 @@
- 		"admin": "admin123", // username : admin, password : admin123
- 	}))
+@@ -53,7 +63,13 @@
  
-+	// NR WARN: Since the handler function name is used as the transaction name,
-+	// anonymous functions do not get usefully named.
-+	// We encourage transforming anonymous functions into named functions
-+	//
  	// Authorized client can stream the event
  	// Add event-streaming headers
 -	authorized.GET("/stream", HeadersMiddleware(), stream.serveHTTP(), func(c *gin.Context) {
 +	nrTxn = NewRelicAgent.StartTransaction("HeadersMiddleware")
 +	authorized.GET("/stream", HeadersMiddleware(nrTxn), stream.serveHTTP(), func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/stream").End()
  		v, ok := c.Get("clientChan")
  		if !ok {
  			return
@@ -75,7 +71,17 @@
  	event = &Event{
  		Message:       make(chan string),
  		NewClients:    make(chan chan string),
-@@ -136,7 +149,9 @@
+@@ -119,6 +132,9 @@
+ 
+ func (stream *Event) serveHTTP() gin.HandlerFunc {
+ 	return func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		// Initialize client channel
+ 		clientChan := make(ClientChan)
+ 
+@@ -136,8 +152,13 @@
  	}
  }
  
@@ -84,5 +90,9 @@
 +	defer nrTxn.StartSegment("HeadersMiddleware").End()
 +
  	return func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
  		c.Writer.Header().Set("Content-Type", "text/event-stream")
  		c.Writer.Header().Set("Cache-Control", "no-cache")
+ 		c.Writer.Header().Set("Connection", "keep-alive")

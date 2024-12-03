@@ -1,6 +1,6 @@
 --- a/main.go
 +++ b/main.go
-@@ -2,12 +2,20 @@
+@@ -2,14 +2,26 @@
  
  import (
  	"net/http"
@@ -16,13 +16,20 @@
 +	defer nrTxn.StartSegment("CookieTool").End()
 +
  	return func(c *gin.Context) {
-+		// NR WARN: Unchecked Error, please consult New Relic documentation on error capture
-+		// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors
-+		//
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
  		// Get cookie
- 		if cookie, err := c.Cookie("label"); err == nil {
+-		if cookie, err := c.Cookie("label"); err == nil {
++		if // NR WARN: Unchecked Error, please consult New Relic documentation on error capture
++		// https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors
++		cookie, err := c.Cookie("label"); err == nil {
  			if cookie == "ok" {
-@@ -23,17 +26,37 @@
+ 				c.Next()
+ 				return
+@@ -23,17 +29,34 @@
  }
  
  func main() {
@@ -35,13 +42,10 @@
  
 +	route.Use(nrgin.Middleware(NewRelicAgent))
 +
-+	// NR WARN: Since the handler function name is used as the transaction name,
-+	// anonymous functions do not get usefully named.
-+	// We encourage transforming anonymous functions into named functions
  	route.GET("/login", func(c *gin.Context) {
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/login").End()
  		// Set cookie {"label": "ok" }, maxAge 30 seconds.
  		c.SetCookie("label", "ok", 30, "/", "localhost", false, true)
  		c.String(200, "Login success!")
@@ -51,8 +55,8 @@
 +	nrTxn := NewRelicAgent.StartTransaction("CookieTool")
 +	route.GET("/home", CookieTool(nrTxn), func(c *gin.Context) {
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/home").End()
  		c.JSON(200, gin.H{"data": "Your home page"})
  	})
 +	nrTxn.End()

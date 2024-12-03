@@ -113,16 +113,15 @@
  )
  
  func rateLimit(c *gin.Context) {
-@@ -47,6 +48,8 @@
+@@ -47,6 +48,7 @@
  }
  
  func roomPOST(c *gin.Context) {
 +	nrTxn := nrgin.Transaction(c)
-+
  	roomid := c.Param("roomid")
  	nick := c.Query("nick")
  	message := c.PostForm("message")
-@@ -67,17 +70,19 @@
+@@ -67,17 +69,18 @@
  		"message": html.EscapeString(message),
  	}
  	messages.Add("inbound", 1)
@@ -133,7 +132,6 @@
  
  func streamRoom(c *gin.Context) {
 +	nrTxn := nrgin.Transaction(c)
-+
  	roomid := c.Param("roomid")
 -	listener := openListener(roomid)
 +	listener := openListener(roomid, nrTxn)
@@ -145,7 +143,7 @@
  		ticker.Stop()
  		users.Add("disconnected", 1)
  	}()
-@@ -88,7 +85,7 @@
+@@ -88,7 +83,7 @@
  			messages.Add("outbound", 1)
  			c.SSEvent("message", msg)
  		case <-ticker.C:

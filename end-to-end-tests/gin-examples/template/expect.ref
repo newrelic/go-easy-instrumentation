@@ -9,7 +9,7 @@
  )
  
  func formatAsDate(t time.Time) string {
-@@ -15,18 +17,32 @@
+@@ -15,7 +17,13 @@
  }
  
  func main() {
@@ -23,16 +23,15 @@
  	router.Delims("{[{", "}]}")
  	router.SetFuncMap(template.FuncMap{
  		"formatAsDate": formatAsDate,
- 	})
+@@ -23,10 +30,17 @@
  	router.LoadHTMLFiles("./testdata/raw.tmpl")
  
-+	// NR WARN: Since the handler function name is used as the transaction name,
-+	// anonymous functions do not get usefully named.
-+	// We encourage transforming anonymous functions into named functions
  	router.GET("/raw", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/raw").End()
  		c.HTML(http.StatusOK, "raw.tmpl", gin.H{
  			"now": time.Date(2017, 0o7, 0o1, 0, 0, 0, 0, time.UTC),
  		})

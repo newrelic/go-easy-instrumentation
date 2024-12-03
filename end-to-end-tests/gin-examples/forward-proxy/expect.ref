@@ -24,7 +24,7 @@
  	r.Use(ForwardMid)
  
  	// Create a catchall route
-@@ -20,20 +23,25 @@
+@@ -20,20 +23,24 @@
  	if err := r.Run(":8888"); err != nil {
  		panic(err)
  	}
@@ -34,7 +34,6 @@
  
  func ForwardMid(c *gin.Context) {
 +	nrTxn := nrgin.Transaction(c)
-+
  	// !!! adapt to your request header set
  	if v, ok := c.Request.Header["Forward"]; ok {
  		if v[0] == "ok" {
@@ -51,7 +50,7 @@
  			c.Writer.WriteHeader(resp.StatusCode)
  			io.Copy(c.Writer, resp.Body)
  			c.Abort()
-@@ -44,7 +39,9 @@
+@@ -44,7 +38,9 @@
  	c.Next()
  }
  
@@ -62,7 +61,7 @@
  	for k, vv := range src {
  		for _, v := range vv {
  			dst.Add(k, v)
-@@ -55,7 +52,9 @@
+@@ -55,7 +51,9 @@
  func Reverse(c *gin.Context) {
  	remote, _ := url.Parse("http://xxx.xxx.xxx")
  	proxy := httputil.NewSingleHostReverseProxy(remote)

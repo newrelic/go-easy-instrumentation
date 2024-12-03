@@ -12,7 +12,7 @@
  )
  
  var html = template.Must(template.New("https").Parse(`
-@@ -21,13 +22,25 @@
+@@ -21,13 +22,24 @@
  `))
  
  func main() {
@@ -28,17 +28,16 @@
 +	r.Use(nrgin.Middleware(NewRelicAgent))
  	r.SetHTMLTemplate(html)
  
-+	// NR WARN: Since the handler function name is used as the transaction name,
-+	// anonymous functions do not get usefully named.
-+	// We encourage transforming anonymous functions into named functions
  	r.GET("/welcome", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/welcome").End()
  		c.HTML(http.StatusOK, "https", gin.H{
  			"status": "success",
  		})
-@@ -35,4 +41,6 @@
+@@ -35,4 +40,6 @@
  
  	// Listen and Server in https://127.0.0.1:8080
  	r.RunTLS(":8080", "./testdata/server.pem", "./testdata/server.key")

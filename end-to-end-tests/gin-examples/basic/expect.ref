@@ -24,9 +24,8 @@
 +	r.Use(nrgin.Middleware(nrTxn.Application()))
 +
  	// Ping test
--	r.GET("/ping", func(c *gin.Context) {
-+	r.GET("/ping", func(c *gin.Context) { // NR WARN: Since the handler function name is used as the transaction name,
-+		// anonymous functions do not get usefully named.
+ 	r.GET("/ping", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
 +		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
@@ -65,7 +64,7 @@
  		user := c.Params.ByName("name")
  		value, ok := db[user]
  		if ok {
-@@ -63,6 +61,9 @@
+@@ -63,6 +60,9 @@
  	  	-d '{"value":"bar"}'
  	*/
  	authorized.POST("admin", func(c *gin.Context) {
@@ -75,7 +74,7 @@
  		user := c.MustGet(gin.AuthUserKey).(string)
  
  		// Parse JSON
-@@ -80,7 +81,16 @@
+@@ -80,7 +80,16 @@
  }
  
  func main() {

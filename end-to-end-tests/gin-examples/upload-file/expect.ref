@@ -1,6 +1,6 @@
 --- a/multiple/main.go
 +++ b/multiple/main.go
-@@ -3,16 +3,31 @@
+@@ -3,16 +3,30 @@
  import (
  	"net/http"
  	"path/filepath"
@@ -22,17 +22,16 @@
  	// Set a lower memory limit for multipart forms (default is 32 MiB)
  	router.MaxMultipartMemory = 8 << 20 // 8 MiB
  	router.Static("/", "./public")
-+	// NR WARN: Since the handler function name is used as the transaction name,
-+	// anonymous functions do not get usefully named.
-+	// We encourage transforming anonymous functions into named functions
  	router.POST("/upload", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/upload").End()
  		name := c.PostForm("name")
  		email := c.PostForm("email")
  
-@@ -35,4 +40,6 @@
+@@ -35,4 +39,6 @@
  		c.String(http.StatusOK, "Uploaded successfully %d files with fields name=%s and email=%s.", len(files), name, email)
  	})
  	router.Run(":8080")
@@ -65,8 +64,8 @@
  	router.Static("/", "./public")
  	router.POST("/upload", func(c *gin.Context) {
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/upload").End()
  		name := c.PostForm("name")
  		email := c.PostForm("email")
  

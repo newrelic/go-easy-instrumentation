@@ -12,6 +12,14 @@ const (
 	WarnHeader string = "NR WARN"
 )
 
+func writeComment(node dst.Node, comments []string) {
+	decs := node.Decorations()
+	if len(decs.Start) > 0 {
+		comments = append(comments, "//")
+	}
+	decs.Start.Prepend(comments...)
+}
+
 // Info appends a new relic info comment to the node.
 // This function is used to add comments that will be written to the generated code.
 // The message is the main comment, and additionalInfo is a list of optional
@@ -24,12 +32,7 @@ func Info(pkg *decorator.Package, node dst.Node, message string, additionalInfo 
 		comments = append(comments, fmt.Sprintf("// %s", info))
 	}
 
-	decs := node.Decorations()
-	if len(decs.Start) > 0 {
-		comments = append(comments, "//")
-	}
-
-	decs.Start.Prepend(comments...)
+	writeComment(node, comments)
 	printer.Add(pkg, node, InfoHeader, message, additionalInfo...)
 }
 
@@ -41,11 +44,7 @@ func Warn(pkg *decorator.Package, node dst.Node, message string, additionalInfo 
 		comments = append(comments, fmt.Sprintf("// %s", info))
 	}
 
-	decs := node.Decorations()
-	if len(decs.Start) > 0 {
-		comments = append(comments, "//")
-	}
-
-	decs.Start.Prepend(comments...)
-	printer.Add(pkg, node, WarnHeader, message, additionalInfo...)
+	writeComment(node, comments)
+	printer.
+		Add(pkg, node, WarnHeader, message, additionalInfo...)
 }

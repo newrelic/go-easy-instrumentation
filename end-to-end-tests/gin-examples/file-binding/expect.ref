@@ -12,7 +12,7 @@
  )
  
  type BindFile struct {
-@@ -16,11 +17,23 @@
+@@ -16,11 +17,22 @@
  }
  
  func main() {
@@ -26,17 +26,16 @@
  	// Set a lower memory limit for multipart forms (default is 32 MiB)
  	router.MaxMultipartMemory = 8 << 20 // 8 MiB
  	router.Static("/", "./public")
-+	// NR WARN: Since the handler function name is used as the transaction name,
-+	// anonymous functions do not get usefully named.
-+	// We encourage transforming anonymous functions into named functions
  	router.POST("/upload", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("/upload").End()
  		var bindFile BindFile
  
  		// Bind file
-@@ -40,4 +48,6 @@
+@@ -40,4 +47,6 @@
  		c.String(http.StatusOK, fmt.Sprintf("File %s uploaded successfully with fields name=%s and email=%s.", file.Filename, bindFile.Name, bindFile.Email))
  	})
  	router.Run(":8080")

@@ -1,6 +1,6 @@
 --- a/main.go
 +++ b/main.go
-@@ -2,22 +2,40 @@
+@@ -2,22 +2,39 @@
  
  import (
  	"net/http"
@@ -24,13 +24,12 @@
  	// version 1
  	apiV1 := router.Group("/v1")
  
-+	// NR WARN: Since the handler function name is used as the transaction name,
-+	// anonymous functions do not get usefully named.
-+	// We encourage transforming anonymous functions into named functions
  	apiV1.GET("users", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("users").End()
  		c.JSON(http.StatusOK, "List Of V1 Users")
  	})
  
@@ -42,13 +41,13 @@
  
  	authV1.POST("users/add", AddV1User)
  
-@@ -25,15 +28,22 @@
+@@ -25,15 +27,22 @@
  	apiV2 := router.Group("/v2")
  
  	apiV2.GET("users", func(c *gin.Context) {
 +		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
 +
-+		defer nrTxn.StartSegment("users").End()
  		c.JSON(http.StatusOK, "List Of V2 Users")
  	})
  
@@ -66,7 +65,7 @@
  }
  
  func AddV1User(c *gin.Context) {
-@@ -48,7 +50,9 @@
+@@ -48,8 +49,13 @@
  	c.JSON(http.StatusOK, "V2 User added")
  }
  
@@ -75,5 +74,9 @@
 +	defer nrTxn.StartSegment("AuthMiddleWare").End()
 +
  	return func(c *gin.Context) {
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
  		// here you can add your authentication method to authorize users.
  		username := c.PostForm("user")
+ 		password := c.PostForm("password")
