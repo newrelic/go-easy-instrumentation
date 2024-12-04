@@ -9,7 +9,7 @@
  	"go.uber.org/ratelimit"
  )
  
-@@ -21,22 +23,35 @@
+@@ -21,22 +23,37 @@
  	log.SetOutput(gin.DefaultWriter)
  }
  
@@ -42,13 +42,15 @@
 +	app.Use(leakBucket(nrTxn))
  
  	app.GET("/rate", func(ctx *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(ctx)
 +		defer nrTxn.StartSegment("function literal").End()
 +
  		ctx.JSON(200, "rate limiting test")
  	})
  
-@@ -45,6 +47,15 @@
+@@ -45,6 +49,15 @@
  }
  
  func main() {

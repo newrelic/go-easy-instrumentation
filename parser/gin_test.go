@@ -165,6 +165,8 @@ func main() {
 		}
 	},
 		func(c *gin.Context) {
+			// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
+			// We encourage transforming anonymous functions into named functions
 			nrTxn := nrgin.Transaction(c)
 			defer nrTxn.StartSegment("function literal").End()
 

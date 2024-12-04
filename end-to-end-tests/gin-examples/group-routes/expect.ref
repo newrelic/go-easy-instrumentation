@@ -36,3 +36,95 @@
 -	addPingRoutes(v2)
 +	addPingRoutes(v2, nrTxn)
  }
+--- a/routes/ping.go
++++ b/routes/ping.go
+@@ -4,12 +4,21 @@
+ 	"net/http"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+-func addPingRoutes(rg *gin.RouterGroup) {
++func addPingRoutes(rg *gin.RouterGroup, nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("addPingRoutes").End()
++
+ 	ping := rg.Group("/ping")
+ 
+ 	ping.GET("/", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.JSON(http.StatusOK, "pong")
+ 	})
+ }
+--- a/routes/users.go
++++ b/routes/users.go
+@@ -4,18 +4,37 @@
+ 	"net/http"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+-func addUserRoutes(rg *gin.RouterGroup) {
++func addUserRoutes(rg *gin.RouterGroup, nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("addUserRoutes").End()
++
+ 	users := rg.Group("/users")
+ 
+ 	users.GET("/", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.JSON(http.StatusOK, "users")
+ 	})
+ 	users.GET("/comments", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.JSON(http.StatusOK, "users comments")
+ 	})
+ 	users.GET("/pictures", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.JSON(http.StatusOK, "users pictures")
+ 	})
+ }
+--- a/main.go
++++ b/main.go
+@@ -1,10 +1,22 @@
+ package main
+ 
+ import (
++	"time"
++
+ 	"github.com/gin-gonic/examples/group-routes/routes"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	// Our server will live in the routes package
+-	routes.Run()
++	nrTxn := NewRelicAgent.StartTransaction("Run")
++	routes.Run(nrTxn)
++	nrTxn.End()
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

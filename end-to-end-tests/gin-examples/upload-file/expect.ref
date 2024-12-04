@@ -40,7 +40,7 @@
  }
 --- a/single/main.go
 +++ b/single/main.go
-@@ -3,16 +3,28 @@
+@@ -3,16 +3,30 @@
  import (
  	"net/http"
  	"path/filepath"
@@ -63,13 +63,15 @@
  	router.MaxMultipartMemory = 8 << 20 // 8 MiB
  	router.Static("/", "./public")
  	router.POST("/upload", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
  		name := c.PostForm("name")
  		email := c.PostForm("email")
  
-@@ -32,4 +34,6 @@
+@@ -32,4 +36,6 @@
  		c.String(http.StatusOK, "File %s uploaded successfully with fields name=%s and email=%s.", file.Filename, name, email)
  	})
  	router.Run(":8080")

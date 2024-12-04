@@ -41,10 +41,12 @@
  
  	authV1.POST("users/add", AddV1User)
  
-@@ -25,15 +27,22 @@
+@@ -25,15 +27,24 @@
  	apiV2 := router.Group("/v2")
  
  	apiV2.GET("users", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
@@ -65,7 +67,7 @@
  }
  
  func AddV1User(c *gin.Context) {
-@@ -48,8 +49,13 @@
+@@ -48,8 +51,15 @@
  	c.JSON(http.StatusOK, "V2 User added")
  }
  
@@ -74,6 +76,8 @@
 +	defer nrTxn.StartSegment("AuthMiddleWare").End()
 +
  	return func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +

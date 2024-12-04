@@ -89,10 +89,7 @@ func defineTxnFromGinCtxLit(manager *InstrumentationManager, fn *dst.FuncLit, tx
 	for i, stmt := range fn.Body.List {
 		stmts[i+1] = stmt
 	}
-	if !manager.anonymousFunctionWarning {
-		manager.anonymousFunctionWarning = true
-		comment.Warn(manager.getDecoratorPackage(), stmts[0], "Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
-	}
+	comment.Warn(manager.getDecoratorPackage(), stmts[0], "Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
 	fn.Body.List = stmts
 }
 

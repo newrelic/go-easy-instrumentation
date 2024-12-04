@@ -29,7 +29,7 @@
  			if cookie == "ok" {
  				c.Next()
  				return
-@@ -23,17 +29,34 @@
+@@ -23,17 +29,38 @@
  }
  
  func main() {
@@ -43,6 +43,8 @@
 +	route.Use(nrgin.Middleware(NewRelicAgent))
 +
  	route.GET("/login", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
@@ -54,6 +56,8 @@
 -	route.GET("/home", CookieTool(), func(c *gin.Context) {
 +	nrTxn := NewRelicAgent.StartTransaction("CookieTool")
 +	route.GET("/home", CookieTool(nrTxn), func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
