@@ -11,86 +11,62 @@ import (
 )
 
 const (
-	NrginImportPath                = "github.com/newrelic/go-agent/v3/integrations/nrgin"
 	ginImportPath                  = "github.com/gin-gonic/gin"
 	ginContextObject               = "*" + ginImportPath + ".Context"
 	NewRelicAgentImportPath string = "github.com/newrelic/go-agent/v3/newrelic"
 )
 
-func ginMiddlewareCall(node dst.Node) (*dst.CallExpr, bool, string) {
-	switch v := node.(type) {
-	case *dst.AssignStmt:
-		if len(v.Rhs) == 1 {
-			if call, ok := v.Rhs[0].(*dst.CallExpr); ok {
-				if ident, ok := call.Fun.(*dst.Ident); ok {
-					if ident.Name == "Default" || ident.Name == "New" && ident.Path == ginImportPath {
-						if v.Lhs != nil {
-							return call, true, v.Lhs[0].(*dst.Ident).Name
-						}
-					}
+func ginMiddlewareCall(stmt dst.Stmt) string {
+	v, ok := stmt.(*dst.AssignStmt)
+	if !ok || len(v.Rhs) != 1 {
+		return ""
+	}
+	if call, ok := v.Rhs[0].(*dst.CallExpr); ok {
+		if ident, ok := call.Fun.(*dst.Ident); ok {
+			if ident.Name == "Default" || ident.Name == "New" && ident.Path == ginImportPath {
+				if v.Lhs != nil {
+					return v.Lhs[0].(*dst.Ident).Name
 				}
 			}
 		}
 	}
-	return nil, false, ""
+
+	return ""
 }
 
-// isGinHandler checks the type of a function or function literal declaration to determine if
-// this is a Gin handler
-func isGinHandler(nodeType *dst.FuncType, pkg *decorator.Package) (string, bool) {
+// getGinHandlerContext checks the type of a function or function literal declaration to determine if
+// this is a Gin handler. returns the context variable of the gin handler
+func getGinHandlerContext(nodeType *dst.FuncType, pkg *decorator.Package) string {
 	// gin functions should only have 1 parameter
 	if len(nodeType.Params.List) != 1 {
-		return "", false
+		return ""
 	}
 
 	// gin function parameters should only have one named parameter element
 	arg := nodeType.Params.List[0]
 	if len(arg.Names) != 1 {
-		return "", false
+		return ""
 	}
-
 	argType := util.TypeOf(arg.Type, pkg)
 	if argType == nil {
-		return "", false
+		return ""
 	}
 
 	if argType.String() == ginContextObject {
-		return arg.Names[0].Name, true
+		return arg.Names[0].Name
 	}
 
-	return "", false
-}
-
-func checkForGinContextFuncDecl(decl *dst.FuncDecl, pkg *decorator.Package) (string, bool) {
-	if decl.Name == nil {
-		return "", false
-	}
-
-	return isGinHandler(decl.Type, pkg)
-}
-
-func checkForGinContextFuncLit(funcLit *dst.FuncLit, pkg *decorator.Package) (string, bool) {
-	return isGinHandler(funcLit.Type, pkg)
+	return ""
 }
 
 // defineTxnFromGinCtx injects a line of code that extracts a transaction from the gin context into the function body
-func defineTxnFromGinCtx(fn *dst.FuncDecl, txnVariable string, ctxName string) {
-	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
+func defineTxnFromGinCtx(body *dst.BlockStmt, txnVariable string, ctxName string) {
+	stmts := make([]dst.Stmt, len(body.List)+1)
 	stmts[0] = codegen.TxnFromGinContext(txnVariable, ctxName)
-	for i, stmt := range fn.Body.List {
+	for i, stmt := range body.List {
 		stmts[i+1] = stmt
 	}
-	fn.Body.List = stmts
-}
-func defineTxnFromGinCtxLit(manager *InstrumentationManager, fn *dst.FuncLit, txnVariable string, ctxName string) {
-	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
-	// If the function is a gin anonymous route, append the comment after the transaction is defined
-	stmts[0] = codegen.TxnFromGinContext(txnVariable, ctxName)
-	for i, stmt := range fn.Body.List {
-		stmts[i+1] = stmt
-	}
-	comment.Warn(manager.getDecoratorPackage(), stmts[0], "Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
-	fn.Body.List = stmts
+	body.List = stmts
 }
 
 // Stateful Tracing Functions
@@ -100,12 +76,14 @@ func defineTxnFromGinCtxLit(manager *InstrumentationManager, fn *dst.FuncLit, tx
 // that are being traced by a transaction.
 func InstrumentGinMiddleware(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	// Check if any return true for ginMiddlewareCall
-	if _, ok, routerName := ginMiddlewareCall(stmt); ok {
-		// Append at the current stmt location
-		c.InsertAfter(codegen.NrGinMiddleware(routerName, tracing.AgentVariable()))
-		return true
+	routerName := ginMiddlewareCall(stmt)
+	if routerName == "" {
+		return false
 	}
-	return false
+	// Append at the current stmt location
+	manager.addImport(codegen.NrginImportPath)
+	c.InsertAfter(codegen.NrGinMiddleware(routerName, tracing.AgentVariable()))
+	return true
 }
 
 // Stateless Tracing Functions
@@ -118,21 +96,30 @@ func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 	currentNode := c.Node()
 	switch v := currentNode.(type) {
 	case *dst.FuncDecl:
-		if ctxName, ok := checkForGinContextFuncDecl(v, manager.getDecoratorPackage()); ok {
-			funcDecl := currentNode.(*dst.FuncDecl)
-			txnName := codegen.DefaultTransactionVariable
-			_, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(txnName))
-			if ok {
-				defineTxnFromGinCtx(funcDecl, txnName, ctxName)
-			}
+		ctxName := getGinHandlerContext(v.Type, manager.getDecoratorPackage())
+		if ctxName == "" {
+			return
 		}
+
+		funcDecl := currentNode.(*dst.FuncDecl)
+		txnName := codegen.DefaultTransactionVariable
+		_, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(txnName))
+		if ok {
+			defineTxnFromGinCtx(funcDecl.Body, txnName, ctxName)
+		}
+
 	case *dst.FuncLit:
-		if ctxName, ok := checkForGinContextFuncLit(v, manager.getDecoratorPackage()); ok {
-			funcLit := currentNode.(*dst.FuncLit)
-			txnName := codegen.DefaultTransactionVariable
-			tc := tracestate.FunctionBody(codegen.DefaultTransactionVariable).FuncLiteralDeclaration(manager.getDecoratorPackage(), funcLit)
-			tc.CreateSegment(funcLit)
-			defineTxnFromGinCtxLit(manager, funcLit, txnName, ctxName)
+		ctxName := getGinHandlerContext(v.Type, manager.getDecoratorPackage())
+		if ctxName == "" {
+			return
 		}
+
+		funcLit := currentNode.(*dst.FuncLit)
+		txnName := codegen.DefaultTransactionVariable
+		tc := tracestate.FunctionBody(codegen.DefaultTransactionVariable).FuncLiteralDeclaration(manager.getDecoratorPackage(), funcLit)
+		tc.CreateSegment(funcLit)
+		defineTxnFromGinCtx(funcLit.Body, txnName, ctxName)
+		comment.Warn(manager.getDecoratorPackage(), funcLit.Body.List[0], "Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
+
 	}
 }
