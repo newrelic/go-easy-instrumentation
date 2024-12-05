@@ -81,7 +81,6 @@ func InstrumentGinMiddleware(manager *InstrumentationManager, stmt dst.Stmt, c *
 		return false
 	}
 	// Append at the current stmt location
-	manager.addImport(codegen.NrginImportPath)
 	c.InsertAfter(codegen.NrGinMiddleware(routerName, tracing.AgentVariable()))
 	return true
 }
