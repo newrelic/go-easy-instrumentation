@@ -1,0 +1,86 @@
+--- a/main.go
++++ b/main.go
+@@ -2,22 +2,39 @@
+ 
+ import (
+ 	"net/http"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	router := gin.Default()
+ 
++	router.Use(nrgin.Middleware(NewRelicAgent))
++
+ 	// version 1
+ 	apiV1 := router.Group("/v1")
+ 
+ 	apiV1.GET("users", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.JSON(http.StatusOK, "List Of V1 Users")
+ 	})
+ 
+ 	// User only can be added by authorized person
+-	authV1 := apiV1.Group("/", AuthMiddleWare())
++	nrTxn := NewRelicAgent.StartTransaction("AuthMiddleWare")
++	authV1 := apiV1.Group("/", AuthMiddleWare(nrTxn))
++	nrTxn.End()
+ 
+ 	authV1.POST("users/add", AddV1User)
+ 
+@@ -25,15 +27,24 @@
+ 	apiV2 := router.Group("/v2")
+ 
+ 	apiV2.GET("users", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.JSON(http.StatusOK, "List Of V2 Users")
+ 	})
+ 
+ 	// User only can be added by authorized person
+-	authV2 := apiV2.Group("/", AuthMiddleWare())
++	nrTxn = NewRelicAgent.StartTransaction("AuthMiddleWare")
++	authV2 := apiV2.Group("/", AuthMiddleWare(nrTxn))
++	nrTxn.End()
+ 
+ 	authV2.POST("users/add", AddV2User)
+ 
+ 	_ = router.Run(":8081")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+ 
+ func AddV1User(c *gin.Context) {
+@@ -48,8 +51,15 @@
+ 	c.JSON(http.StatusOK, "V2 User added")
+ }
+ 
+-func AuthMiddleWare() gin.HandlerFunc {
++func AuthMiddleWare(nrTxn *newrelic.Transaction) gin.HandlerFunc {
++	defer nrTxn.StartSegment("AuthMiddleWare").End()
++
+ 	return func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		// here you can add your authentication method to authorize users.
+ 		username := c.PostForm("user")
+ 		password := c.PostForm("password")

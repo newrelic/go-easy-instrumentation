@@ -13,7 +13,11 @@
 		"dir": "end-to-end-tests/grpc"
 	},
 	{
-		"name": "errors",
-		"dir": "end-to-end-tests/errors"
+		"name": "gin - basic",
+		"dir": "end-to-end-tests/gin-examples/basic"
+	},
+	{
+		"name": "gin - multiple services",
+		"dir": "end-to-end-tests/gin-examples/multiple-service"
 	}
 ]}

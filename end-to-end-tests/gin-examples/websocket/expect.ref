@@ -1,0 +1,105 @@
+--- a/server/server.go
++++ b/server/server.go
+@@ -4,9 +4,12 @@
+ 	"flag"
+ 	"log"
+ 	"text/template"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
+ 	"github.com/gorilla/websocket"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ var addr = flag.String("addr", ":8080", "http service address")
+@@ -14,9 +14,11 @@
+ var upgrader = websocket.Upgrader{} // use default option
+ 
+ func echo(ctx *gin.Context) {
+-	w,r := ctx.Writer, ctx.Request
++	nrTxn := nrgin.Transaction(ctx)
++	w, r := ctx.Writer, ctx.Request
+ 	c, err := upgrader.Upgrade(w, r, nil)
+ 	if err != nil {
++		nrTxn.NoticeError(err)
+ 		log.Println("upgrade:", err)
+ 		return
+ 	}
+@@ -24,12 +24,14 @@
+ 	for {
+ 		mt, message, err := c.ReadMessage()
+ 		if err != nil {
++			nrTxn.NoticeError(err)
+ 			log.Println("read:", err)
+ 			break
+ 		}
+ 		log.Printf("recv:%s", message)
+ 		err = c.WriteMessage(mt, message)
+ 		if err != nil {
++			nrTxn.NoticeError(err)
+ 			log.Println("write:", err)
+ 			break
+ 		}
+@@ -41,15 +37,22 @@
+ }
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	flag.Parse()
+ 	log.SetFlags(0)
+ 	r := gin.Default()
++	r.Use(nrgin.Middleware(NewRelicAgent))
+ 	r.GET("/echo", echo)
+ 	r.GET("/", home)
+ 	log.Fatal(r.Run(*addr))
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+ 
+-
+ var homeTemplate = template.Must(template.New("").Parse(`
+ <!DOCTYPE html>
+ <html>
+--- a/client/client.go
++++ b/client/client.go
+@@ -9,11 +9,17 @@
+ 	"time"
+ 
+ 	"github.com/gorilla/websocket"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ var addr = flag.String("addr", "localhost:8080", "http service address")
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	flag.Parse()
+ 	log.SetFlags(0)
+ 
+@@ -31,6 +32,8 @@
+ 
+ 	done := make(chan struct{})
+ 
++	// NR INFO: go-easy-instrumentation doesn't support tracing goroutines in a main method; please instrument manually.
++	// https://docs.newrelic.com/docs/apm/agents/go-agent/instrumentation/instrument-go-transactions/#goroutines
+ 	go func() {
+ 		defer close(done)
+ 		for {
+@@ -73,4 +76,6 @@
+ 			return
+ 		}
+ 	}
+-}
+\ No newline at end of file
++
++	NewRelicAgent.Shutdown(5 * time.Second)
++}

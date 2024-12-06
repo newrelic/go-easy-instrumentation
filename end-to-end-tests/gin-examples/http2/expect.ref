@@ -1,0 +1,46 @@
+--- a/main.go
++++ b/main.go
+@@ -5,8 +5,11 @@
+ 	"log"
+ 	"net/http"
+ 	"os"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ var html = template.Must(template.New("https").Parse(`
+@@ -21,13 +22,24 @@
+ `))
+ 
+ func main() {
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
+ 	logger := log.New(os.Stderr, "", 0)
+ 	logger.Println("[WARNING] DON'T USE THE EMBED CERTS FROM THIS EXAMPLE IN PRODUCTION ENVIRONMENT, GENERATE YOUR OWN!")
+ 
+ 	r := gin.Default()
++	r.Use(nrgin.Middleware(NewRelicAgent))
+ 	r.SetHTMLTemplate(html)
+ 
+ 	r.GET("/welcome", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.HTML(http.StatusOK, "https", gin.H{
+ 			"status": "success",
+ 		})
+@@ -35,4 +40,6 @@
+ 
+ 	// Listen and Server in https://127.0.0.1:8080
+ 	r.RunTLS(":8080", "./testdata/server.pem", "./testdata/server.key")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

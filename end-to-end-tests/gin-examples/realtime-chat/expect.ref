@@ -1,0 +1,60 @@
+--- a/main.go
++++ b/main.go
+@@ -5,15 +5,26 @@
+ 	"io"
+ 	"math/rand"
+ 	"net/http"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ var roomManager *Manager
+ 
+ func main() {
+-	roomManager = NewRoomManager()
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
++	nrTxn := NewRelicAgent.StartTransaction("NewRoomManager")
++	roomManager = NewRoomManager(nrTxn)
++	nrTxn.End()
+ 	router := gin.Default()
++	router.Use(nrgin.Middleware(NewRelicAgent))
+ 	router.SetHTMLTemplate(html)
+ 
+ 	router.GET("/room/:roomid", roomGET)
+@@ -22,6 +25,8 @@
+ 	router.GET("/stream/:roomid", stream)
+ 
+ 	router.Run(":8080")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+ 
+ func stream(c *gin.Context) {
+--- a/rooms.go
++++ b/rooms.go
+@@ -2,6 +2,7 @@
+ 
+ import (
+ 	"github.com/dustin/go-broadcast"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ type Message struct {
+@@ -23,7 +24,9 @@
+ 	messages     chan *Message
+ }
+ 
+-func NewRoomManager() *Manager {
++func NewRoomManager(nrTxn *newrelic.Transaction) *Manager {
++	defer nrTxn.StartSegment("NewRoomManager").End()
++
+ 	manager := &Manager{
+ 		roomChannels: make(map[string]broadcast.Broadcaster),
+ 		open:         make(chan *Listener, 100),

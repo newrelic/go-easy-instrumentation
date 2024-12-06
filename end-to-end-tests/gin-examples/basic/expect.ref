@@ -1,0 +1,102 @@
+--- a/main.go
++++ b/main.go
+@@ -2,36 +2,68 @@
+ 
+ import (
+ 	"net/http"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ var db = make(map[string]string)
+ 
+-func setupRouter() *gin.Engine {
++func setupRouter(nrTxn *newrelic.Transaction) *gin.Engine {
++	defer nrTxn.StartSegment("setupRouter").End()
++
+ 	// Disable Console Color
+ 	// gin.DisableConsoleColor()
+ 	r := gin.Default()
+ 
++	r.Use(nrgin.Middleware(nrTxn.Application()))
++
+ 	// Ping test
+ 	r.GET("/ping", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.String(http.StatusOK, "pong")
++		// the "http.Get()" net/http method can not be instrumented and its outbound traffic can not be traced
++		// please see these examples of code patterns for external http calls that can be instrumented:
++		// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
++		//
+ 		// make a dummy request and err check
+ 		_, err := http.Get("http://localhost:8080/ping")
+ 		if err != nil {
++			nrTxn.NoticeError(err)
+ 			c.String(http.StatusInternalServerError, "error")
+ 			return
+ 		}
+ 	})
+ 	// two test
+ 	r.GET("/", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.String(http.StatusOK, "pong")
+ 	}, func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		c.String(http.StatusOK, "second function")
+ 	})
+ 
+ 	// Get user value
+ 	r.GET("/user/:name", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		user := c.Params.ByName("name")
+ 		value, ok := db[user]
+ 		if ok {
+@@ -63,6 +66,11 @@
+ 	  	-d '{"value":"bar"}'
+ 	*/
+ 	authorized.POST("admin", func(c *gin.Context) {
++		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
++		// We encourage transforming anonymous functions into named functions
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		user := c.MustGet(gin.AuthUserKey).(string)
+ 
+ 		// Parse JSON
+@@ -80,7 +88,16 @@
+ }
+ 
+ func main() {
+-	r := setupRouter()
++     NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("gin - basic"), newrelic.ConfigFromEnvironment())
++	if err != nil {
++		panic(err)
++	}
++
++	nrTxn := NewRelicAgent.StartTransaction("setupRouter")
++	r := setupRouter(nrTxn)
++	nrTxn.End()
+ 	// Listen and Server in 0.0.0.0:8080
+ 	r.Run(":8080")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

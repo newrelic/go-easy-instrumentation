@@ -214,7 +214,6 @@ func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 			return true
 		})
 	}
-
 	return returnFuncName, cannotInstrument
 }
 

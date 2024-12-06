@@ -37,7 +37,7 @@ func TestAddComment(t *testing.T) {
 	if len(testPrinter.comments) != 1 {
 		t.Errorf("Expected 1 comment, got %d", len(testPrinter.comments))
 	} else {
-		expected := "NR INFO - message\n\tadditionalInfo"
+		expected := "NR INFO - message\nadditionalInfo"
 		if testPrinter.comments[0] != expected {
 			t.Errorf("Expected %s, got %s", expected, testPrinter.comments[0])
 		}

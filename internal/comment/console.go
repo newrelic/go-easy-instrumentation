@@ -47,7 +47,7 @@ func (p *ConsolePrinter) Add(pkg *decorator.Package, node dst.Node, header, mess
 	}
 	b.WriteString(message)
 	for _, info := range additionalInfo {
-		b.WriteString("\n\t")
+		b.WriteString("\n")
 		b.WriteString(info)
 	}
 
