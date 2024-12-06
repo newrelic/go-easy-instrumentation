@@ -42,7 +42,7 @@ The following libraries are supported for automatic instrumentation. Listed belo
 | ------------ | --------- |
 | net/http     | 0.1.0 |
 | gRPC         | 0.2.0 |
-| Gin          | coming |
+| Gin          | 0.4.0 |
 
 ## Installation
 
