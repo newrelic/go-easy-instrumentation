@@ -337,7 +337,7 @@ func TestGetGinHandlerContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ok := getGinHandlerContext(tt.node, tt.pkg)
+			ok := getGinContextFromHandler(tt.node, tt.pkg)
 			if ok != tt.want {
 				t.Errorf("expected %v, got %v", tt.want, ok)
 			}

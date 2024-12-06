@@ -16,6 +16,7 @@ const (
 	NewRelicAgentImportPath string = "github.com/newrelic/go-agent/v3/newrelic"
 )
 
+// ginMiddlewareCall returns the variable name of the gin router so that new relic middleware can be appended
 func ginMiddlewareCall(stmt dst.Stmt) string {
 	v, ok := stmt.(*dst.AssignStmt)
 	if !ok || len(v.Rhs) != 1 {
@@ -34,9 +35,9 @@ func ginMiddlewareCall(stmt dst.Stmt) string {
 	return ""
 }
 
-// getGinHandlerContext checks the type of a function or function literal declaration to determine if
+// getGinContextFromHandler checks the type of a function or function literal declaration to determine if
 // this is a Gin handler. returns the context variable of the gin handler
-func getGinHandlerContext(nodeType *dst.FuncType, pkg *decorator.Package) string {
+func getGinContextFromHandler(nodeType *dst.FuncType, pkg *decorator.Package) string {
 	// gin functions should only have 1 parameter
 	if len(nodeType.Params.List) != 1 {
 		return ""
@@ -95,7 +96,7 @@ func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 	currentNode := c.Node()
 	switch v := currentNode.(type) {
 	case *dst.FuncDecl:
-		ctxName := getGinHandlerContext(v.Type, manager.getDecoratorPackage())
+		ctxName := getGinContextFromHandler(v.Type, manager.getDecoratorPackage())
 		if ctxName == "" {
 			return
 		}
@@ -108,7 +109,7 @@ func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 		}
 
 	case *dst.FuncLit:
-		ctxName := getGinHandlerContext(v.Type, manager.getDecoratorPackage())
+		ctxName := getGinContextFromHandler(v.Type, manager.getDecoratorPackage())
 		if ctxName == "" {
 			return
 		}
