@@ -29,19 +29,6 @@ var (
 	diffFile          string
 )
 
-// Strictly speaking this Config struct may be a relic of the old way the app used to
-// be structured and might be able to be removed in favor of the variables
-// set by Cobra's flags.
-
-type Config struct {
-	Debug             bool
-	PackageName       string
-	PackagePath       string
-	AppName           string
-	DiffFile          string
-	AgentVariableName string
-}
-
 var instrumentCmd = &cobra.Command{
 	Use:   "instrument",
 	Short: "add instrumentation",
@@ -61,25 +48,16 @@ func Instrument() {
 		log.Fatalf("-path \"%s\" is invalid: %v", packagePath, err)
 	}
 
-	cfg := Config{
-		PackageName:       defaultPackageName, // don't touch this
-		PackagePath:       packagePath,
-		AppName:           appName,
-		DiffFile:          diffFile,
-		AgentVariableName: agentVariableName,
-		Debug:             debug,
-	}
-
-	if cfg.Debug {
+	if debug {
 		comment.EnableConsolePrinter()
 	}
 
-	pkgs, err := decorator.Load(&packages.Config{Dir: cfg.PackagePath, Mode: packages.LoadSyntax}, cfg.PackageName)
+	pkgs, err := decorator.Load(&packages.Config{Dir: packagePath, Mode: packages.LoadSyntax}, defaultPackageName)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	manager := parser.NewInstrumentationManager(pkgs, cfg.AppName, cfg.AgentVariableName, cfg.DiffFile, cfg.PackagePath)
+	manager := parser.NewInstrumentationManager(pkgs, appName, agentVariableName, diffFile, packagePath)
 	err = manager.CreateDiffFile()
 	if err != nil {
 		log.Fatal(err)
