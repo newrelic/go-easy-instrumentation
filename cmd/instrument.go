@@ -41,11 +41,11 @@ var instrumentCmd = &cobra.Command{
 
 func Instrument() {
 	if packagePath == "" {
-		log.Fatal("-path is required")
+		log.Fatal("--path is required")
 	}
 
 	if _, err := os.Stat(packagePath); err != nil {
-		log.Fatalf("-path \"%s\" is invalid: %v", packagePath, err)
+		log.Fatalf("--path \"%s\" is invalid: %v", packagePath, err)
 	}
 
 	if debug {
