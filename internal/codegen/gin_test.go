@@ -60,8 +60,12 @@ func Test_NrGinMiddleware(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NrGinMiddleware(tt.args.routerName, tt.args.agentVariableName); !reflect.DeepEqual(got, tt.want) {
+			got, imp := NrGinMiddleware(tt.args.routerName, tt.args.agentVariableName)
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NrGinMiddleware() = %v, want %v", got, tt.want)
+			}
+			if imp != NrginImportPath {
+				t.Errorf("NrGinMiddleware() = %v, want %v", imp, NrginImportPath)
 			}
 		})
 	}

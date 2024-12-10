@@ -11,7 +11,9 @@ const (
 	GinImportPath   = "github.com/gin-gonic/gin"
 )
 
-func NrGinMiddleware(routerName string, agentVariableName dst.Expr) *dst.ExprStmt {
+// GinMiddlewareCall returns a new relic gin middleware call, and a string representing the import path
+// of the library that contains the middleware function
+func NrGinMiddleware(routerName string, agentVariableName dst.Expr) (*dst.ExprStmt, string) {
 	return &dst.ExprStmt{
 		X: &dst.CallExpr{
 			Fun: &dst.SelectorExpr{
@@ -30,7 +32,7 @@ func NrGinMiddleware(routerName string, agentVariableName dst.Expr) *dst.ExprStm
 				},
 			},
 		},
-	}
+	}, NrginImportPath
 }
 func TxnFromGinContext(txnVariable string, ctxName string) *dst.AssignStmt {
 	return &dst.AssignStmt{

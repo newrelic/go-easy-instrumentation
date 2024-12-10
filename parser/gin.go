@@ -11,9 +11,8 @@ import (
 )
 
 const (
-	ginImportPath                  = "github.com/gin-gonic/gin"
-	ginContextObject               = "*" + ginImportPath + ".Context"
-	NewRelicAgentImportPath string = "github.com/newrelic/go-agent/v3/newrelic"
+	ginImportPath    = "github.com/gin-gonic/gin"
+	ginContextObject = "*" + ginImportPath + ".Context"
 )
 
 // ginMiddlewareCall returns the variable name of the gin router so that new relic middleware can be appended
@@ -82,7 +81,9 @@ func InstrumentGinMiddleware(manager *InstrumentationManager, stmt dst.Stmt, c *
 		return false
 	}
 	// Append at the current stmt location
-	c.InsertAfter(codegen.NrGinMiddleware(routerName, tracing.AgentVariable()))
+	middleware, goGet := codegen.NrGinMiddleware(routerName, tracing.AgentVariable())
+	c.InsertAfter(middleware)
+	manager.addImport(goGet)
 	return true
 }
 
@@ -120,6 +121,5 @@ func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 		tc.CreateSegment(funcLit)
 		defineTxnFromGinCtx(funcLit.Body, txnName, ctxName)
 		comment.Warn(manager.getDecoratorPackage(), funcLit.Body.List[0], "Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
-
 	}
 }
