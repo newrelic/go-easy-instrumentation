@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
@@ -17,6 +19,7 @@ const (
 	defaultPackageName       = "./..."
 	defaultPackagePath       = ""
 	defaultAppName           = ""
+	defaultOutputFilePath    = ""
 	defaultDiffFileName      = "new-relic-instrumentation.diff"
 	defaultDebug             = false
 )
@@ -39,13 +42,51 @@ var instrumentCmd = &cobra.Command{
 	},
 }
 
+// validateOutputFile checks that the custom output path is valid
+func validateOutputFile(path string) error {
+	if filepath.Ext(path) != ".diff" {
+		return errors.New("output file must have a .diff extension")
+	}
+
+	_, err := os.Stat(filepath.Dir(path))
+	if errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("output file directory does not exist: %v", err)
+	}
+
+	return nil
+}
+
+// setOutputFilePath returns a complete output file path based on the provided
+// diffFile flag value. If the flag is empty, the default path will be based
+// on the applicationPath.
+//
+// This will fail if the packagePath is not valid, and must be run after
+// validateing it.
+func setOutputFilePath(outputFilePath, applicationPath string) (string, error) {
+	if outputFilePath == "" {
+		outputFilePath = filepath.Join(applicationPath, defaultDiffFileName)
+	}
+
+	err := validateOutputFile(outputFilePath)
+	if err != nil {
+		return "", err
+	}
+
+	return outputFilePath, nil
+}
+
 func Instrument() {
 	if packagePath == "" {
 		log.Fatal("--path is required")
 	}
 
 	if _, err := os.Stat(packagePath); err != nil {
-		log.Fatalf("--path \"%s\" is invalid: %v", packagePath, err)
+		cobra.CheckErr(fmt.Errorf("--path \"%s\" is invalid: %v", packagePath, err))
+	}
+
+	outputFile, err := setOutputFilePath(diffFile, packagePath)
+	if err != nil {
+		cobra.CheckErr(err)
 	}
 
 	if debug {
@@ -57,7 +98,7 @@ func Instrument() {
 		log.Fatal(err)
 	}
 
-	manager := parser.NewInstrumentationManager(pkgs, appName, agentVariableName, diffFile, packagePath)
+	manager := parser.NewInstrumentationManager(pkgs, appName, agentVariableName, outputFile, packagePath)
 	err = manager.CreateDiffFile()
 	if err != nil {
 		log.Fatal(err)
@@ -87,17 +128,12 @@ func Instrument() {
 }
 
 func init() {
-	// base the default path to the diff file on the current working directory
-	wd, _ := os.Getwd()
-	relativePath, err := filepath.Rel(wd, filepath.Join(wd, defaultDiffFileName))
-	if err != nil {
-		relativePath = defaultDiffFileName
-	}
-
 	instrumentCmd.Flags().BoolVar(&debug, "debug", defaultDebug, "enable debugging output")
 	instrumentCmd.Flags().StringVar(&agentVariableName, "agent", defaultAgentVariableName, "set agent application variable name")
 	instrumentCmd.Flags().StringVar(&packagePath, "path", defaultPackagePath, "specify package path")
 	instrumentCmd.Flags().StringVar(&appName, "name", defaultAppName, "set application name for telemetry reporting")
-	instrumentCmd.Flags().StringVar(&diffFile, "diff", relativePath, "specify diff output file path")
+	instrumentCmd.Flags().StringVar(&diffFile, "diff", defaultOutputFilePath, "specify diff output file path")
+	cobra.MarkFlagFilename(instrumentCmd.Flags(), "diff", ".diff") // for file completion
+
 	rootCmd.AddCommand(instrumentCmd)
 }
