@@ -77,7 +77,7 @@ func setOutputFilePath(outputFilePath, applicationPath string) (string, error) {
 
 func Instrument() {
 	if packagePath == "" {
-		log.Fatal("--path is required")
+		cobra.CheckErr("--path is required")
 	}
 
 	if _, err := os.Stat(packagePath); err != nil {
