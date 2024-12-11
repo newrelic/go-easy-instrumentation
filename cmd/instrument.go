@@ -90,7 +90,7 @@ func Instrument() {
 	}
 
 	if debug {
-		comment.EnableConsolePrinter()
+		comment.EnableConsolePrinter(packagePath)
 	}
 
 	pkgs, err := decorator.Load(&packages.Config{Dir: packagePath, Mode: packages.LoadSyntax}, defaultPackageName)
@@ -119,12 +119,14 @@ func Instrument() {
 		log.Fatal(err)
 	}
 
+	// write debug comments before writing diff so that
+	// diff file console log is still easy to see
+	comment.WriteAll()
+
 	err = manager.WriteDiff()
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	comment.WriteAll()
 }
 
 func init() {

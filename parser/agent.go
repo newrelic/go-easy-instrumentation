@@ -257,7 +257,7 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 		cachedErrExpr := manager.errorCache.GetExpression()
 		if cachedErrExpr != nil {
 			stmt := manager.errorCache.GetStatement()
-			comment.Warn(pkg, stmt, fmt.Sprintf("Unchecked Error \"%s\", please consult New Relic documentation on error capture", util.WriteExpr(cachedErrExpr, pkg)))
+			comment.Warn(pkg, stmt, stmt, fmt.Sprintf("Unchecked Error \"%s\", please consult New Relic documentation on error capture", util.WriteExpr(cachedErrExpr, pkg)))
 			manager.errorCache.Clear()
 		}
 

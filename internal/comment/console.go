@@ -2,23 +2,24 @@ package comment
 
 import (
 	"log"
+	"path/filepath"
 	"strings"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
-	"github.com/newrelic/go-easy-instrumentation/internal/util"
 )
 
 type ConsolePrinter struct {
+	appRoot  string
 	comments []string
 }
 
 // initialize this if you want to use it at the start of the program
 var printer *ConsolePrinter
 
-func EnableConsolePrinter() {
+func EnableConsolePrinter(applicationPath string) {
 	printer = &ConsolePrinter{
-		comments: []string{},
+		appRoot: filepath.Base(applicationPath),
 	}
 }
 
@@ -37,12 +38,15 @@ func (p *ConsolePrinter) Add(pkg *decorator.Package, node dst.Node, header, mess
 		return
 	}
 
-	pos := util.Position(node, pkg)
+	pos := getPosition(pkg, node, p.appRoot)
+
 	b := strings.Builder{}
 	b.WriteString(header)
+	b.WriteByte(':')
 	b.WriteByte(' ')
-	if pos != nil {
-		b.WriteString(pos.String())
+
+	if pos != "" {
+		b.WriteString(pos)
 		b.WriteByte(' ')
 	}
 	b.WriteString(message)

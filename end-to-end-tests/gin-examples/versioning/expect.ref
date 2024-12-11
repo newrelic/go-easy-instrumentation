@@ -25,8 +25,8 @@
  	apiV1 := router.Group("/v1")
  
  	apiV1.GET("users", func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
++		// NR WARN: function literal segments will be named "function literal" by default
++		// declare a function instead to improve segment name generation
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
@@ -45,8 +45,8 @@
  	apiV2 := router.Group("/v2")
  
  	apiV2.GET("users", func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
++		// NR WARN: function literal segments will be named "function literal" by default
++		// declare a function instead to improve segment name generation
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
@@ -76,8 +76,8 @@
 +	defer nrTxn.StartSegment("AuthMiddleWare").End()
 +
  	return func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
++		// NR WARN: function literal segments will be named "function literal" by default
++		// declare a function instead to improve segment name generation
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +

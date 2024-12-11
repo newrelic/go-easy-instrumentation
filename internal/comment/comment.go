@@ -8,8 +8,11 @@ import (
 )
 
 const (
-	InfoHeader string = "NR INFO"
-	WarnHeader string = "NR WARN"
+	InfoHeader        string = "NR INFO"
+	InfoConsoleHeader string = "Info"
+
+	WarnHeader        string = "NR WARN"
+	WarnConsoleHeader string = "Warn"
 )
 
 func writeComment(node dst.Node, comments []string) {
@@ -24,7 +27,7 @@ func writeComment(node dst.Node, comments []string) {
 // This function is used to add comments that will be written to the generated code.
 // The message is the main comment, and additionalInfo is a list of optional
 // comments that will be printed on new lines below the main comment.
-func Info(pkg *decorator.Package, node dst.Node, message string, additionalInfo ...string) {
+func Info(pkg *decorator.Package, commentNode dst.Node, positionNode dst.Node, message string, additionalInfo ...string) {
 	comments := []string{
 		fmt.Sprintf("// %s: %s", InfoHeader, message),
 	}
@@ -32,11 +35,11 @@ func Info(pkg *decorator.Package, node dst.Node, message string, additionalInfo 
 		comments = append(comments, fmt.Sprintf("// %s", info))
 	}
 
-	writeComment(node, comments)
-	printer.Add(pkg, node, InfoHeader, message, additionalInfo...)
+	writeComment(commentNode, comments)
+	printer.Add(pkg, positionNode, InfoConsoleHeader, message, additionalInfo...)
 }
 
-func Warn(pkg *decorator.Package, node dst.Node, message string, additionalInfo ...string) {
+func Warn(pkg *decorator.Package, commentNode dst.Node, positionNode dst.Node, message string, additionalInfo ...string) {
 	comments := []string{
 		fmt.Sprintf("// %s: %s", WarnHeader, message),
 	}
@@ -44,7 +47,7 @@ func Warn(pkg *decorator.Package, node dst.Node, message string, additionalInfo 
 		comments = append(comments, fmt.Sprintf("// %s", info))
 	}
 
-	writeComment(node, comments)
+	writeComment(commentNode, comments)
 	printer.
-		Add(pkg, node, WarnHeader, message, additionalInfo...)
+		Add(pkg, positionNode, WarnConsoleHeader, message, additionalInfo...)
 }

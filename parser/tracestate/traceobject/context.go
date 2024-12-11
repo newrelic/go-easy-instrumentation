@@ -50,7 +50,7 @@ func (ctx *Context) AddToCall(pkg *decorator.Package, call *dst.CallExpr, transa
 				// if the context variable being passed is different from the one we know has a transaction
 				// pass a transaction to it defensively.
 				argumentString := util.WriteExpr(arg, pkg)
-				comment.Info(pkg, call,
+				comment.Info(pkg, call, call,
 					fmt.Sprintf("a transaction was added to to the context argument %s to ensure a transaction is passed to the function call", argumentString),
 					fmt.Sprintf("This may not be necessary, and can be safely removed if this context %s is a child of %s", argumentString, util.WriteExpr(dst.NewIdent(ctx.contextParameterName), pkg)),
 				)

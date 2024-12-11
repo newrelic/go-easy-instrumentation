@@ -12,7 +12,7 @@ import (
 
 func TestAddComment(t *testing.T) {
 	dstNode1 := &dst.Ident{Name: "hi"}
-	astNode1 := &ast.Ident{Name: "hi", NamePos: token.Pos(0)}
+	astNode1 := &ast.Ident{Name: "hi"}
 
 	pkg := &decorator.Package{
 		Decorator: &decorator.Decorator{
@@ -33,11 +33,11 @@ func TestAddComment(t *testing.T) {
 		comments: []string{},
 	}
 
-	testPrinter.Add(pkg, dstNode1, InfoHeader, "message", "additionalInfo")
+	testPrinter.Add(pkg, dstNode1, InfoConsoleHeader, "message", "additionalInfo")
 	if len(testPrinter.comments) != 1 {
 		t.Errorf("Expected 1 comment, got %d", len(testPrinter.comments))
 	} else {
-		expected := "NR INFO - message\nadditionalInfo"
+		expected := "Info: message\nadditionalInfo"
 		if testPrinter.comments[0] != expected {
 			t.Errorf("Expected %s, got %s", expected, testPrinter.comments[0])
 		}
