@@ -85,7 +85,7 @@ To modify which tests get run, modify the `end-to-end-tests/testcases.json` file
 
 ## Generate instrumentation suggestions
 
-For detailed instructions on how to generate instrumentation suggestions, see our documentation at [docs.newrelic.com](https://docs/apm/agents/go-agent/installation/install-automation-new-relic-go/#generate-suggestions).
+For detailed instructions on how to generate instrumentation suggestions, see our documentation at [docs.newrelic.com](https://docs.newrelic.com/docs/apm/agents/go-agent/installation/install-automation-new-relic-go/#generate-suggestions).
 
 ## Support
 This is an experimental product, and New Relic is not offering official support at the moment. Please create issues in Github if you are encountering a problem that you're unable to resolve. When creating issues, its vital that you include as much of the requested information as possible. This enables us to get to the root cause of the issue much more quickly. Please also make sure to search existing issues before creating a new one.
