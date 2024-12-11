@@ -1,6 +1,6 @@
 --- a/main.go
 +++ b/main.go
-@@ -2,36 +2,68 @@
+@@ -2,36 +2,69 @@
  
  import (
  	"net/http"
@@ -24,9 +24,9 @@
 +	r.Use(nrgin.Middleware(nrTxn.Application()))
 +
  	// Ping test
++	// NR WARN: function literal segments will be named "function literal" by default
++	// declare a function instead to improve segment name generation
  	r.GET("/ping", func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
@@ -44,16 +44,17 @@
  		}
  	})
  	// two test
++	// NR WARN: function literal segments will be named "function literal" by default
++	// declare a function instead to improve segment name generation
++	//
++	// NR WARN: function literal segments will be named "function literal" by default
++	// declare a function instead to improve segment name generation
  	r.GET("/", func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
  		c.String(http.StatusOK, "pong")
  	}, func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
@@ -61,21 +62,22 @@
  	})
  
  	// Get user value
++	// NR WARN: function literal segments will be named "function literal" by default
++	// declare a function instead to improve segment name generation
  	r.GET("/user/:name", func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
  		user := c.Params.ByName("name")
  		value, ok := db[user]
  		if ok {
-@@ -63,6 +66,11 @@
+@@ -62,7 +66,12 @@
+ 	  	-H 'content-type: application/json' \
  	  	-d '{"value":"bar"}'
  	*/
++	// NR WARN: function literal segments will be named "function literal" by default
++	// declare a function instead to improve segment name generation
  	authorized.POST("admin", func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
@@ -87,7 +89,7 @@
  
  func main() {
 -	r := setupRouter()
-+     NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("gin - basic"), newrelic.ConfigFromEnvironment())
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("gin - basic"), newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}

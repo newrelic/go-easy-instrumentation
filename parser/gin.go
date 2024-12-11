@@ -120,6 +120,6 @@ func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 		tc := tracestate.FunctionBody(codegen.DefaultTransactionVariable).FuncLiteralDeclaration(manager.getDecoratorPackage(), funcLit)
 		tc.CreateSegment(funcLit)
 		defineTxnFromGinCtx(funcLit.Body, txnName, ctxName)
-		comment.Warn(manager.getDecoratorPackage(), funcLit.Body.List[0], "Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.", "We encourage transforming anonymous functions into named functions")
+		comment.Warn(manager.getDecoratorPackage(), c.Parent(), c.Node(), "function literal segments will be named \"function literal\" by default", "declare a function instead to improve segment name generation")
 	}
 }

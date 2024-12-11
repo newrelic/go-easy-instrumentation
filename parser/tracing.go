@@ -65,7 +65,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 			return true
 		case *dst.GoStmt:
 			if tracing.IsMain() {
-				comment.Info(manager.getDecoratorPackage(), v, fmt.Sprintf("%s doesn't support tracing goroutines in a main method; please instrument manually.", common.ApplicationName), "https://docs.newrelic.com/docs/apm/agents/go-agent/instrumentation/instrument-go-transactions/#goroutines")
+				comment.Info(manager.getDecoratorPackage(), v, v, fmt.Sprintf("%s doesn't support tracing goroutines in a main method; please instrument manually.", common.ApplicationName), "https://docs.newrelic.com/docs/apm/agents/go-agent/instrumentation/instrument-go-transactions/#goroutines")
 				return false
 			}
 			switch fun := v.Call.Fun.(type) {
@@ -162,7 +162,8 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 	// Check if error cache is still full, if so add unchecked error warning
 	if manager.errorCache.GetExpression() != nil {
-		comment.Warn(manager.getDecoratorPackage(), manager.errorCache.GetStatement(), "Unchecked Error, please consult New Relic documentation on error capture", "https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors")
+		stmt := manager.errorCache.GetStatement()
+		comment.Warn(manager.getDecoratorPackage(), stmt, stmt, "Unchecked Error, please consult New Relic documentation on error capture", "https://docs.newrelic.com/docs/apm/agents/go-agent/api-guides/guide-using-go-agent-api/#errors")
 		manager.errorCache.Clear()
 	}
 

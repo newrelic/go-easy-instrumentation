@@ -8,7 +8,7 @@ import (
 
 func TestInfo(t *testing.T) {
 	node := &dst.Ident{Name: "hi"}
-	Info(nil, node, "message", "additionalInfo")
+	Info(nil, node, nil, "message", "additionalInfo")
 
 	decs := node.Decorations()
 	if len(decs.Start) != 2 {
@@ -26,7 +26,7 @@ func TestInfo(t *testing.T) {
 	}
 
 	nodeWithComments := &dst.Ident{Name: "hi", Decs: dst.IdentDecorations{NodeDecs: dst.NodeDecs{Start: []string{"// existing comment"}}}}
-	Info(nil, nodeWithComments, "message", "additionalInfo")
+	Info(nil, nodeWithComments, nil, "message", "additionalInfo")
 	decs = nodeWithComments.Decorations()
 	if len(decs.Start) != 4 {
 		t.Errorf("Expected 4 comments, got %d", len(decs.Start))
@@ -47,7 +47,7 @@ func TestInfo(t *testing.T) {
 
 func TestWarn(t *testing.T) {
 	node := &dst.Ident{Name: "hi"}
-	Warn(nil, node, "message", "additionalInfo")
+	Warn(nil, node, nil, "message", "additionalInfo")
 
 	decs := node.Decorations()
 	if len(decs.Start) != 2 {
@@ -65,7 +65,7 @@ func TestWarn(t *testing.T) {
 	}
 
 	nodeWithComments := &dst.Ident{Name: "hi", Decs: dst.IdentDecorations{NodeDecs: dst.NodeDecs{Start: []string{"// existing comment"}}}}
-	Warn(nil, nodeWithComments, "message", "additionalInfo")
+	Warn(nil, nodeWithComments, nil, "message", "additionalInfo")
 	decs = nodeWithComments.Decorations()
 	if len(decs.Start) != 4 {
 		t.Errorf("Expected 4 comments, got %d", len(decs.Start))

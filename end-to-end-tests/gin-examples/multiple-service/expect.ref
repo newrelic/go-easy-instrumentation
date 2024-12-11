@@ -18,9 +18,9 @@
  	e := gin.New()
 +	e.Use(nrgin.Middleware(nrTxn.Application()))
  	e.Use(gin.Recovery())
++	// NR WARN: function literal segments will be named "function literal" by default
++	// declare a function instead to improve segment name generation
  	e.GET("/", func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
@@ -38,9 +38,9 @@
  	e := gin.New()
 +	e.Use(nrgin.Middleware(nrTxn.Application()))
  	e.Use(gin.Recovery())
++	// NR WARN: function literal segments will be named "function literal" by default
++	// declare a function instead to improve segment name generation
  	e.GET("/", func(c *gin.Context) {
-+		// NR WARN: Since the handler function name is used as the transaction name, anonymous functions do not get usefully named.
-+		// We encourage transforming anonymous functions into named functions
 +		nrTxn := nrgin.Transaction(c)
 +		defer nrTxn.StartSegment("function literal").End()
 +
