@@ -54,7 +54,7 @@ Installation Steps have been moved to: https://docs.newrelic.com/docs/apm/agents
 
 1. Clone this repository to a directory on your system. For example:
     ```sh
-    git clone .../go-easy-instrumentation.git
+    git clone https://github.com/newrelic/go-easy-instrumentation.git
     ```
 2. Go into that directory:
     ```sh

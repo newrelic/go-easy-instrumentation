@@ -34,7 +34,7 @@ type tracedFunctionDecl struct {
 type tracingFunctions struct {
 	stateless  []StatelessTracingFunction
 	stateful   []StatefulTracingFunction
-	dependency []DependencyScan
+	dependency []FactDiscoveryFunction
 }
 
 // InstrumentationManager maintains state relevant to tracing across all files, packages and functions.
@@ -72,7 +72,7 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		tracingFunctions: tracingFunctions{
 			stateless:  []StatelessTracingFunction{},
 			stateful:   []StatefulTracingFunction{},
-			dependency: []DependencyScan{},
+			dependency: []FactDiscoveryFunction{},
 		},
 	}
 
@@ -103,7 +103,7 @@ func (m *InstrumentationManager) loadStatelessTracingFunctions(functions ...Stat
 	m.tracingFunctions.stateless = append(m.tracingFunctions.stateless, functions...)
 }
 
-func (m *InstrumentationManager) loadDependencyScans(scans ...DependencyScan) {
+func (m *InstrumentationManager) loadDependencyScans(scans ...FactDiscoveryFunction) {
 	m.tracingFunctions.dependency = append(m.tracingFunctions.dependency, scans...)
 }
 
@@ -365,7 +365,7 @@ func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions 
 }
 
 // traceFunctionCalls discovers and sets up tracing for all function calls in the current package
-func tracePackageFunctionCalls(manager *InstrumentationManager, dependencyScans ...DependencyScan) error {
+func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFunctions ...FactDiscoveryFunction) error {
 	hasMain := false
 	var errReturn error
 
@@ -385,9 +385,9 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, dependencyScans 
 						hasMain = true
 					}
 				}
-				if len(dependencyScans) > 0 {
+				if len(factDiscoveryFunctions) > 0 {
 					dst.Inspect(decl, func(n dst.Node) bool {
-						for _, scan := range dependencyScans {
+						for _, scan := range factDiscoveryFunctions {
 							entry, ok := scan(manager.getDecoratorPackage(), n)
 							if ok {
 								err := manager.facts.AddFact(entry)
