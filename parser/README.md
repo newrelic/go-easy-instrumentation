@@ -22,8 +22,7 @@ The manager maintains the state of this application, and is a centralized place 
 ### Fact Discovery Functions
 FactDiscoveryFunction identify a "Fact" about a code pattern, which can be referenced later to identify patterns that are essential for instrumentation. This function is executed on all nodes in the syntax tree of every function declared in an application. Facts are deterministic labels assigned to specific patterns. When a FactDiscoveryFunction identifies a fact in a node of the abstract syntax tree (AST), it should return a FactEntry for the manager to cache for future use.
 
-Here is an example of a `FactDiscoveryFunction` that finds a server stream object in gRPC code. Knowing the type of this allows us to detect it later and fetch
-instrumentation from it.
+Here is an example of a `FactDiscoveryFunction` that finds a server stream object in gRPC code.
 
 ```go
 // FindGrpcServerObject scans for a call to Register...Server in the package
@@ -65,35 +64,7 @@ func FindGrpcServerObject(pkg *decorator.Package, node dst.Node) (facts.Entry, b
 }
 ```
 
-### Stateful Tracing Functions
-`StatefulTracingFunctions` are functions that require knowledge of the state of New Relic tracing in the current scope of the application in order to apply their changes. That state is stored in the `tracestate.State` object. `StatefulTracingFunctions` are executed against every line of code in the body of a function being traced, as well as every line of code in functions that are declard in this application and called by the function being traced.
-
-Here is an example of how we add interceptors to gRPC servers. These interceptors need to be passed the go agent, so it requires knowledge of the 
-current state of tracing.
-
-```go
-// InstrumentGrpcServer adds the New Relic gRPC server interceptors to the grpc.NewServer call
-func InstrumentGrpcServer(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
-	// determine if this is a gRPC server initialization
-	callExpr, ok := grpcNewServerCall(stmt)
-	if !ok {
-		return false
-	}
-
-	// inject middleware
-	callExpr.Args = append(callExpr.Args, codegen.NrGrpcUnaryServerInterceptor(tracing.AgentVariable(), callExpr))
-	callExpr.Args = append(callExpr.Args, codegen.NrGrpcStreamServerInterceptor(tracing.AgentVariable(), callExpr))
-	manager.addImport(codegen.NrgrpcImportPath)
-	return true
-}
-```
-
-### Stateless Tracing Functions
-`StatelessTracingFunctions` are a powerful tool for identifying and modifying specific sections of code. These functions operate independently, without needing information about the current scope of the code they analyze, the Go agent application, Go agent transactions, or any prior modifications to the code. They are particularly effective in detecting code segments suitable for middleware injection or initiating tracing when middleware is already present.
-
-These functions are ideal for scenarios where a consistent operation can be applied to a specific code pattern. Stateless Tracing Functions are loaded into the manager during initialization and are executed during the second traversal of the abstract syntax tree (AST) on every node in the tree.
-
-Here is an example of a `StatelessTracingFunction` that detects functions that are methods of a gRPC server, then instruments and traces them. This function works because we have gathered facts that we can use to recognize the type that implements the gRPC server, and because we know that our stateful function will inject middleware into all gRPC servers that creates transactions for us. The lowercase functions are helper functions, and the `InstrumentGrpcServerMethod` is the `StatelesTracingFunction`.
+Knowing the type of the object that implements the server stream helps us use it later to get the New Relic transaction. Here is the function that does this.
 
 ```go
 // getTxnFromGrpcServer finds the transaction object from a gRPC server method
@@ -131,7 +102,39 @@ func getTxnFromGrpcServer(manager *InstrumentationManager, params []*dst.Field, 
 
 	return nil, false
 }
+```
 
+### Stateful Tracing Functions
+`StatefulTracingFunctions` are functions that require knowledge of the state of New Relic tracing in the current scope of the application in order to apply their changes. That state is stored in the `tracestate.State` object. `StatefulTracingFunctions` are executed against every line of code in the body of a function being traced, as well as every line of code in functions that are declard in this application and called by the function being traced.
+
+Here is an example of how we add interceptors to gRPC servers. These interceptors need to be passed the go agent, so it requires knowledge of the 
+current state of tracing.
+
+```go
+// InstrumentGrpcServer adds the New Relic gRPC server interceptors to the grpc.NewServer call
+func InstrumentGrpcServer(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
+	// determine if this is a gRPC server initialization
+	callExpr, ok := grpcNewServerCall(stmt)
+	if !ok {
+		return false
+	}
+
+	// inject middleware
+	callExpr.Args = append(callExpr.Args, codegen.NrGrpcUnaryServerInterceptor(tracing.AgentVariable(), callExpr))
+	callExpr.Args = append(callExpr.Args, codegen.NrGrpcStreamServerInterceptor(tracing.AgentVariable(), callExpr))
+	manager.addImport(codegen.NrgrpcImportPath)
+	return true
+}
+```
+
+### Stateless Tracing Functions
+`StatelessTracingFunctions` are a powerful tool for identifying and modifying specific sections of code. These functions operate independently, without needing information about the current scope of the code they analyze, the Go agent application, Go agent transactions, or any prior modifications to the code. They are particularly effective in detecting code segments suitable for middleware injection or initiating tracing when middleware is already present.
+
+These functions are ideal for scenarios where a consistent operation can be applied to a specific code pattern. Stateless Tracing Functions are loaded into the manager during initialization and are executed during the second traversal of the abstract syntax tree (AST) on every node in the tree.
+
+Here is an example of a `StatelessTracingFunction` that detects functions that are methods of a gRPC server, then instruments and traces them. This function works because we have gathered facts that we can use to recognize the type that implements the gRPC server, and because we know that our stateful function will inject middleware into all gRPC servers that creates transactions for us. The lowercase functions are helper functions, and the `InstrumentGrpcServerMethod` is the `StatelesTracingFunction`.
+
+```go
 // isGrpcServerMethod checks if a function declaration is a method of the user's gRPC server
 // based on facts generated from scanning their gRPC configuration code.
 func isGrpcServerMethod(manager *InstrumentationManager, funcDecl *dst.FuncDecl) bool {
