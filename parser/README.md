@@ -178,6 +178,6 @@ There are a few best practices that should always be followed when contributing 
 
 1. Due to the complex nature of what we are testing, unit tests will always be missing something. For this reason, it is best to keep the scope of the unit tests
 small, and focus on enforcing a set of expected behaviors on a function. This will help us protect against regressions as we add more features and modify the code in the future.
-2. Always cover new instrumentation with end to end tests. These are the most robust way to catch edge cases, and are a non-negotiable requirement for every feature added.
+2. Always cover new instrumentation with [end to end tests](../end-to-end-tests/README.md). These are the most robust way to catch edge cases, and are a non-negotiable requirement for every feature added.
 3. All code generation functionality should be written as an exported function in internal/codegen. This allows us to re-use that code across the application mroe easily.
 4. Use `internal/util.TypeOf` to type check things rather than using DST node paths when possible. This is more reliable, and accurate.
