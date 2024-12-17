@@ -1,3 +1,4 @@
+// traceobject defines an interface for objects that can contain a New Relic transaction, and how to interact with them.
 package traceobject
 
 import (

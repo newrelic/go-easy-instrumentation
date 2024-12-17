@@ -1,3 +1,5 @@
+// facts provides a way to represent determisitic facts about the code
+// in a simple key value store.
 package facts
 
 type Fact uint8
@@ -17,6 +19,7 @@ const (
 	GrpcServerStream Fact = 2
 )
 
+// String returns a string representation of the Fact.
 func (f Fact) String() string {
 	switch f {
 	case None:
