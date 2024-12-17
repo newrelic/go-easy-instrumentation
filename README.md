@@ -94,6 +94,7 @@ This is an experimental product, and New Relic is not offering official support 
 We encourage your contributions! Keep in mind when you submit your pull request, you'll need to sign the CLA via the click-through using CLA-Assistant. You only have to sign the CLA one time per project.
 If you have any questions, or to execute our corporate CLA, required if your contribution is on behalf of a company, please drop us an email at opensource@newrelic.com.
 
+To learn more about how to contribute features to this project, read the [parser readme](/parser/README.md). The [godoc](https://pkg.go.dev/github.com/newrelic/go-easy-instrumentation) for this project is also kept up to date, and can be a great resource.
 
 ## License
 Go easy instrumentation is licensed under the [Apache 2.0](http://apache.org/licenses/LICENSE-2.0.txt) License.

@@ -1,17 +1,28 @@
-/*
-Parser is a static analysis library that can detect and inject instrumentation code into a Go application.
-
-It does this in the following steps.
-
-1. Generate an abstract syntax tree from the application using DST. A unique tree will be generated for every package in the parsed application. Trees
-get stored in a cache that seperates data based on the pacakage it belongs to, and can be looked up by the path of that package, which is a unique identifier.
-
-2. Walk the syntax tree for each package in a given application. While we do that, we build a new data structure that contains data mapped by package. This data structure is looking for a few key pieces of information, but primarily, it is looking for user defined function declarations. These declarations are objects in the tree, and we can uniquely identify them by package name, and function name. Additional key information is discovered with `FactDiscoveryFunctions` and cached in an object called the `FactStore`, which can be used for recognizing key information that is not available in the scope of a single package or function call.
-
-3. Once we have gathered all our facts and impelentation data, we have all the information we need to instrument an application. The tool will walk through the entire syntax tree for each package again, making this the second full walk of the tree(s). This time, it will look for sections of code where middleware can be injected, tracing has already been started by middleware, or tracing could potentially be started using `StatelessTracingFunctions`. Then it will apply tracing to that section of code, as well as all reachable code that is called from the current scope, using `StatefulTracingFunctions`. Once this has completed, a modified tree with complete instrumentation written into the code has been built.
-
-4. Restore the modified tree back to code. That code is compared to the original application, and a GIT compatible diff is generated in memory. This diff file is written to a file in the local operating system where the user can review it and decide how to proceed.
-*/
+// Parser is a static analysis library that can detect and inject instrumentation code into a Go application.
+// It does this in the following steps:
+//
+//  1. Generate an abstract syntax tree from the application using DST. A unique tree will be generated for every
+//     package in the parsed application. Trees get stored in a cache that seperates data based on the pacakage it
+//     belongs to, and can be looked up by the path of that package, which is a unique identifier.
+//
+//  2. Walk the syntax tree for each package in a given application. While we do that, we build a new data structure
+//     that contains data mapped by package. This data structure is looking for a few key pieces of information, but
+//     primarily, it is looking for user defined function declarations. These declarations are objects in the tree, and
+//     we can uniquely identify them by package name, and function name. Additional key information is discovered with
+//     `FactDiscoveryFunctions` and cached in an object called the `FactStore`, which can be used for recognizing key
+//     information that is not available in the scope of a single package or function call.
+//
+//  3. Once we have gathered all our facts and impelentation data, we have all the information we need to instrument
+//     an application. The tool will walk through the entire syntax tree for each package again, making this the second
+//     full walk of the tree(s). This time, it will look for sections of code where middleware can be injected, tracing
+//     has already been started by middleware, or tracing could potentially be started using `StatelessTracingFunctions`.
+//     Then it will apply tracing to that section of code, as well as all reachable code that is called from the current
+//     scope, using `StatefulTracingFunctions`. Once this has completed, a modified tree with complete instrumentation
+//     written into the code has been built.
+//
+//  4. Restore the modified tree back to code. That code is compared to the original application, and a GIT compatible
+//     diff is generated in memory. This diff file is written to a file in the local operating system where the user can
+//     review it and decide how to proceed.
 package parser
 
 import (

@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	UntypedNil = "untyped nil"
+	untypedNil = "untyped nil"
 )
 
 // errorReturnIndex returns the index of the error return value in the function call
@@ -150,11 +150,11 @@ func errNilCheck(stmt *dst.BinaryExpr, pkg *decorator.Package) bool {
 		return false
 	}
 
-	if util.IsError(exprTypeX) && exprTypeY.String() == UntypedNil {
+	if util.IsError(exprTypeX) && exprTypeY.String() == untypedNil {
 		return true
 	}
 
-	if util.IsError(exprTypeY) && exprTypeX.String() == UntypedNil {
+	if util.IsError(exprTypeY) && exprTypeX.String() == untypedNil {
 		return true
 	}
 	return false

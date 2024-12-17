@@ -33,7 +33,7 @@ func TestAddComment(t *testing.T) {
 		comments: []string{},
 	}
 
-	testPrinter.Add(pkg, dstNode1, InfoConsoleHeader, "message", "additionalInfo")
+	testPrinter.add(pkg, dstNode1, InfoConsoleHeader, "message", "additionalInfo")
 	if len(testPrinter.comments) != 1 {
 		t.Errorf("Expected 1 comment, got %d", len(testPrinter.comments))
 	} else {
