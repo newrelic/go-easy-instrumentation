@@ -51,7 +51,7 @@
  }
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("errors"), newrelic.ConfigFromEnvironment())
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}
