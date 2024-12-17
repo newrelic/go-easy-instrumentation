@@ -46,12 +46,12 @@ type InstrumentationManager struct {
 	currentPackage    string
 	tracingFunctions  tracingFunctions
 	facts             facts.Keeper
-	packages          map[string]*PackageState // stores stateful information on packages by ID
+	packages          map[string]*packageState // stores stateful information on packages by ID
 	errorCache        errorcache.ErrorCache    // stores error handling status for functions
 }
 
 // PackageManager contains state relevant to tracing within a single package.
-type PackageState struct {
+type packageState struct {
 	pkg          *decorator.Package             // the package being instrumented
 	tracedFuncs  map[string]*tracedFunctionDecl // maintains state of tracing for functions within the package
 	importsAdded map[string]bool                // tracks imports added to the package
@@ -66,7 +66,7 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		diffFile:          diffFile,
 		appName:           appName,
 		agentVariableName: agentVariableName,
-		packages:          map[string]*PackageState{},
+		packages:          map[string]*packageState{},
 		facts:             facts.NewKeeper(),
 		errorCache:        errorcache.ErrorCache{},
 		tracingFunctions: tracingFunctions{
@@ -77,7 +77,7 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	}
 
 	for _, pkg := range pkgs {
-		manager.packages[pkg.ID] = &PackageState{
+		manager.packages[pkg.ID] = &packageState{
 			pkg:          pkg,
 			tracedFuncs:  map[string]*tracedFunctionDecl{},
 			importsAdded: map[string]bool{},

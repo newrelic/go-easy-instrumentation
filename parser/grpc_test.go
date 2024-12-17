@@ -651,7 +651,7 @@ func TestIsGrpcServerMethod(t *testing.T) {
 
 	manager := &InstrumentationManager{
 		currentPackage: "test",
-		packages: map[string]*PackageState{
+		packages: map[string]*packageState{
 			"test": {
 				pkg: &decorator.Package{
 					Package: &packages.Package{
@@ -740,7 +740,7 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 	astServerStream := &ast.Ident{Name: "stream"}
 	manager := &InstrumentationManager{
 		currentPackage: "test",
-		packages: map[string]*PackageState{
+		packages: map[string]*packageState{
 			"test": {
 				pkg: &decorator.Package{
 					Package: &packages.Package{

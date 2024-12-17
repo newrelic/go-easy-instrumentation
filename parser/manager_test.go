@@ -17,7 +17,7 @@ func Test_AddImport(t *testing.T) {
 		appName           string
 		agentVariableName string
 		currentPackage    string
-		packages          map[string]*PackageState
+		packages          map[string]*packageState
 	}
 	type args struct {
 		path string
@@ -31,7 +31,7 @@ func Test_AddImport(t *testing.T) {
 		{
 			name: "AddImport",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}}},
+				packages:       map[string]*packageState{"foo": {importsAdded: map[string]bool{}}},
 				currentPackage: "foo",
 			},
 			args:   args{path: "bar"},
@@ -40,7 +40,7 @@ func Test_AddImport(t *testing.T) {
 		{
 			name: "AddImport_nil_check",
 			fields: fields{
-				packages: map[string]*PackageState{"foo": {importsAdded: map[string]bool{}}},
+				packages: map[string]*packageState{"foo": {importsAdded: map[string]bool{}}},
 			},
 			args:   args{path: "bar"},
 			expect: false,
@@ -78,7 +78,7 @@ func Test_GetImports(t *testing.T) {
 		appName           string
 		agentVariableName string
 		currentPackage    string
-		packages          map[string]*PackageState
+		packages          map[string]*packageState
 	}
 
 	tests := []struct {
@@ -89,7 +89,7 @@ func Test_GetImports(t *testing.T) {
 		{
 			name: "GetImports_one_import",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{"bar": true}}},
+				packages:       map[string]*packageState{"foo": {importsAdded: map[string]bool{"bar": true}}},
 				currentPackage: "foo",
 			},
 			want: []string{"bar"},
@@ -97,7 +97,7 @@ func Test_GetImports(t *testing.T) {
 		{
 			name: "GetImports_empty",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}}},
+				packages:       map[string]*packageState{"foo": {importsAdded: map[string]bool{}}},
 				currentPackage: "foo",
 			},
 			want: []string{},
@@ -105,7 +105,7 @@ func Test_GetImports(t *testing.T) {
 		{
 			name: "GetImports_nil_check",
 			fields: fields{
-				packages: map[string]*PackageState{"foo": {importsAdded: map[string]bool{}}},
+				packages: map[string]*packageState{"foo": {importsAdded: map[string]bool{}}},
 			},
 			want: []string{},
 		},
@@ -134,7 +134,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 		appName           string
 		agentVariableName string
 		currentPackage    string
-		packages          map[string]*PackageState
+		packages          map[string]*packageState
 	}
 	type args struct {
 		decl *dst.FuncDecl
@@ -148,7 +148,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 		{
 			name: "CreateFunctionDeclaration",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{}}},
+				packages:       map[string]*packageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{}}},
 				currentPackage: "foo",
 			},
 			args:   args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
@@ -157,7 +157,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 		{
 			name: "CreateFunctionDeclaration_nil_check",
 			fields: fields{
-				packages: map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{}}},
+				packages: map[string]*packageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{}}},
 			},
 			args:   args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
 			expect: false,
@@ -165,7 +165,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 		{
 			name: "CreateFunctionDeclaration_already_exists",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
+				packages:       map[string]*packageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 				currentPackage: "foo",
 			},
 			args:   args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
@@ -210,7 +210,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 		appName           string
 		agentVariableName string
 		currentPackage    string
-		packages          map[string]*PackageState
+		packages          map[string]*packageState
 	}
 	type args struct {
 		decl *dst.FuncDecl
@@ -224,7 +224,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 		{
 			name: "UpdateFunctionDeclaration",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
+				packages:       map[string]*packageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 				currentPackage: "foo",
 			},
 			args:    args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
@@ -233,7 +233,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 		{
 			name: "UpdateFunctionDeclaration_nil_check",
 			fields: fields{
-				packages: map[string]*PackageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
+				packages: map[string]*packageState{"foo": {importsAdded: map[string]bool{}, tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 			},
 			args:    args{decl: &dst.FuncDecl{Name: &dst.Ident{Name: "bar"}}},
 			updates: false,
@@ -266,7 +266,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 
 // What if there are two instrumentable function invocations in a statement?
 func Test_GetPackageFunctionInvocation(t *testing.T) {
-	state := map[string]*PackageState{"foo": {
+	state := map[string]*packageState{"foo": {
 		tracedFuncs: map[string]*tracedFunctionDecl{"bar": {body: &dst.FuncDecl{}}},
 	}}
 	type fields struct {
@@ -275,7 +275,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 		appName           string
 		agentVariableName string
 		currentPackage    string
-		packages          map[string]*PackageState
+		packages          map[string]*packageState
 	}
 	type args struct {
 		node dst.Node
@@ -365,7 +365,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 		appName           string
 		agentVariableName string
 		currentPackage    string
-		packages          map[string]*PackageState
+		packages          map[string]*packageState
 	}
 	type args struct {
 		inv *invocationInfo
@@ -379,7 +379,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 		{
 			name: "function_should_be_instrumented",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
+				packages:       map[string]*packageState{"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 				currentPackage: "foo",
 			},
 			args: args{inv: &invocationInfo{packageName: "foo", functionName: "bar"}},
@@ -388,7 +388,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 		{
 			name: "nil_invocation",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
+				packages:       map[string]*packageState{"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}}},
 				currentPackage: "foo",
 			},
 			args: args{inv: nil},
@@ -397,7 +397,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 		{
 			name: "already_instrumented",
 			fields: fields{
-				packages:       map[string]*PackageState{"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {traced: true}}}},
+				packages:       map[string]*packageState{"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {traced: true}}}},
 				currentPackage: "foo",
 			},
 			args: args{inv: &invocationInfo{packageName: "foo", functionName: "bar"}},
@@ -406,7 +406,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 		{
 			name: "package_not_found",
 			fields: fields{
-				packages:       map[string]*PackageState{},
+				packages:       map[string]*packageState{},
 				currentPackage: "foo",
 			},
 			args: args{inv: &invocationInfo{packageName: "foo", functionName: "bar"}},
