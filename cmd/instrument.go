@@ -32,7 +32,7 @@ var (
 var instrumentCmd = &cobra.Command{
 	Use:   "instrument <path>",
 	Short: "add instrumentation",
-	Long:  "add instrumentation to existing application source files",
+	Long:  "add instrumentation to an application's source files and write these changes to a diff file",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		Instrument(args[0])
