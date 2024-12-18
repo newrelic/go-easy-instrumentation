@@ -50,9 +50,9 @@ for testnumber, testcase in enumerate(tests['tests']):
     test_diff = os.path.join('/tmp',f"{test_id}.diff")
     print(f"Running \"{testcase['name']}\" from \"{testcase['dir']}\" as {test_id}...")
 
-    proc_args = ['go', 'run', '.', 'instrument', '--diff', test_diff, '--path', testcase['dir']]
-    if appname := testcase.get('name'):
-        proc_args.extend(['--name', appname])
+    proc_args = ['go', 'run', '.', 'instrument', testcase['dir'], '--output', test_diff]
+#    if appname := testcase.get('name'):
+#        proc_args.extend(['--name', appname])
 
     status = subprocess.run(proc_args).returncode
     if status:

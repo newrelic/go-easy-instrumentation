@@ -121,7 +121,7 @@
  }
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("grpc app"), newrelic.ConfigFromEnvironment())
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}
@@ -189,7 +189,7 @@
  }
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigAppName("grpc app"), newrelic.ConfigFromEnvironment())
++	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
 +	if err != nil {
 +		panic(err)
 +	}

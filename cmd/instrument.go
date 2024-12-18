@@ -25,20 +25,17 @@ const (
 )
 
 var (
-	debug             bool
-	agentVariableName string
-	packagePath       string
-	appName           string
-	diffFile          string
+	debug    bool
+	diffFile string
 )
 
 var instrumentCmd = &cobra.Command{
-	Use:   "instrument",
+	Use:   "instrument <path>",
 	Short: "add instrumentation",
 	Long:  "add instrumentation to existing application source files",
-	Args:  cobra.ExactArgs(0),
+	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		Instrument()
+		Instrument(args[0])
 	},
 }
 
@@ -61,7 +58,7 @@ func validateOutputFile(path string) error {
 // on the applicationPath.
 //
 // This will fail if the packagePath is not valid, and must be run after
-// validateing it.
+// validating it.
 func setOutputFilePath(outputFilePath, applicationPath string) (string, error) {
 	if outputFilePath == "" {
 		outputFilePath = filepath.Join(applicationPath, defaultDiffFileName)
@@ -75,13 +72,13 @@ func setOutputFilePath(outputFilePath, applicationPath string) (string, error) {
 	return outputFilePath, nil
 }
 
-func Instrument() {
+func Instrument(packagePath string) {
 	if packagePath == "" {
-		cobra.CheckErr("--path is required")
+		cobra.CheckErr("path argument cannot be empty")
 	}
 
 	if _, err := os.Stat(packagePath); err != nil {
-		cobra.CheckErr(fmt.Errorf("--path \"%s\" is invalid: %v", packagePath, err))
+		cobra.CheckErr(fmt.Errorf("path argument \"%s\" is invalid: %v", packagePath, err))
 	}
 
 	outputFile, err := setOutputFilePath(diffFile, packagePath)
@@ -98,7 +95,7 @@ func Instrument() {
 		log.Fatal(err)
 	}
 
-	manager := parser.NewInstrumentationManager(pkgs, appName, agentVariableName, outputFile, packagePath)
+	manager := parser.NewInstrumentationManager(pkgs, defaultAppName, defaultAgentVariableName, outputFile, packagePath)
 	err = manager.CreateDiffFile()
 	if err != nil {
 		log.Fatal(err)
@@ -130,12 +127,9 @@ func Instrument() {
 }
 
 func init() {
-	instrumentCmd.Flags().BoolVar(&debug, "debug", defaultDebug, "enable debugging output")
-	instrumentCmd.Flags().StringVar(&agentVariableName, "agent", defaultAgentVariableName, "set agent application variable name")
-	instrumentCmd.Flags().StringVar(&packagePath, "path", defaultPackagePath, "specify package path")
-	instrumentCmd.Flags().StringVar(&appName, "name", defaultAppName, "set application name for telemetry reporting")
-	instrumentCmd.Flags().StringVar(&diffFile, "diff", defaultOutputFilePath, "specify diff output file path")
-	cobra.MarkFlagFilename(instrumentCmd.Flags(), "diff", ".diff") // for file completion
+	instrumentCmd.Flags().BoolVarP(&debug, "debug", "D", defaultDebug, "enable debugging output")
+	instrumentCmd.Flags().StringVarP(&diffFile, "output", "o", defaultOutputFilePath, "specify diff output file path")
+	cobra.MarkFlagFilename(instrumentCmd.Flags(), "output", ".diff") // for file completion
 
 	rootCmd.AddCommand(instrumentCmd)
 }
