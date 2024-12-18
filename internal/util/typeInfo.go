@@ -68,6 +68,7 @@ func FunctionName(call *dst.CallExpr) string {
 	return ""
 }
 
+// Position returns the position of the node in the file
 func Position(node dst.Node, pkg *decorator.Package) *token.Position {
 	if node == nil || pkg == nil {
 		return nil
@@ -82,6 +83,10 @@ func Position(node dst.Node, pkg *decorator.Package) *token.Position {
 	return &pos
 }
 
+// WriteExpr returns a shortened string representation of the expression
+// as go code.
+//
+// Warning: This may not be equivilent to how it appears in the source code!
 func WriteExpr(expr dst.Expr, pkg *decorator.Package) string {
 	if expr == nil || pkg == nil {
 		return ""
@@ -95,6 +100,7 @@ func WriteExpr(expr dst.Expr, pkg *decorator.Package) string {
 	return types.ExprString(astExpr.(ast.Expr))
 }
 
+// IsError returns true if the type is an error type
 func IsError(t types.Type) bool {
 	if t == nil {
 		return false
@@ -114,6 +120,10 @@ func IsError(t types.Type) bool {
 	return o != nil && o.Pkg() == nil && o.Name() == "error"
 }
 
+// PrintNode returns a string representation of the node
+// as go code.
+//
+// Warning: `gofmt` is applied to the output.
 func PrintNode(pkg *decorator.Package, node dst.Node) string {
 	if node == nil || pkg == nil {
 		return ""

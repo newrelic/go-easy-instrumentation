@@ -6,6 +6,8 @@ import (
 	"github.com/dave/dst"
 )
 
+// AssertExpressionEqual compares two dst.Expr and returns true if they are equal
+// by recursively comparing their fields and values.
 func AssertExpressionEqual(a dst.Expr, b dst.Expr) bool {
 	return compareExpr(a, b)
 }

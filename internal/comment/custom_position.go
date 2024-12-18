@@ -10,6 +10,17 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 )
 
+// getPosition creates a human readable string representing the position of a node in an application.
+// In order to improve readability, the filename will be localized to the root of the application.
+// The format of the string is as follows based on the positional info available:
+//
+// Info 					|		Formatting
+// ------------------------------------------------------------------
+// filename,line, column	|	filename line:column
+// filename, line			|	filename line
+// filename, column			|	filename
+// filename					|	filename
+// invalid or empty			|	""
 func getPosition(pkg *decorator.Package, node dst.Node, appRoot string) string {
 	pos := util.Position(node, pkg)
 	if pos == nil || !pos.IsValid() {
@@ -31,11 +42,10 @@ func getPosition(pkg *decorator.Package, node dst.Node, appRoot string) string {
 	if pos.Line != 0 {
 		path.WriteByte(' ')
 		path.WriteString(strconv.Itoa(pos.Column))
-	}
-
-	if pos.Column != 0 {
-		path.WriteByte(':')
-		path.WriteString(strconv.Itoa(pos.Line))
+		if pos.Column != 0 {
+			path.WriteByte(':')
+			path.WriteString(strconv.Itoa(pos.Line))
+		}
 	}
 
 	return path.String()

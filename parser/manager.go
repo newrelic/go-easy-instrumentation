@@ -34,7 +34,7 @@ type tracedFunctionDecl struct {
 type tracingFunctions struct {
 	stateless  []StatelessTracingFunction
 	stateful   []StatefulTracingFunction
-	dependency []DependencyScan
+	dependency []FactDiscoveryFunction
 }
 
 // InstrumentationManager maintains state relevant to tracing across all files, packages and functions.
@@ -46,12 +46,12 @@ type InstrumentationManager struct {
 	currentPackage    string
 	tracingFunctions  tracingFunctions
 	facts             facts.Keeper
-	packages          map[string]*PackageState // stores stateful information on packages by ID
+	packages          map[string]*packageState // stores stateful information on packages by ID
 	errorCache        errorcache.ErrorCache    // stores error handling status for functions
 }
 
 // PackageManager contains state relevant to tracing within a single package.
-type PackageState struct {
+type packageState struct {
 	pkg          *decorator.Package             // the package being instrumented
 	tracedFuncs  map[string]*tracedFunctionDecl // maintains state of tracing for functions within the package
 	importsAdded map[string]bool                // tracks imports added to the package
@@ -66,18 +66,18 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		diffFile:          diffFile,
 		appName:           appName,
 		agentVariableName: agentVariableName,
-		packages:          map[string]*PackageState{},
+		packages:          map[string]*packageState{},
 		facts:             facts.NewKeeper(),
 		errorCache:        errorcache.ErrorCache{},
 		tracingFunctions: tracingFunctions{
 			stateless:  []StatelessTracingFunction{},
 			stateful:   []StatefulTracingFunction{},
-			dependency: []DependencyScan{},
+			dependency: []FactDiscoveryFunction{},
 		},
 	}
 
 	for _, pkg := range pkgs {
-		manager.packages[pkg.ID] = &PackageState{
+		manager.packages[pkg.ID] = &packageState{
 			pkg:          pkg,
 			tracedFuncs:  map[string]*tracedFunctionDecl{},
 			importsAdded: map[string]bool{},
@@ -103,7 +103,7 @@ func (m *InstrumentationManager) loadStatelessTracingFunctions(functions ...Stat
 	m.tracingFunctions.stateless = append(m.tracingFunctions.stateless, functions...)
 }
 
-func (m *InstrumentationManager) loadDependencyScans(scans ...DependencyScan) {
+func (m *InstrumentationManager) loadDependencyScans(scans ...FactDiscoveryFunction) {
 	m.tracingFunctions.dependency = append(m.tracingFunctions.dependency, scans...)
 }
 
@@ -365,7 +365,7 @@ func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions 
 }
 
 // traceFunctionCalls discovers and sets up tracing for all function calls in the current package
-func tracePackageFunctionCalls(manager *InstrumentationManager, dependencyScans ...DependencyScan) error {
+func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFunctions ...FactDiscoveryFunction) error {
 	hasMain := false
 	var errReturn error
 
@@ -385,9 +385,9 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, dependencyScans 
 						hasMain = true
 					}
 				}
-				if len(dependencyScans) > 0 {
+				if len(factDiscoveryFunctions) > 0 {
 					dst.Inspect(decl, func(n dst.Node) bool {
-						for _, scan := range dependencyScans {
+						for _, scan := range factDiscoveryFunctions {
 							entry, ok := scan(manager.getDecoratorPackage(), n)
 							if ok {
 								err := manager.facts.AddFact(entry)

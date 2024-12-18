@@ -12,26 +12,6 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
-type segmentOpts struct {
-	async  bool
-	create bool
-}
-
-// noSegment indicates that a segment should not be created
-func noSegment() segmentOpts {
-	return segmentOpts{}
-}
-
-// async segment creates a segment for an async function that begins and ends in the body of a function
-func asyncSegment() segmentOpts {
-	return segmentOpts{async: true, create: true}
-}
-
-// functionSegment creates a segment that begins and ends in the body of a function
-func functionSegment() segmentOpts {
-	return segmentOpts{create: true}
-}
-
 // TraceFunction adds tracing to a function. This includes error capture, and passing agent metadata to relevant functions and services.
 // Traces all called functions inside the current package as well.
 // This function returns a FuncDecl object pointer that contains the potentially modified version of the FuncDecl object, fn, passed. If

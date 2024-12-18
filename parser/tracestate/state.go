@@ -1,3 +1,5 @@
+// tracestate is a package that is used to keep track of the state of the tracing process in the scope of a current function.
+// It also provides ways to modify the existing tracing state, or add it to function or line of code.
 package tracestate
 
 import (
