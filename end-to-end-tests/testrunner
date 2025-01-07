@@ -75,19 +75,28 @@ for testnumber, testcase in enumerate(tests['tests']):
         print(f"\33[1;31mFAIL\33[0m diff {diff_status}: output not as expected")
         fail = True
 
+    # apply the changes computed
+    subprocess.run(['git', 'apply', test_diff], cwd=testcase['dir'])
+
     for build in builds:
         print(f"Building {build}...")
         build_status = subprocess.run(['go', 'build', '.'], cwd=build).returncode
         if build_status:
             print(f"\33[1;31mFAIL\33[0m go build exited with status {build_status}")
             fail = True
+        else:
+            # always clean this up
+            os.remove(os.path.join("./", build, os.path.split(build)[-1]))
 
     # clean up
     if cleanup:
+        # revert the applied changes
+        subprocess.run(['git', 'apply', '-R', test_diff], cwd=testcase['dir'])
+        # remove the diff file
         os.remove(test_diff)
-        for build in builds:
-            os.remove(os.path.join("./", build, os.path.split(build)[-1]))
+        # restore the go.mod file
         subprocess.run(['go', 'mod', 'tidy'], cwd=testcase['dir'])
+        
     
     if fail:
         fails += 1
