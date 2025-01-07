@@ -14,7 +14,6 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/gopackages"
 	"github.com/dave/dst/dstutil"
-	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/errorcache"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
@@ -59,8 +58,6 @@ type packageState struct {
 
 // NewInstrumentationManager initializes an InstrumentationManager cache for a given package.
 func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariableName, diffFile, userAppPath string) *InstrumentationManager {
-	comment.EnableConsolePrinter(userAppPath)
-
 	manager := &InstrumentationManager{
 		userAppPath:       userAppPath,
 		diffFile:          diffFile,
