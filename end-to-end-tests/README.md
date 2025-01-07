@@ -27,3 +27,5 @@ Each test case is a JSON object with these fields:
 `dir` -- The directory relative to the root of go-easy-instrumentation.
 
 `cmp` -- Optional; The name of the reference file which should match the generated diff output. This tool will look for a file named "expect.ref" in the test "dir" by default.
+
+builds -- Optional; The list of paths to sub directories that need to be built for compiler testing. Use this if the root does not contain go code, but is just a place that collects child repos.

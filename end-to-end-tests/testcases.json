@@ -10,7 +10,11 @@
 	},
 	{
 		"name": "grpc app",
-		"dir": "end-to-end-tests/grpc"
+		"dir": "end-to-end-tests/grpc",
+		"builds": [
+			"end-to-end-tests/grpc/server",
+			"end-to-end-tests/grpc/client"
+		]
 	},
 	{
 		"name": "gin - basic",

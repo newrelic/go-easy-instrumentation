@@ -46,6 +46,12 @@ for testnumber, testcase in enumerate(tests['tests']):
         fails += 1
         continue
 
+    builds = []
+    if 'builds' in testcase:
+        builds = testcase['builds']
+    else:
+        builds = [testcase['dir']]
+
     test_id = str(uuid.uuid4())
     test_diff = os.path.join('/tmp',f"{test_id}.diff")
     print(f"Running \"{testcase['name']}\" from \"{testcase['dir']}\" as {test_id}...")
@@ -60,14 +66,30 @@ for testnumber, testcase in enumerate(tests['tests']):
         fails += 1
         continue
 
+    # keeps track of failure
+    fail = False
 
-    status = subprocess.run(['diff', '-B', '-b', '--color=always', '-L', 'expected', '-L', 'actual', referenceFile, test_diff]).returncode
+    # generate the diff and complie the code
+    diff_status = subprocess.run(['diff', '-B', '-b', '--color=always', '-L', 'expected', '-L', 'actual', referenceFile, test_diff]).returncode
+    if diff_status:
+        print(f"\33[1;31mFAIL\33[0m diff {diff_status}: output not as expected")
+        fail = True
+
+    for build in builds:
+        print(f"Building {build}...")
+        build_status = subprocess.run(['go', 'build', '.'], cwd=build).returncode
+        if build_status:
+            print(f"\33[1;31mFAIL\33[0m go build exited with status {build_status}")
+            fail = True
+
+    # clean up
     if cleanup:
         os.remove(test_diff)
+        for build in builds:
+            os.remove(os.path.join("./", build, os.path.split(build)[-1]))
         subprocess.run(['go', 'mod', 'tidy'], cwd=testcase['dir'])
-
-    if status:   
-        print(f"\33[ 1;31mFAIL\33[0m diff {status}: output not as expected")
+    
+    if fail:
         fails += 1
         continue
 
