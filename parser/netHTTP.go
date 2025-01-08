@@ -315,7 +315,16 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 			callExpr := v
 			funcName := getNetHttpMethod(callExpr, pkg)
 			switch funcName {
-			case httpHandleFunc, httpMuxHandle:
+			case httpHandleFunc:
+				if len(callExpr.Args) == 2 {
+					// Instrument handle funcs
+					codegen.WrapHttpHandleFunc(tracing.AgentVariable(), callExpr)
+
+					wasModified = true
+					manager.addImport(codegen.NewRelicAgentImportPath)
+					return false
+				}
+			case httpMuxHandle:
 				if len(callExpr.Args) == 2 {
 					// Instrument handle funcs
 					codegen.WrapHttpHandle(tracing.AgentVariable(), callExpr)

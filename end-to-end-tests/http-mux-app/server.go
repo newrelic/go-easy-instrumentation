@@ -34,13 +34,9 @@ func main() {
 	router.Handle("/", index())
 	router.Handle("/healthz", healthz())
 
-	nextRequestID := func() string {
-		return fmt.Sprintf("%d", time.Now().UnixNano())
-	}
-
 	server := &http.Server{
 		Addr:         listenAddr,
-		Handler:      tracing(nextRequestID)(logging(logger)(router)),
+		Handler:      tracing()(router),
 		ErrorLog:     logger,
 		ReadTimeout:  5 * time.Second,
 		WriteTimeout: 10 * time.Second,
@@ -99,6 +95,8 @@ func healthz() http.Handler {
 	})
 }
 
+// TODO: uncomment this when function literals are implemented
+/*
 func logging(logger *log.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -113,8 +111,13 @@ func logging(logger *log.Logger) func(http.Handler) http.Handler {
 		})
 	}
 }
+*/
 
-func tracing(nextRequestID func() string) func(http.Handler) http.Handler {
+func nextRequestID() string {
+	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+func tracing() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestID := r.Header.Get("X-Request-Id")
