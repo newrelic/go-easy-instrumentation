@@ -848,7 +848,7 @@ import (
 
 func main() {
 	mux := http.NewServeMux()
-	mux.Handle(newrelic.WrapHandleFunc(txn.Application(), "/", index))
+	mux.Handle(newrelic.WrapHandle(txn.Application(), "/", index))
 }
 `,
 		},

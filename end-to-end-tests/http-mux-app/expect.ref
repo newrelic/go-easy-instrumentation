@@ -21,31 +21,24 @@
  	flag.StringVar(&listenAddr, "listen-addr", ":5000", "server listen address")
  	flag.Parse()
  
-@@ -31,26 +38,36 @@
+@@ -31,22 +38,30 @@
  	logger.Println("Server is starting...")
  
  	router := http.NewServeMux()
 -	router.Handle("/", index())
 -	router.Handle("/healthz", healthz())
 +	nrTxn := NewRelicAgent.StartTransaction("index")
-+	router.Handle(newrelic.WrapHandleFunc(NewRelicAgent, "/", index(nrTxn)))
++	router.Handle(newrelic.WrapHandle(NewRelicAgent, "/", index(nrTxn)))
 +	nrTxn.End()
 +	nrTxn = NewRelicAgent.StartTransaction("healthz")
-+	router.Handle(newrelic.WrapHandleFunc(NewRelicAgent, "/healthz", healthz(nrTxn)))
++	router.Handle(newrelic.WrapHandle(NewRelicAgent, "/healthz", healthz(nrTxn)))
 +	nrTxn.End()
  
--	nextRequestID := func() string {
-+	nextRequestID := func(nrTxn *newrelic.Transaction) string {
-+		defer nrTxn.StartSegment("function literal").End()
-+
- 		return fmt.Sprintf("%d", time.Now().UnixNano())
- 	}
- 
-+	nrTxn = NewRelicAgent.StartTransaction("logging")
++	nrTxn = NewRelicAgent.StartTransaction("tracing")
  	server := &http.Server{
  		Addr:         listenAddr,
--		Handler:      tracing(nextRequestID)(logging(logger)(router)),
-+		Handler:      tracing(nextRequestID)(logging(logger, nrTxn)(router)),
+-		Handler:      tracing()(router),
++		Handler:      tracing(nrTxn)(router),
  		ErrorLog:     logger,
  		ReadTimeout:  5 * time.Second,
  		WriteTimeout: 10 * time.Second,
@@ -62,7 +55,7 @@
  	go func() {
  		<-quit
  		logger.Println("Server is shutting down...")
-@@ -74,9 +75,13 @@
+@@ -70,9 +72,13 @@
  
  	<-done
  	logger.Println("Server stopped")
@@ -77,7 +70,7 @@
  	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
  		if r.URL.Path != "/" {
  			http.Error(w, http.StatusText(http.StatusNotFound), http.StatusNotFound)
-@@ -89,7 +92,9 @@
+@@ -85,7 +89,9 @@
  	})
  }
  
@@ -88,14 +81,27 @@
  	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
  		if atomic.LoadInt32(&healthy) == 1 {
  			w.WriteHeader(http.StatusNoContent)
-@@ -99,7 +104,9 @@
- 	})
+@@ -113,16 +119,20 @@
+ }
+ */
+ 
+-func nextRequestID() string {
++func nextRequestID(nrTxn *newrelic.Transaction) string {
++	defer nrTxn.StartSegment("nextRequestID").End()
++
+ 	return fmt.Sprintf("%d", time.Now().UnixNano())
  }
  
--func logging(logger *log.Logger) func(http.Handler) http.Handler {
-+func logging(logger *log.Logger, nrTxn *newrelic.Transaction) func(http.Handler) http.Handler {
-+	defer nrTxn.StartSegment("logging").End()
+-func tracing() func(http.Handler) http.Handler {
++func tracing(nrTxn *newrelic.Transaction) func(http.Handler) http.Handler {
++	defer nrTxn.StartSegment("tracing").End()
 +
  	return func(next http.Handler) http.Handler {
  		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
- 			defer func() {
+ 			requestID := r.Header.Get("X-Request-Id")
+ 			if requestID == "" {
+-				requestID = nextRequestID()
++				requestID = nextRequestID(nrTxn)
+ 			}
+ 			ctx := context.WithValue(r.Context(), requestIDKey, requestID)
+ 			w.Header().Set("X-Request-Id", requestID)
