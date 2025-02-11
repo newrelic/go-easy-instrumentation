@@ -80,15 +80,16 @@ func getTxnFromGrpcServer(manager *InstrumentationManager, params []*dst.Field, 
 	var contextIdent *dst.Ident
 
 	pkg := manager.getDecoratorPackage()
-
+	f := manager.facts
 	for _, param := range params {
 		paramType := util.TypeOf(param.Names[0], pkg)
-		underlyingType := paramType.Underlying()
 		if paramType != nil {
+			underlyingType := paramType.Underlying()
 			if len(param.Names) == 1 {
 				// check if this is a stream server object or a context object
 				paramTypeName := paramType.String()
-				if util.IsUnderlyingType(underlyingType, grpcServerStreamType) {
+				fact := f.GetFact(paramTypeName)
+				if fact == facts.GrpcServerStream || util.IsUnderlyingType(underlyingType, grpcServerStreamType) {
 					streamServerIdent = param.Names[0]
 				} else if paramTypeName == contextType {
 					contextIdent = param.Names[0]

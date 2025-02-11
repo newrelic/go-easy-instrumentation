@@ -56,6 +56,9 @@ func TypeOf(expr dst.Expr, pkg *decorator.Package) types.Type {
 }
 
 func IsUnderlyingType(underlyingType types.Type, name string) bool {
+	if underlyingType == nil {
+		return false
+	}
 	return strings.Contains(underlyingType.String(), name)
 }
 
