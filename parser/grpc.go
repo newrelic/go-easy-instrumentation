@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	grpcServerType = "*google.golang.org/grpc.Server"
-	grpcPath       = "google.golang.org/grpc"
-	contextType    = "context.Context"
+	grpcServerType       = "*google.golang.org/grpc.Server"
+	grpcServerStreamType = "google.golang.org/grpc.ServerStream"
+	grpcPath             = "google.golang.org/grpc"
+	contextType          = "context.Context"
 )
 
 func grpcDialCall(node dst.Node) (*dst.CallExpr, bool) {
@@ -79,16 +80,15 @@ func getTxnFromGrpcServer(manager *InstrumentationManager, params []*dst.Field, 
 	var contextIdent *dst.Ident
 
 	pkg := manager.getDecoratorPackage()
-	f := manager.facts
 
 	for _, param := range params {
-		if len(param.Names) == 1 {
-			paramType := util.TypeOf(param.Names[0], pkg)
-			if paramType != nil {
+		paramType := util.TypeOf(param.Names[0], pkg)
+		underlyingType := paramType.Underlying()
+		if paramType != nil {
+			if len(param.Names) == 1 {
 				// check if this is a stream server object or a context object
 				paramTypeName := paramType.String()
-				fact := f.GetFact(paramTypeName)
-				if fact == facts.GrpcServerStream {
+				if util.IsUnderlyingType(underlyingType, grpcServerStreamType) {
 					streamServerIdent = param.Names[0]
 				} else if paramTypeName == contextType {
 					contextIdent = param.Names[0]

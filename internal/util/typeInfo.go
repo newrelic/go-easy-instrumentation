@@ -7,6 +7,7 @@ import (
 	"go/printer"
 	"go/token"
 	"go/types"
+	"strings"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -52,6 +53,10 @@ func TypeOf(expr dst.Expr, pkg *decorator.Package) types.Type {
 	}
 	astExpr := astNode.(ast.Expr)
 	return pkg.TypesInfo.TypeOf(astExpr)
+}
+
+func IsUnderlyingType(underlyingType types.Type, name string) bool {
+	return strings.Contains(underlyingType.String(), name)
 }
 
 // FunctionName returns the name of the function being invoked in a call expression

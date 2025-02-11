@@ -8,6 +8,7 @@ import (
 	fmt "fmt"
 	"io"
 	"net"
+	"time"
 
 	"grpc-app/sampleapp"
 
@@ -21,6 +22,11 @@ type Server struct{}
 func processMessage(ctx context.Context, msg *sampleapp.Message) error {
 	fmt.Printf("Message received: %s\n", msg.Text)
 	return nil
+}
+
+func doSomething() {
+	fmt.Println("Doing something")
+	time.Sleep(1 * time.Second)
 }
 
 // DoUnaryUnary is a unary request, unary response method.
@@ -66,6 +72,7 @@ func (s *Server) DoStreamStream(stream sampleapp.SampleApplication_DoStreamStrea
 		} else if nil != err {
 			return err
 		}
+		doSomething()
 		processMessage(stream.Context(), msg)
 		if err := stream.Send(&sampleapp.Message{Text: "Hello from DoStreamStream"}); nil != err {
 			return err
