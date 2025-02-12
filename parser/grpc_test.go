@@ -556,7 +556,135 @@ func TestFindGrpcServerObject(t *testing.T) {
 		}
 	}
 }
+func TestGetTxnFromGrpcServer(t *testing.T) {
+	grpcServerStreamType := types.NewNamed(
+		types.NewTypeName(0, nil, "mainType", nil), // Main Type
+		types.NewInterfaceType( // Underlying Type
+			nil,
+			[]types.Type{
+				types.NewNamed(
+					types.NewTypeName(0, nil, grpcServerStreamType, nil),
+					nil,
+					nil,
+				),
+			},
+		),
+		nil,
+	)
 
+	contextParamName := &dst.Ident{Name: "ctx"}
+	astContext := &ast.Ident{Name: "ctx"}
+	serverStreamParamName := &dst.Ident{Name: "stream"}
+	astServerStream := &ast.Ident{Name: "stream"}
+	manager := &InstrumentationManager{
+		currentPackage: "test",
+		packages: map[string]*packageState{
+			"test": {
+				pkg: &decorator.Package{
+					Package: &packages.Package{
+						TypesInfo: &types.Info{
+							Types: map[ast.Expr]types.TypeAndValue{
+								astContext: {
+									Type: types.NewNamed(types.NewTypeName(token.NoPos, types.NewPackage("context", "context"), "Context", nil), nil, nil),
+								},
+								astServerStream: {
+									Type: grpcServerStreamType,
+								},
+							},
+						},
+					},
+					Decorator: &decorator.Decorator{
+						Map: decorator.Map{
+							Ast: decorator.AstMap{
+								Nodes: map[dst.Node]ast.Node{contextParamName: astContext, serverStreamParamName: astServerStream},
+							},
+						},
+					},
+				},
+			},
+		},
+		facts: facts.Keeper{
+			"github.com/example/testapp.TestApp_StreamServer": facts.GrpcServerStream,
+		},
+	}
+	type args struct {
+		manager *InstrumentationManager
+		params  []*dst.Field
+	}
+	tests := []struct {
+		name string
+		args
+		want   *dst.AssignStmt
+		expect bool
+	}{
+		{
+			name: "grpc server stream",
+			args: args{
+				manager: manager,
+				params: []*dst.Field{
+					{
+						Names: []*dst.Ident{serverStreamParamName},
+					},
+				},
+			},
+			want:   codegen.TxnFromContext("txn", codegen.GrpcStreamContext(serverStreamParamName)),
+			expect: true,
+		},
+		{
+			name: "grpc context",
+			args: args{
+				manager: manager,
+				params: []*dst.Field{
+					{
+						Names: []*dst.Ident{contextParamName},
+					},
+				},
+			},
+			want:   codegen.TxnFromContext("txn", contextParamName),
+			expect: true,
+		},
+		{
+			name: "empty params",
+			args: args{
+				manager: manager,
+				params:  []*dst.Field{},
+			},
+			want:   nil,
+			expect: false,
+		},
+		{
+			name: "no context or stream",
+			args: args{
+				manager: manager,
+				params: []*dst.Field{
+					{
+						Names: []*dst.Ident{
+							{Name: "notContext"},
+						},
+					},
+				},
+			},
+			want:   nil,
+			expect: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := getTxnFromGrpcServer(tt.args.manager, tt.args.params, "txn")
+			if tt.expect {
+				if !ok {
+					t.Error("expected a transaction to be gotten from grpc server agrument")
+				} else {
+					assert.Equal(t, tt.want, got)
+				}
+			} else {
+				if ok {
+					t.Errorf("expected no transaction to be gotten from grpc server agrument, but got %+v", got)
+				}
+			}
+		})
+	}
+}
 func TestIsGrpcServerMethod(t *testing.T) {
 	serverRecv := &dst.Ident{
 		Name: "srv",
@@ -644,6 +772,32 @@ func TestIsGrpcServerMethod(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := isGrpcServerMethod(tt.args.manager, tt.args.decl); got != tt.want {
 				t.Errorf("isGrpcServerMethod() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_getTxnFromGrpcServer(t *testing.T) {
+	tests := []struct {
+		name string // description of this test case
+		// Named input parameters for target function.
+		manager         *InstrumentationManager
+		params          []*dst.Field
+		txnVariableName string
+		want            *dst.AssignStmt
+		want2           bool
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, got2 := getTxnFromGrpcServer(tt.manager, tt.params, tt.txnVariableName)
+			// TODO: update the condition below to compare got with tt.want.
+			if true {
+				t.Errorf("getTxnFromGrpcServer() = %v, want %v", got, tt.want)
+			}
+			if true {
+				t.Errorf("getTxnFromGrpcServer() = %v, want %v", got2, tt.want2)
 			}
 		})
 	}
