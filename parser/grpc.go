@@ -246,33 +246,3 @@ func FindGrpcServerObject(pkg *decorator.Package, node dst.Node) (facts.Entry, b
 	}
 	return facts.Entry{Name: handlerTypeString, Fact: facts.GrpcServerType}, true
 }
-
-// FindGrpcServerStreamInterface scans for an interface that embeds the grpc.ServerStream object
-// We know this is a carrier of contexts injected with New Relic Transactions
-func FindGrpcServerStreamInterface(pkg *decorator.Package, node dst.Node) (facts.Entry, bool) {
-	if node == nil {
-		return facts.Entry{}, false
-	}
-
-	if genDecl, ok := node.(*dst.GenDecl); ok && len(genDecl.Specs) == 1 {
-		typeSpec, ok := genDecl.Specs[0].(*dst.TypeSpec)
-		if ok && typeSpec.Type != nil {
-			interfaceType, ok := typeSpec.Type.(*dst.InterfaceType)
-			if ok && interfaceType.Methods != nil && interfaceType.Methods.List != nil {
-				for _, method := range interfaceType.Methods.List {
-					ident, ok := method.Type.(*dst.Ident)
-					if ok {
-						if ident.Name == "ServerStream" && ident.Path == grpcPath {
-							serverStreamType := util.TypeOf(typeSpec.Name, pkg)
-							if serverStreamType != nil {
-								return facts.Entry{Name: serverStreamType.String(), Fact: facts.GrpcServerStream}, true
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return facts.Entry{}, false
-}
