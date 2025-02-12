@@ -776,29 +776,3 @@ func TestIsGrpcServerMethod(t *testing.T) {
 		})
 	}
 }
-
-func Test_getTxnFromGrpcServer(t *testing.T) {
-	tests := []struct {
-		name string // description of this test case
-		// Named input parameters for target function.
-		manager         *InstrumentationManager
-		params          []*dst.Field
-		txnVariableName string
-		want            *dst.AssignStmt
-		want2           bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, got2 := getTxnFromGrpcServer(tt.manager, tt.params, tt.txnVariableName)
-			// TODO: update the condition below to compare got with tt.want.
-			if true {
-				t.Errorf("getTxnFromGrpcServer() = %v, want %v", got, tt.want)
-			}
-			if true {
-				t.Errorf("getTxnFromGrpcServer() = %v, want %v", got2, tt.want2)
-			}
-		})
-	}
-}
