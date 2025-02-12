@@ -14,9 +14,10 @@ import (
 )
 
 const (
-	grpcServerType = "*google.golang.org/grpc.Server"
-	grpcPath       = "google.golang.org/grpc"
-	contextType    = "context.Context"
+	grpcServerType       = "*google.golang.org/grpc.Server"
+	grpcServerStreamType = "google.golang.org/grpc.ServerStream"
+	grpcPath             = "google.golang.org/grpc"
+	contextType          = "context.Context"
 )
 
 func grpcDialCall(node dst.Node) (*dst.CallExpr, bool) {
@@ -79,16 +80,14 @@ func getTxnFromGrpcServer(manager *InstrumentationManager, params []*dst.Field, 
 	var contextIdent *dst.Ident
 
 	pkg := manager.getDecoratorPackage()
-	f := manager.facts
-
 	for _, param := range params {
-		if len(param.Names) == 1 {
-			paramType := util.TypeOf(param.Names[0], pkg)
-			if paramType != nil {
+		paramType := util.TypeOf(param.Names[0], pkg)
+		if paramType != nil {
+			underlyingType := paramType.Underlying()
+			if len(param.Names) == 1 {
 				// check if this is a stream server object or a context object
 				paramTypeName := paramType.String()
-				fact := f.GetFact(paramTypeName)
-				if fact == facts.GrpcServerStream {
+				if util.IsUnderlyingType(underlyingType, grpcServerStreamType) {
 					streamServerIdent = param.Names[0]
 				} else if paramTypeName == contextType {
 					contextIdent = param.Names[0]
@@ -246,34 +245,4 @@ func FindGrpcServerObject(pkg *decorator.Package, node dst.Node) (facts.Entry, b
 		handlerTypeString = "*" + handlerTypeString
 	}
 	return facts.Entry{Name: handlerTypeString, Fact: facts.GrpcServerType}, true
-}
-
-// FindGrpcServerStreamInterface scans for an interface that embeds the grpc.ServerStream object
-// We know this is a carrier of contexts injected with New Relic Transactions
-func FindGrpcServerStreamInterface(pkg *decorator.Package, node dst.Node) (facts.Entry, bool) {
-	if node == nil {
-		return facts.Entry{}, false
-	}
-
-	if genDecl, ok := node.(*dst.GenDecl); ok && len(genDecl.Specs) == 1 {
-		typeSpec, ok := genDecl.Specs[0].(*dst.TypeSpec)
-		if ok && typeSpec.Type != nil {
-			interfaceType, ok := typeSpec.Type.(*dst.InterfaceType)
-			if ok && interfaceType.Methods != nil && interfaceType.Methods.List != nil {
-				for _, method := range interfaceType.Methods.List {
-					ident, ok := method.Type.(*dst.Ident)
-					if ok {
-						if ident.Name == "ServerStream" && ident.Path == grpcPath {
-							serverStreamType := util.TypeOf(typeSpec.Name, pkg)
-							if serverStreamType != nil {
-								return facts.Entry{Name: serverStreamType.String(), Fact: facts.GrpcServerStream}, true
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	return facts.Entry{}, false
 }

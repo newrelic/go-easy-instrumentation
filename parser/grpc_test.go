@@ -556,184 +556,22 @@ func TestFindGrpcServerObject(t *testing.T) {
 		}
 	}
 }
-
-func TestFindGrpcServerStreamInterface(t *testing.T) {
-	validTypeSpec := &dst.TypeSpec{
-		Name: &dst.Ident{
-			Name: "TestApp_StreamServer",
-			Path: "github.com/example/testapp",
-		},
-		Type: &dst.InterfaceType{
-			Methods: &dst.FieldList{
-				List: []*dst.Field{
-					{
-						Type: &dst.Ident{
-							Name: "ServerStream",
-							Path: "google.golang.org/grpc",
-						},
-					},
-				},
-			},
-		},
-	}
-
-	astTypeSpecIdent := &ast.Ident{
-		Name: "TestApp_StreamServer",
-	}
-
-	testPkg := &decorator.Package{
-		Package: &packages.Package{
-			TypesInfo: &types.Info{
-				Types: map[ast.Expr]types.TypeAndValue{
-					astTypeSpecIdent: {
-						Type: types.NewNamed(types.NewTypeName(token.NoPos, types.NewPackage("github.com/example/testapp", "testapp"), "TestApp_StreamServer", types.NewInterfaceType(nil, nil)), nil, nil),
-					},
-				},
-			},
-		},
-		Decorator: &decorator.Decorator{
-			Map: decorator.Map{
-				Ast: decorator.AstMap{
-					Nodes: map[dst.Node]ast.Node{validTypeSpec.Name: astTypeSpecIdent},
-				},
-			},
-		},
-	}
-
-	type args struct {
-		pkg  *decorator.Package
-		node dst.Node
-	}
-	tests := []struct {
-		name     string
-		args     args
-		wantFact facts.Entry
-		want     bool
-	}{
-		{
-			name: "valid stream server",
-			args: args{
-				pkg: testPkg,
-				node: &dst.GenDecl{
-					Specs: []dst.Spec{validTypeSpec},
-				},
-			},
-			wantFact: facts.Entry{
-				Name: "github.com/example/testapp.TestApp_StreamServer",
-				Fact: facts.GrpcServerStream,
-			},
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, gotOk := FindGrpcServerStreamInterface(tt.args.pkg, tt.args.node)
-			if tt.want {
-				if !gotOk {
-					t.Error("expected FindGrpcServerStreamInterface to return a fact entry")
-				} else {
-					assert.Equal(t, tt.wantFact, got)
-				}
-			} else if gotOk {
-				t.Errorf("expected FindGrpcServerStreamInterface to return false, but got true and %s", got)
-			}
-		})
-	}
-}
-
-func TestIsGrpcServerMethod(t *testing.T) {
-	serverRecv := &dst.Ident{
-		Name: "srv",
-	}
-	astServer := &ast.Ident{
-		Name: "srv",
-	}
-
-	manager := &InstrumentationManager{
-		currentPackage: "test",
-		packages: map[string]*packageState{
-			"test": {
-				pkg: &decorator.Package{
-					Package: &packages.Package{
-						TypesInfo: &types.Info{
-							Types: map[ast.Expr]types.TypeAndValue{
-								astServer: {
-									Type: types.NewPointer(types.NewNamed(types.NewTypeName(token.NoPos, types.NewPackage("github.com/example/testapp", "testapp"), "Server", types.NewInterfaceType(nil, nil)), nil, nil)),
-								},
-							},
-						},
-					},
-					Decorator: &decorator.Decorator{
-						Map: decorator.Map{
-							Ast: decorator.AstMap{
-								Nodes: map[dst.Node]ast.Node{serverRecv: astServer},
-							},
-						},
-					},
-				},
-			},
-		},
-		facts: facts.Keeper{
-			"*github.com/example/testapp.Server": facts.GrpcServerType,
-		},
-	}
-
-	type args struct {
-		manager *InstrumentationManager
-		decl    *dst.FuncDecl
-	}
-	tests := []struct {
-		name string
-		args
-		want bool
-	}{
-		{
-			name: "grpc server method",
-			args: args{
-				manager: manager,
-				decl: &dst.FuncDecl{
-					Recv: &dst.FieldList{
-						List: []*dst.Field{
-							{
-								Names: []*dst.Ident{serverRecv},
-							},
-						},
-					},
-				},
-			},
-			want: true,
-		},
-		{
-			name: "reciever is not grpc server",
-			args: args{
-				manager: manager,
-				decl: &dst.FuncDecl{
-					Recv: &dst.FieldList{
-						List: []*dst.Field{
-							{
-								Names: []*dst.Ident{
-									{
-										Name: "notServer",
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-			want: false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := isGrpcServerMethod(tt.args.manager, tt.args.decl); got != tt.want {
-				t.Errorf("isGrpcServerMethod() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 func TestGetTxnFromGrpcServer(t *testing.T) {
+	grpcServerStreamType := types.NewNamed(
+		types.NewTypeName(0, nil, "mainType", nil), // Main Type
+		types.NewInterfaceType( // Underlying Type
+			nil,
+			[]types.Type{
+				types.NewNamed(
+					types.NewTypeName(0, nil, grpcServerStreamType, nil),
+					nil,
+					nil,
+				),
+			},
+		),
+		nil,
+	)
+
 	contextParamName := &dst.Ident{Name: "ctx"}
 	astContext := &ast.Ident{Name: "ctx"}
 	serverStreamParamName := &dst.Ident{Name: "stream"}
@@ -750,7 +588,7 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 									Type: types.NewNamed(types.NewTypeName(token.NoPos, types.NewPackage("context", "context"), "Context", nil), nil, nil),
 								},
 								astServerStream: {
-									Type: types.NewNamed(types.NewTypeName(token.NoPos, types.NewPackage("github.com/example/testapp", "testapp"), "TestApp_StreamServer", types.NewInterfaceType(nil, nil)), nil, nil),
+									Type: grpcServerStreamType,
 								},
 							},
 						},
@@ -843,6 +681,97 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 				if ok {
 					t.Errorf("expected no transaction to be gotten from grpc server agrument, but got %+v", got)
 				}
+			}
+		})
+	}
+}
+func TestIsGrpcServerMethod(t *testing.T) {
+	serverRecv := &dst.Ident{
+		Name: "srv",
+	}
+	astServer := &ast.Ident{
+		Name: "srv",
+	}
+
+	manager := &InstrumentationManager{
+		currentPackage: "test",
+		packages: map[string]*packageState{
+			"test": {
+				pkg: &decorator.Package{
+					Package: &packages.Package{
+						TypesInfo: &types.Info{
+							Types: map[ast.Expr]types.TypeAndValue{
+								astServer: {
+									Type: types.NewPointer(types.NewNamed(types.NewTypeName(token.NoPos, types.NewPackage("github.com/example/testapp", "testapp"), "Server", types.NewInterfaceType(nil, nil)), nil, nil)),
+								},
+							},
+						},
+					},
+					Decorator: &decorator.Decorator{
+						Map: decorator.Map{
+							Ast: decorator.AstMap{
+								Nodes: map[dst.Node]ast.Node{serverRecv: astServer},
+							},
+						},
+					},
+				},
+			},
+		},
+		facts: facts.Keeper{
+			"*github.com/example/testapp.Server": facts.GrpcServerType,
+		},
+	}
+
+	type args struct {
+		manager *InstrumentationManager
+		decl    *dst.FuncDecl
+	}
+	tests := []struct {
+		name string
+		args
+		want bool
+	}{
+		{
+			name: "grpc server method",
+			args: args{
+				manager: manager,
+				decl: &dst.FuncDecl{
+					Recv: &dst.FieldList{
+						List: []*dst.Field{
+							{
+								Names: []*dst.Ident{serverRecv},
+							},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "reciever is not grpc server",
+			args: args{
+				manager: manager,
+				decl: &dst.FuncDecl{
+					Recv: &dst.FieldList{
+						List: []*dst.Field{
+							{
+								Names: []*dst.Ident{
+									{
+										Name: "notServer",
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isGrpcServerMethod(tt.args.manager, tt.args.decl); got != tt.want {
+				t.Errorf("isGrpcServerMethod() = %v, want %v", got, tt.want)
 			}
 		})
 	}
