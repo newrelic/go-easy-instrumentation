@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
@@ -72,6 +71,8 @@ func setOutputFilePath(outputFilePath, applicationPath string) (string, error) {
 	return outputFilePath, nil
 }
 
+const LoadMode = packages.LoadSyntax | packages.NeedForTest
+
 func Instrument(packagePath string) {
 	if packagePath == "" {
 		cobra.CheckErr("path argument cannot be empty")
@@ -82,48 +83,36 @@ func Instrument(packagePath string) {
 	}
 
 	outputFile, err := setOutputFilePath(diffFile, packagePath)
-	if err != nil {
-		cobra.CheckErr(err)
-	}
-
+	cobra.CheckErr(err)
 	if debug {
 		comment.EnableConsolePrinter(packagePath)
 	}
 
-	pkgs, err := decorator.Load(&packages.Config{Dir: packagePath, Mode: packages.LoadSyntax}, defaultPackageName)
-	if err != nil {
-		log.Fatal(err)
-	}
+	pkgs, err := decorator.Load(&packages.Config{Dir: packagePath, Mode: LoadMode, Tests: true}, defaultPackageName)
+	cobra.CheckErr(err)
 
 	manager := parser.NewInstrumentationManager(pkgs, defaultAppName, defaultAgentVariableName, outputFile, packagePath)
 	err = manager.CreateDiffFile()
-	if err != nil {
-		log.Fatal(err)
-	}
+	cobra.CheckErr(err)
 
 	err = manager.DetectDependencyIntegrations()
-	if err != nil {
-		log.Fatal(err)
-	}
+	cobra.CheckErr(err)
 
 	err = manager.InstrumentApplication()
-	if err != nil {
-		log.Fatal(err)
-	}
+	cobra.CheckErr(err)
+
+	err = manager.ResolveUnitTests()
+	cobra.CheckErr(err)
 
 	err = manager.AddRequiredModules()
-	if err != nil {
-		log.Fatal(err)
-	}
+	cobra.CheckErr(err)
 
 	// write debug comments before writing diff so that
 	// diff file console log is still easy to see
 	comment.WriteAll()
 
 	err = manager.WriteDiff()
-	if err != nil {
-		log.Fatal(err)
-	}
+	cobra.CheckErr(err)
 }
 
 func init() {

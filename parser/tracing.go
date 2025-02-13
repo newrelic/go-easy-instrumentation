@@ -28,8 +28,11 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 	// add needed tracing object to function declaration parameters
 	// this must be the first thing done, since it double checks the type assignment for tracing and will change it
-	tracingImport := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
-	manager.addImport(tracingImport)
+	tracingImport, ok := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
+	if ok {
+		manager.addImport(tracingImport)
+		TopLevelFunctionChanged = true
+	}
 
 	// create segment if needed
 	segmentImport, ok := tracing.CreateSegment(node)
@@ -79,7 +82,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 					if manager.shouldInstrumentFunction(invInfo) {
 						manager.setPackage(invInfo.packageName)
-						TraceFunction(manager, manager.getDeclaration(invInfo.functionName), childState)
+						TraceFunction(manager, invInfo.decl, childState)
 						manager.setPackage(rootPkg)
 					}
 				}
@@ -115,7 +118,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 				if manager.shouldInstrumentFunction(invInfo) {
 					manager.setPackage(invInfo.packageName)
-					TraceFunction(manager, manager.getDeclaration(invInfo.functionName), childState)
+					TraceFunction(manager, invInfo.decl, childState)
 					downstreamFunctionTraced = true
 					manager.setPackage(rootPkg)
 				}

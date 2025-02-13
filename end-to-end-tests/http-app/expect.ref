@@ -294,3 +294,22 @@
 +
 +	NewRelicAgent.Shutdown(5 * time.Second)
  }
+--- a/main_test.go
++++ b/main_test.go
+@@ -38,14 +38,14 @@
+ 
+ func TestDoAThing(t *testing.T) {
+ 	t.Run("without error", func(t *testing.T) {
+-		result, success, err := DoAThing(false)
++		result, success, err := DoAThing(false, nil)
+ 		assert.NoError(t, err)
+ 		assert.Equal(t, "thing complete", result)
+ 		assert.True(t, success)
+ 	})
+ 
+ 	t.Run("with error", func(t *testing.T) {
+-		result, success, err := DoAThing(true)
++		result, success, err := DoAThing(true, nil)
+ 		assert.Error(t, err)
+ 		assert.Equal(t, "thing not done", result)
+ 		assert.False(t, success)
