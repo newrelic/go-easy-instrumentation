@@ -353,7 +353,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 			defer panicRecovery(t)
-			got := m.getPackageFunctionInvocation(tt.args.node, tracestate.FunctionBody(codegen.DefaultTransactionVariable))
+			got := m.getInvocationInfo(tt.args.node, tracestate.FunctionBody(codegen.DefaultTransactionVariable), "")
 			assert.Equal(t, tt.want, got)
 		})
 	}

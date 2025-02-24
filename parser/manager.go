@@ -192,11 +192,30 @@ type invocationInfo struct {
 	decl         *dst.FuncDecl
 }
 
-// GetPackageFunctionInvocation returns the name of the function being invoked, and the expression containing the call
-// where that invocation occurs if a function is declared in this package.
+func resolvePath(identPath, currentPackage, override string) string {
+	if override != "" {
+		return override
+	}
+
+	if identPath != "" {
+		return identPath
+	}
+
+	return currentPackage
+}
+
+// getInvocationInfo returns a collection of data about a function call if it was defined
+// in the scope of this application. If the expression passed does not contain a valid function
+// call, this method will return nil.
+//
+// The node passed is a dst node that you want to search for a function call in.
+// The state passed is the current state of the application, and is used to resolve function literals.
+// The packageOverride is an optional parameter that allows you to override the package name of the function call,
+// and should only be used if you know the package the declaration lives in. This is useful for resolving
+// function calls in unit tests becasue the package linking is not handled the same way as in the main application.
 //
 // If the node does not contain a function call made to a function declared in this application, this method will return nil.
-func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node, state *tracestate.State) *invocationInfo {
+func (m *InstrumentationManager) getInvocationInfo(node dst.Node, state *tracestate.State, packageOverride string) *invocationInfo {
 	var invInfo *invocationInfo
 
 	dst.Inspect(node, func(n dst.Node) bool {
@@ -217,10 +236,8 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node, sta
 			if !ok {
 				return true
 			}
-			path := functionCallIdent.Path
-			if path == "" {
-				path = m.getPackageName()
-			}
+
+			path := resolvePath(functionCallIdent.Path, m.getPackageName(), packageOverride)
 			pkg, ok := m.packages[path]
 			if ok && pkg.tracedFuncs[functionCallIdent.Name] != nil {
 				invInfo = &invocationInfo{
@@ -459,6 +476,7 @@ func isUnitTestDecl(decl *dst.FuncDecl) bool {
 func (m *InstrumentationManager) ResolveUnitTests() error {
 	state := tracestate.Placeholder()
 	for _, pkgState := range m.packages {
+		// vet that this is a package created to test another package
 		pkg := pkgState.pkg
 		if pkg.ForTest != "" {
 			for _, file := range pkg.Syntax {
@@ -471,12 +489,16 @@ func (m *InstrumentationManager) ResolveUnitTests() error {
 						continue
 					}
 
+					fmt.Println(decl)
+
 					// find all function calls and check if they are any of the functions we modified the parameters for
 					// and update them accordingly.
+					// This logic is applied to the syntax tree in a bottom up fashion, or in postorder traversal, so that
+					// we see all function calls in the body.
 					newDecl := dstutil.Apply(decl, nil, func(c *dstutil.Cursor) bool {
-						switch c.Node().(type) {
+						switch call := c.Node().(type) {
 						case *dst.CallExpr:
-							inv := m.getPackageFunctionInvocation(c.Node(), state)
+							inv := m.getInvocationInfo(call, state, pkg.ForTest)
 							if inv != nil && inv.decl != nil && inv.decl.Type.Params.List != nil && len(inv.decl.Type.Params.List) > 0 {
 								// if the function declaration has a transaction as its last parameter, the test needs to be updated to do the same
 								star, ok := inv.decl.Type.Params.List[len(inv.decl.Type.Params.List)-1].Type.(*dst.StarExpr)
