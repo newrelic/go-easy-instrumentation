@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/dave/dst"
@@ -302,9 +303,20 @@ func (m *InstrumentationManager) shouldInstrumentFunction(inv *invocationInfo) b
 	return false
 }
 
+func (m *InstrumentationManager) getSortedPackages() []string {
+	keys := make([]string, 0, len(m.packages))
+	for k := range m.packages {
+		keys = append(keys, k)
+	}
+	slices.Sort(keys)
+	return keys
+}
+
 // WriteDiff writes out the changes made to a file to the diff file for this package.
 func (m *InstrumentationManager) WriteDiff() error {
-	for _, state := range m.packages {
+	pkgs := m.getSortedPackages()
+	for _, pkg := range pkgs {
+		state := m.packages[pkg]
 		r := decorator.NewRestorerWithImports(state.pkg.Dir, gopackages.New(state.pkg.Dir))
 
 		for _, file := range state.pkg.Syntax {
