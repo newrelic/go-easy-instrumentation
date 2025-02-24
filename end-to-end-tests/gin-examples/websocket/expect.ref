@@ -45,9 +45,9 @@
  }
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-+	if err != nil {
-+		panic(err)
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
 +	}
 +
  	flag.Parse()
@@ -77,9 +77,9 @@
  var addr = flag.String("addr", "localhost:8080", "http service address")
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-+	if err != nil {
-+		panic(err)
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
 +	}
 +
  	flag.Parse()

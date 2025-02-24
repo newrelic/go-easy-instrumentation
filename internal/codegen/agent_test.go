@@ -30,7 +30,7 @@ func Test_InitializeAgent(t *testing.T) {
 						Name: "testAgent",
 					},
 					&dst.Ident{
-						Name: "err",
+						Name: agentErrorVariableName,
 					},
 				},
 				Tok: token.DEFINE,
@@ -50,7 +50,7 @@ func Test_InitializeAgent(t *testing.T) {
 						},
 					},
 				},
-			}, panicOnError()},
+			}, panicOnError(agentErrorVariableName)},
 		},
 		{
 			name: "Test create agent AST with AppName",
@@ -64,7 +64,7 @@ func Test_InitializeAgent(t *testing.T) {
 						Name: "testAgent",
 					},
 					&dst.Ident{
-						Name: "err",
+						Name: agentErrorVariableName,
 					},
 				},
 				Tok: token.DEFINE,
@@ -96,7 +96,7 @@ func Test_InitializeAgent(t *testing.T) {
 						},
 					},
 				},
-			}, panicOnError()},
+			}, panicOnError(agentErrorVariableName)},
 		},
 	}
 	for _, tt := range tests {
@@ -203,7 +203,7 @@ func Test_panicOnError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := panicOnError(); !reflect.DeepEqual(got, tt.want) {
+			if got := panicOnError("err"); !reflect.DeepEqual(got, tt.want) {
 				assert.Equal(t, tt.want, got)
 			}
 		})

@@ -110,9 +110,9 @@ func test(nrTxn *newrelic.Transaction) {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	nrTxn := NewRelicAgent.StartTransaction("test")
@@ -159,9 +159,9 @@ func test(nrTxn *newrelic.Transaction) error {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	nrTxn := NewRelicAgent.StartTransaction("test")
@@ -202,9 +202,9 @@ func test(nrTxn *newrelic.Transaction) {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	nrTxn := NewRelicAgent.StartTransaction("test")
@@ -258,9 +258,9 @@ func test(nrTxn *newrelic.Transaction) (any, error) {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	nrTxn := NewRelicAgent.StartTransaction("test")
@@ -298,9 +298,9 @@ import (
 )
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	_, err := http.Get("http://example.com")
@@ -366,9 +366,9 @@ func myFunc(nrTxn *newrelic.Transaction) {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	nrTxn := NewRelicAgent.StartTransaction("myFunc")
@@ -417,9 +417,9 @@ func myFunc(nrTxn *newrelic.Transaction) {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	nrTxn := NewRelicAgent.StartTransaction("myFunc")
@@ -477,9 +477,9 @@ func myFunc(ctx context.Context) {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	ctx := context.Background()
@@ -529,9 +529,9 @@ func myFunc(nrTxn *newrelic.Transaction) {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	nrTxn := NewRelicAgent.StartTransaction("myFunc")
@@ -579,9 +579,9 @@ func myFunc() {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	// NR INFO: go-easy-instrumentation doesn't support tracing goroutines in a main method; please instrument manually.
