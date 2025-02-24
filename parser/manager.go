@@ -493,9 +493,7 @@ func (m *InstrumentationManager) ResolveUnitTests() error {
 
 					// find all function calls and check if they are any of the functions we modified the parameters for
 					// and update them accordingly.
-					// This logic is applied to the syntax tree in a bottom up fashion, or in postorder traversal, so that
-					// we see all function calls in the body.
-					newDecl := dstutil.Apply(decl, nil, func(c *dstutil.Cursor) bool {
+					newDecl := dstutil.Apply(decl, func(c *dstutil.Cursor) bool {
 						switch call := c.Node().(type) {
 						case *dst.CallExpr:
 							inv := m.getInvocationInfo(call, state, pkg.ForTest)
@@ -503,6 +501,11 @@ func (m *InstrumentationManager) ResolveUnitTests() error {
 								// if the function declaration has a transaction as its last parameter, the test needs to be updated to do the same
 								star, ok := inv.decl.Type.Params.List[len(inv.decl.Type.Params.List)-1].Type.(*dst.StarExpr)
 								if !ok {
+									return true
+								}
+
+								numParams := inv.decl.Type.Params.NumFields()
+								if len(call.Args) == numParams {
 									return true
 								}
 
@@ -514,7 +517,7 @@ func (m *InstrumentationManager) ResolveUnitTests() error {
 							}
 						}
 						return true
-					})
+					}, nil)
 
 					file.Decls[i] = newDecl.(dst.Decl)
 				}
