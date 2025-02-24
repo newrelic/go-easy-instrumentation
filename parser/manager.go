@@ -193,13 +193,13 @@ type invocationInfo struct {
 	decl         *dst.FuncDecl
 }
 
-func resolvePath(identPath, currentPackage, override string) string {
-	if override != "" {
-		return override
-	}
-
+func resolvePath(identPath, currentPackage, forTest string) string {
 	if identPath != "" {
 		return identPath
+	}
+
+	if forTest != "" {
+		return forTest
 	}
 
 	return currentPackage
@@ -212,13 +212,13 @@ func resolvePath(identPath, currentPackage, override string) string {
 // TODO: support function literals
 //
 // NOTE: unlike getInvocationInfo, this method does not recursively search for invocations.
-func (m *InstrumentationManager) getInvocationInfoFromCall(call *dst.CallExpr, packageOverride string) *invocationInfo {
+func (m *InstrumentationManager) getInvocationInfoFromCall(call *dst.CallExpr, forTest string) *invocationInfo {
 	functionCallIdent, ok := call.Fun.(*dst.Ident)
 	if !ok {
 		return nil
 	}
 
-	path := resolvePath(functionCallIdent.Path, m.getPackageName(), packageOverride)
+	path := resolvePath(functionCallIdent.Path, m.getPackageName(), forTest)
 	pkg, ok := m.packages[path]
 	if ok && pkg.tracedFuncs[functionCallIdent.Name] != nil {
 		return &invocationInfo{

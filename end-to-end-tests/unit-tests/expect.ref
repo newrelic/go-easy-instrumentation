@@ -220,7 +220,7 @@
  }
 --- a/pkg3/pkg3_test.go
 +++ b/pkg3/pkg3_test.go
-@@ -7,13 +7,13 @@
+@@ -8,15 +8,15 @@
  )
  
  func TestConcat(t *testing.T) {
@@ -230,6 +230,8 @@
 +	assert.Equal(t, "hello world", Concat("hello ", "world", nil))
 +	assert.Equal(t, "foo", Concat("f", "oo", nil))
 +	assert.Equal(t, "barbaz", Concat("bar", "baz", nil))
+ 
+ 	util.DoSomething()
  }
  
  func TestSplit(t *testing.T) {

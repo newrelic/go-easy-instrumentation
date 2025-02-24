@@ -2,6 +2,7 @@ package pkg3
 
 import (
 	"testing"
+	"unit-tests/util"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -10,6 +11,8 @@ func TestConcat(t *testing.T) {
 	assert.Equal(t, "hello world", Concat("hello ", "world"))
 	assert.Equal(t, "foo", Concat("f", "oo"))
 	assert.Equal(t, "barbaz", Concat("bar", "baz"))
+
+	util.DoSomething()
 }
 
 func TestSplit(t *testing.T) {
