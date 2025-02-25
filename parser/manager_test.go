@@ -432,3 +432,103 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 		})
 	}
 }
+
+func Test_IsUnitTestDecl(t *testing.T) {
+	tests := []struct {
+		name string
+		decl *dst.FuncDecl
+		want bool
+	}{
+		{
+			name: "UnitTestFunction",
+			decl: &dst.FuncDecl{Name: &dst.Ident{Name: "TestFunction"}},
+			want: true,
+		},
+		{
+			name: "NonUnitTestFunction",
+			decl: &dst.FuncDecl{Name: &dst.Ident{Name: "Function"}},
+			want: false,
+		},
+		{
+			name: "EmptyFunctionName",
+			decl: &dst.FuncDecl{Name: &dst.Ident{Name: ""}},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isUnitTestDecl(tt.decl)
+			if got != tt.want {
+				t.Errorf("isUnitTestDecl() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+func Test_GetInvocationInfoFromCall(t *testing.T) {
+	testFuncDecl := &dst.FuncDecl{}
+	state := map[string]*packageState{"foo": {
+		tracedFuncs: map[string]*tracedFunctionDecl{"bar": {body: testFuncDecl}},
+	}}
+	type fields struct {
+		userAppPath       string
+		diffFile          string
+		appName           string
+		agentVariableName string
+		currentPackage    string
+		packages          map[string]*packageState
+	}
+	type args struct {
+		call    *dst.CallExpr
+		forTest string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   *invocationInfo
+	}{
+		{
+			name: "basic_passing_case",
+			fields: fields{
+				packages:       state,
+				currentPackage: "foo",
+			},
+			args: args{call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}, forTest: ""},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}, decl: testFuncDecl},
+		},
+		{
+			name: "ignore_functions_not_in_package",
+			fields: fields{
+				packages:       state,
+				currentPackage: "foo",
+			},
+			args: args{call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "fmt"}}, forTest: ""},
+			want: nil,
+		},
+		{
+			name: "forTest_path_passes",
+			fields: fields{
+				packages:       state,
+				currentPackage: "foo",
+			},
+			args: args{call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, forTest: "foo"},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: testFuncDecl},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &InstrumentationManager{
+				userAppPath:       tt.fields.userAppPath,
+				diffFile:          tt.fields.diffFile,
+				appName:           tt.fields.appName,
+				agentVariableName: tt.fields.agentVariableName,
+				currentPackage:    tt.fields.currentPackage,
+				packages:          tt.fields.packages,
+			}
+			defer panicRecovery(t)
+			got := m.getInvocationInfoFromCall(tt.args.call, tt.args.forTest)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
