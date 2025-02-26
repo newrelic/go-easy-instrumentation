@@ -1,6 +1,8 @@
 package main
 
 import (
+	// "context"
+	"context"
 	"fmt"
 	"unit-tests/pkg1"
 	"unit-tests/pkg2"
@@ -23,4 +25,9 @@ func main() {
 	str := pkg3.Concat("hello", "world")
 	split := pkg3.Split(str, "")
 	fmt.Println(split)
+
+	// context should get wrapped with a transaction
+	fmt.Println(pkg3.UnrulyFunction("hello", "world", context.Background()))
+	fmt.Println(pkg3.CrazyFunction("hello", 42, []string{"foo", "bar"}, map[string]int{"baz": 1, "qux": 2}, struct{ X, Y int }{X: 3, Y: 4}, context.Background()))
+
 }

@@ -2,7 +2,6 @@ package parser
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"go/ast"
 	"log"
@@ -434,6 +433,10 @@ func isGenerated(decorator *decorator.Decorator, file *dst.File) bool {
 	return false
 }
 
+func errorNoMain(path string) error {
+	return fmt.Errorf("cannot find a main method in %s; instrumenting applications without a main method is not supported", path)
+}
+
 func isTestPackage(pkg *decorator.Package) bool {
 	return strings.HasSuffix(pkg.ID, ".test") || pkg.ForTest != ""
 }
@@ -482,7 +485,11 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFun
 	}
 
 	if !hasMain {
-		errors.Join(errReturn, errors.New("cannot find a main method for this application; applications without main methods can not be instrumented"))
+		noMain := errorNoMain(manager.userAppPath)
+		if errReturn != nil {
+			return fmt.Errorf("%w; %w", errReturn, noMain)
+		}
+		return noMain
 	}
 	return errReturn
 }
