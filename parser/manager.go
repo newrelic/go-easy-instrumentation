@@ -3,13 +3,11 @@ package parser
 import (
 	"bytes"
 	"fmt"
-	"go/ast"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strings"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -204,6 +202,16 @@ func resolvePath(identPath, currentPackage, forTest string) string {
 	return currentPackage
 }
 
+func (m *InstrumentationManager) isDefinedInPackage(functionName, packageName string) bool {
+	state, ok := m.packages[packageName]
+	if ok {
+		_, ok = state.tracedFuncs[functionName]
+		return ok
+	}
+
+	return false
+}
+
 // getInvocationInfoFromCall returns a collection of data about a function call if it was defined
 // in the scope of this application. If the expression passed does not contain a valid function
 // call, this method will return nil.
@@ -302,6 +310,8 @@ func (m *InstrumentationManager) shouldInstrumentFunction(inv *invocationInfo) b
 	return false
 }
 
+// getSortedPackages returns a sorted list of package names.
+// this performs a log(n) sort
 func (m *InstrumentationManager) getSortedPackages() []string {
 	keys := make([]string, 0, len(m.packages))
 	for k := range m.packages {
@@ -319,7 +329,7 @@ func (m *InstrumentationManager) WriteDiff() error {
 		r := decorator.NewRestorerWithImports(state.pkg.Dir, gopackages.New(state.pkg.Dir))
 
 		for _, file := range state.pkg.Syntax {
-			if isGenerated(state.pkg.Decorator, file) { // never alter generated files, and do not include them in the diff
+			if util.IsGenerated(state.pkg.Decorator, file) { // never alter generated files, and do not include them in the diff
 				continue
 			}
 			path := state.pkg.Decorator.Filenames[file]
@@ -365,7 +375,7 @@ func (m *InstrumentationManager) WriteDiff() error {
 
 func (m *InstrumentationManager) AddRequiredModules() error {
 	for _, state := range m.packages {
-		if isTestPackage(state.pkg) {
+		if util.IsTestPackage(state.pkg) {
 			continue
 		}
 		wd, err := os.Getwd()
@@ -424,21 +434,8 @@ func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions 
 	return nil
 }
 
-func isGenerated(decorator *decorator.Decorator, file *dst.File) bool {
-	astNode := decorator.Ast.Nodes[file]
-	if astFile, ok := astNode.(*ast.File); astFile != nil && ok {
-		return ast.IsGenerated(astFile)
-	}
-
-	return false
-}
-
 func errorNoMain(path string) error {
 	return fmt.Errorf("cannot find a main method in %s; instrumenting applications without a main method is not supported", path)
-}
-
-func isTestPackage(pkg *decorator.Package) bool {
-	return strings.HasSuffix(pkg.ID, ".test") || pkg.ForTest != ""
 }
 
 // traceFunctionCalls discovers and sets up tracing for all function calls in the current package
@@ -447,14 +444,14 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFun
 	var errReturn error
 
 	for packageName, pkg := range manager.packages {
-		if isTestPackage(pkg.pkg) {
+		if util.IsTestPackage(pkg.pkg) {
 			continue
 		}
 		manager.setPackage(packageName)
 
 		for _, file := range pkg.pkg.Syntax {
 			pos := util.Position(file, pkg.pkg)
-			if pos != nil && isGenerated(pkg.pkg.Decorator, file) {
+			if pos != nil && util.IsGenerated(pkg.pkg.Decorator, file) {
 				continue
 			}
 
@@ -497,7 +494,7 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFun
 // apply instrumentation to the package
 func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessTracingFunction) {
 	for pkgName, pkgState := range manager.packages {
-		if isTestPackage(pkgState.pkg) {
+		if util.IsTestPackage(pkgState.pkg) {
 			continue
 		}
 		manager.setPackage(pkgName)
@@ -516,56 +513,61 @@ func instrumentPackages(manager *InstrumentationManager, instrumentationFunction
 	}
 }
 
-func isUnitTestDecl(decl *dst.FuncDecl) bool {
-	return strings.HasPrefix(decl.Name.Name, "Test")
-}
-
 func (m *InstrumentationManager) ResolveUnitTests() error {
 	for _, pkgState := range m.packages {
 		// vet that this is a package created to test another package
 		pkg := pkgState.pkg
-		if pkg.ForTest != "" {
-			for _, file := range pkg.Syntax {
-				if isGenerated(pkg.Decorator, file) {
+		// NOTE: do not switch this to util.IsTestPackage(), it will not work
+		if pkg.ForTest == "" {
+			continue
+		}
+
+		for _, file := range pkg.Syntax {
+			if util.IsGenerated(pkg.Decorator, file) {
+				continue
+			}
+			for i, decl := range file.Decls {
+				fn, ok := decl.(*dst.FuncDecl)
+				if !ok {
 					continue
 				}
-				for i, decl := range file.Decls {
-					fn, ok := decl.(*dst.FuncDecl)
-					if !ok || !isUnitTestDecl(fn) {
-						continue
-					}
 
-					// find all function calls and check if they are any of the functions we modified the parameters for
-					// and update them accordingly.
-					newDecl := dstutil.Apply(decl, func(c *dstutil.Cursor) bool {
-						switch call := c.Node().(type) {
-						case *dst.CallExpr:
-							inv := m.getInvocationInfoFromCall(call, pkg.ForTest)
-							if inv != nil && inv.decl != nil && inv.decl.Type.Params.List != nil && len(inv.decl.Type.Params.List) > 0 {
-								// if the function declaration has a transaction as its last parameter, the test needs to be updated to do the same
-								star, ok := inv.decl.Type.Params.List[len(inv.decl.Type.Params.List)-1].Type.(*dst.StarExpr)
-								if !ok {
-									return true
-								}
+				// pointers to decls from the package being tested are coppied in test packages
+				// and will modify the original decl if incorrectly modified by this function
+				if m.isDefinedInPackage(fn.Name.Name, pkg.ForTest) {
+					continue
+				}
 
-								// guard agains duplicate parameters being added
-								numParams := inv.decl.Type.Params.NumFields()
-								if len(call.Args) == numParams {
-									return true
-								}
+				// find all function calls and check if they are any of the functions we modified the parameters for
+				// and update them accordingly.
+				newDecl := dstutil.Apply(decl, func(c *dstutil.Cursor) bool {
+					switch call := c.Node().(type) {
+					case *dst.CallExpr:
+						inv := m.getInvocationInfoFromCall(call, pkg.ForTest)
+						if inv != nil && inv.decl != nil && inv.decl.Type.Params.List != nil && len(inv.decl.Type.Params.List) > 0 {
+							// if the function declaration has a transaction as its last parameter, the test needs to be updated to do the same
+							star, ok := inv.decl.Type.Params.List[len(inv.decl.Type.Params.List)-1].Type.(*dst.StarExpr)
+							if !ok {
+								return true
+							}
 
-								txnIdent, ok := star.X.(*dst.Ident)
-								if ok && txnIdent.Name == "Transaction" && txnIdent.Path == codegen.NewRelicAgentImportPath {
-									// we have a match, now we need to update the call to include a transaction
-									inv.call.Args = append(inv.call.Args, &dst.Ident{Name: "nil"})
-								}
+							// guard agains duplicate parameters being added
+							numParams := inv.decl.Type.Params.NumFields()
+							if len(call.Args) == numParams {
+								return true
+							}
+
+							txnIdent, ok := star.X.(*dst.Ident)
+							if ok && txnIdent.Name == "Transaction" && txnIdent.Path == codegen.NewRelicAgentImportPath {
+								// we have a match, now we need to update the call to include a transaction
+								inv.call.Args = append(inv.call.Args, &dst.Ident{Name: "nil"})
 							}
 						}
-						return true
-					}, nil)
+					}
+					return true
+				}, nil)
 
-					file.Decls[i] = newDecl.(dst.Decl)
-				}
+				file.Decls[i] = newDecl.(dst.Decl)
 			}
 		}
 	}

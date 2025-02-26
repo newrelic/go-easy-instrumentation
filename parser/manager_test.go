@@ -433,38 +433,6 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 	}
 }
 
-func Test_IsUnitTestDecl(t *testing.T) {
-	tests := []struct {
-		name string
-		decl *dst.FuncDecl
-		want bool
-	}{
-		{
-			name: "UnitTestFunction",
-			decl: &dst.FuncDecl{Name: &dst.Ident{Name: "TestFunction"}},
-			want: true,
-		},
-		{
-			name: "NonUnitTestFunction",
-			decl: &dst.FuncDecl{Name: &dst.Ident{Name: "Function"}},
-			want: false,
-		},
-		{
-			name: "EmptyFunctionName",
-			decl: &dst.FuncDecl{Name: &dst.Ident{Name: ""}},
-			want: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := isUnitTestDecl(tt.decl)
-			if got != tt.want {
-				t.Errorf("isUnitTestDecl() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
 func Test_GetInvocationInfoFromCall(t *testing.T) {
 	testFuncDecl := &dst.FuncDecl{}
 	state := map[string]*packageState{"foo": {

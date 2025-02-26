@@ -16,6 +16,16 @@ func TestConcat(t *testing.T) {
 	util.DoSomething()
 }
 
+func TestConcatParalell(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "hello world", Concat("hello ", "world"))
+	assert.Equal(t, "foo", Concat("f", "oo"))
+	assert.Equal(t, "barbaz", Concat("bar", "baz"))
+
+	util.DoSomething()
+}
+
 func TestSplit(t *testing.T) {
 	assert.Equal(t, []string{"a", "b", "c"}, Split("a,b,c", ","))
 	assert.Equal(t, []string{"foo", "bar"}, Split("foo bar", " "))

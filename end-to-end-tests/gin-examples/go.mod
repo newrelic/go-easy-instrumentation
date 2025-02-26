@@ -1,8 +1,8 @@
 module github.com/gin-gonic/examples
 
-go 1.21
+go 1.22
 
-toolchain go1.23.2
+toolchain go1.24.0
 
 require (
 	github.com/fatih/color v1.16.0
