@@ -150,3 +150,64 @@ func PrintNode(pkg *decorator.Package, node dst.Node) string {
 
 	return buf.String()
 }
+
+func IsUnitTest(pkg *decorator.Package, decl *dst.FuncDecl) bool {
+	if decl == nil {
+		return false
+	}
+	if decl.Name == nil {
+		return false
+	}
+	if !strings.HasPrefix(decl.Name.Name, "Test") {
+		return false
+	}
+
+	// Check if the function has a single parameter of type *testing.T
+	if len(decl.Type.Params.List) != 1 {
+		return false
+	}
+
+	if len(decl.Type.Params.List[0].Names) != 1 {
+		return false
+	}
+
+	// Check if the parameter is of type *testing.T
+	return IsUnderlyingType(TypeOf(decl.Type.Params.List[0].Type, pkg), "*testing.T")
+}
+
+func IsBenchmark(pkg *decorator.Package, decl *dst.FuncDecl) bool {
+	if decl == nil {
+		return false
+	}
+	if decl.Name == nil {
+		return false
+	}
+	if !strings.HasPrefix(decl.Name.Name, "Benchmark") {
+		return false
+	}
+
+	// Check if the function has a single parameter of type *testing.T
+	if len(decl.Type.Params.List) != 1 {
+		return false
+	}
+
+	if len(decl.Type.Params.List[0].Names) != 1 {
+		return false
+	}
+
+	// Check if the parameter is of type *testing.T
+	return IsUnderlyingType(TypeOf(decl.Type.Params.List[0].Type, pkg), "*testing.B")
+}
+
+func IsGenerated(decorator *decorator.Decorator, file *dst.File) bool {
+	astNode := decorator.Ast.Nodes[file]
+	if astFile, ok := astNode.(*ast.File); astFile != nil && ok {
+		return ast.IsGenerated(astFile)
+	}
+
+	return false
+}
+
+func IsTestPackage(pkg *decorator.Package) bool {
+	return strings.HasSuffix(pkg.ID, ".test") || pkg.ForTest != ""
+}

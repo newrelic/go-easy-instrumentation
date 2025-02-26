@@ -9,6 +9,7 @@ import (
 const (
 	// the import path for the newrelic package
 	NewRelicAgentImportPath string = "github.com/newrelic/go-agent/v3/newrelic"
+	agentErrorVariableName  string = "agentInitError"
 )
 
 func InitializeAgent(AppName, AgentVariableName string) []dst.Stmt {
@@ -42,7 +43,7 @@ func InitializeAgent(AppName, AgentVariableName string) []dst.Stmt {
 				Name: AgentVariableName,
 			},
 			&dst.Ident{
-				Name: "err",
+				Name: agentErrorVariableName,
 			},
 		},
 		Tok: token.DEFINE,
@@ -57,7 +58,7 @@ func InitializeAgent(AppName, AgentVariableName string) []dst.Stmt {
 		},
 	}
 
-	return []dst.Stmt{agentInit, panicOnError()}
+	return []dst.Stmt{agentInit, panicOnError(agentErrorVariableName)}
 }
 
 func ShutdownAgent(AgentVariableName string) *dst.ExprStmt {
@@ -93,11 +94,11 @@ func ShutdownAgent(AgentVariableName string) *dst.ExprStmt {
 	}
 }
 
-func panicOnError() *dst.IfStmt {
+func panicOnError(errorVariableName string) *dst.IfStmt {
 	return &dst.IfStmt{
 		Cond: &dst.BinaryExpr{
 			X: &dst.Ident{
-				Name: "err",
+				Name: errorVariableName,
 			},
 			Op: token.NEQ,
 			Y: &dst.Ident{
@@ -113,7 +114,7 @@ func panicOnError() *dst.IfStmt {
 						},
 						Args: []dst.Expr{
 							&dst.Ident{
-								Name: "err",
+								Name: errorVariableName,
 							},
 						},
 					},

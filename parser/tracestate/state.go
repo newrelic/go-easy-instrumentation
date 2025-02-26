@@ -67,6 +67,13 @@ func FunctionBody(transactionVariable string, obj ...traceobject.TraceObject) *S
 	}
 }
 
+// Placeholder creates a placeholder state for testing.
+func Placeholder() *State {
+	return &State{
+		funcLitVariables: make(map[string]*dst.FuncLit),
+	}
+}
+
 // functionCall creates a trace state for tracing a function call
 // that is being made from the scope of the current function.
 func (tc *State) functionCall(obj traceobject.TraceObject) *State {
@@ -231,21 +238,21 @@ func (tc *State) GetFuncLitVariable(pkg *decorator.Package, variable dst.Expr) (
 //  1. If the function takes an argument of the same type as the tracing object, we will pass as that type.
 //  2. If the function takes an argument of type context.Context, we will inject the transaction into the passed context.
 //  3. If neither case 1 or case 2 is met, a *newrelic.Transaction will be passed as the last argument of the function.
-func (tc *State) AddParameterToDeclaration(pkg *decorator.Package, node dst.Node) string {
+func (tc *State) AddParameterToDeclaration(pkg *decorator.Package, node dst.Node) (string, bool) {
 	if tc.addTracingParam {
 		switch decl := node.(type) {
 		case *dst.FuncDecl:
 			obj, goGet := tc.object.AddToFuncDecl(pkg, decl)
 			tc.object = obj
-			return goGet
+			return goGet, true
 		case *dst.FuncLit:
 			obj, goGet := tc.object.AddToFuncLit(pkg, decl)
 			tc.object = obj
-			return goGet
+			return goGet, true
 		}
 	}
 
-	return ""
+	return "", false
 }
 
 // AssignTransactionVariable assigns the transaction variable to a new variable that will always be the default transaction variable name.

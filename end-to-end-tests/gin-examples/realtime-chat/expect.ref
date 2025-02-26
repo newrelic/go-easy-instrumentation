@@ -15,9 +15,9 @@
  
  func main() {
 -	roomManager = NewRoomManager()
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-+	if err != nil {
-+		panic(err)
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
 +	}
 +
 +	nrTxn := NewRelicAgent.StartTransaction("NewRoomManager")

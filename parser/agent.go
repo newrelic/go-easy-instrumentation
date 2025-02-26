@@ -106,20 +106,6 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 		}
 	}
 }
-func findErrorVariableIf(stmt *dst.IfStmt, manager *InstrumentationManager) dst.Expr {
-	if binExpr, ok := stmt.Cond.(*dst.BinaryExpr); ok {
-		if exp, ok := binExpr.X.(*dst.Ident); ok {
-			if exp.Obj != nil {
-				if objData, ok := exp.Obj.Decl.(*dst.AssignStmt); ok {
-					return findErrorVariable(objData, manager.getDecoratorPackage())
-				}
-			}
-			return nil
-		}
-	}
-
-	return nil
-}
 
 // errNilCheck tests if an if statement contains a conditional check that an error is not nil
 func errNilCheck(stmt *dst.BinaryExpr, pkg *decorator.Package) bool {

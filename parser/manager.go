@@ -2,18 +2,18 @@ package parser
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"slices"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/decorator/resolver/gopackages"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/errorcache"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
@@ -187,13 +187,71 @@ type invocationInfo struct {
 	functionName string
 	packageName  string
 	call         *dst.CallExpr
+	decl         *dst.FuncDecl
 }
 
-// GetPackageFunctionInvocation returns the name of the function being invoked, and the expression containing the call
-// where that invocation occurs if a function is declared in this package.
+func resolvePath(identPath, currentPackage, forTest string) string {
+	if identPath != "" {
+		return identPath
+	}
+
+	if forTest != "" {
+		return forTest
+	}
+
+	return currentPackage
+}
+
+func (m *InstrumentationManager) isDefinedInPackage(functionName, packageName string) bool {
+	state, ok := m.packages[packageName]
+	if ok {
+		_, ok = state.tracedFuncs[functionName]
+		return ok
+	}
+
+	return false
+}
+
+// getInvocationInfoFromCall returns a collection of data about a function call if it was defined
+// in the scope of this application. If the expression passed does not contain a valid function
+// call, this method will return nil.
+//
+// TODO: support function literals
+//
+// NOTE: unlike getInvocationInfo, this method does not recursively search for invocations.
+func (m *InstrumentationManager) getInvocationInfoFromCall(call *dst.CallExpr, forTest string) *invocationInfo {
+	functionCallIdent, ok := call.Fun.(*dst.Ident)
+	if !ok {
+		return nil
+	}
+
+	path := resolvePath(functionCallIdent.Path, m.getPackageName(), forTest)
+	pkg, ok := m.packages[path]
+	if ok && pkg.tracedFuncs[functionCallIdent.Name] != nil {
+		return &invocationInfo{
+			functionName: functionCallIdent.Name,
+			packageName:  path,
+			call:         call,
+			decl:         pkg.tracedFuncs[functionCallIdent.Name].body,
+		}
+	}
+
+	return nil
+}
+
+// findInvocationInfo recursively searches for a call expression and
+// returns a collection of data about the discovered function call if it was defined
+// in the scope of this application. If the expression passed does not contain a valid function
+// call, this method will return nil.
+//
+// The node passed is a dst node that you want to search for a function call in.
+// The state passed is the current state of the application, and is used to resolve function literals.
+// The packageOverride is an optional parameter that allows you to override the package name of the function call,
+// and should only be used if you know the package the declaration lives in. This is useful for resolving
+// function calls in unit tests becasue the package linking is not handled the same way as in the main application.
 //
 // If the node does not contain a function call made to a function declared in this application, this method will return nil.
-func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node, state *tracestate.State) *invocationInfo {
+func (m *InstrumentationManager) findInvocationInfo(node dst.Node, state *tracestate.State) *invocationInfo {
 	var invInfo *invocationInfo
 
 	dst.Inspect(node, func(n dst.Node) bool {
@@ -214,16 +272,15 @@ func (m *InstrumentationManager) getPackageFunctionInvocation(node dst.Node, sta
 			if !ok {
 				return true
 			}
-			path := functionCallIdent.Path
-			if path == "" {
-				path = m.getPackageName()
-			}
+
+			path := resolvePath(functionCallIdent.Path, m.getPackageName(), "")
 			pkg, ok := m.packages[path]
 			if ok && pkg.tracedFuncs[functionCallIdent.Name] != nil {
 				invInfo = &invocationInfo{
 					functionName: functionCallIdent.Name,
 					packageName:  path,
 					call:         call,
+					decl:         pkg.tracedFuncs[functionCallIdent.Name].body,
 				}
 				return false
 			}
@@ -253,23 +310,28 @@ func (m *InstrumentationManager) shouldInstrumentFunction(inv *invocationInfo) b
 	return false
 }
 
-// GetDeclaration returns a pointer to the location in the DST tree where a function is declared and defined.
-func (m *InstrumentationManager) getDeclaration(functionName string) *dst.FuncDecl {
-	if m.packages[m.currentPackage] != nil && m.packages[m.currentPackage].tracedFuncs != nil {
-		v, ok := m.packages[m.currentPackage].tracedFuncs[functionName]
-		if ok {
-			return v.body
-		}
+// getSortedPackages returns a sorted list of package names.
+// this performs a log(n) sort
+func (m *InstrumentationManager) getSortedPackages() []string {
+	keys := make([]string, 0, len(m.packages))
+	for k := range m.packages {
+		keys = append(keys, k)
 	}
-	return nil
+	slices.Sort(keys)
+	return keys
 }
 
 // WriteDiff writes out the changes made to a file to the diff file for this package.
 func (m *InstrumentationManager) WriteDiff() error {
-	for _, state := range m.packages {
+	pkgs := m.getSortedPackages()
+	for _, pkg := range pkgs {
+		state := m.packages[pkg]
 		r := decorator.NewRestorerWithImports(state.pkg.Dir, gopackages.New(state.pkg.Dir))
 
 		for _, file := range state.pkg.Syntax {
+			if util.IsGenerated(state.pkg.Decorator, file) { // never alter generated files, and do not include them in the diff
+				continue
+			}
 			path := state.pkg.Decorator.Filenames[file]
 			originalFile, err := os.ReadFile(path)
 			if err != nil {
@@ -313,27 +375,38 @@ func (m *InstrumentationManager) WriteDiff() error {
 
 func (m *InstrumentationManager) AddRequiredModules() error {
 	for _, state := range m.packages {
+		if util.IsTestPackage(state.pkg) {
+			continue
+		}
 		wd, err := os.Getwd()
 		if err != nil {
 			return fmt.Errorf("failed to get working directory: %v", err)
 		}
 
-		defer func() {
-			err := os.Chdir(wd)
-			if err != nil {
-				log.Printf("error changing back to working directory: %v", err)
-			}
-		}()
+		// change to the directory of the package being traced so that go get adds dependencies to the right place
+		if state.pkg.Dir != "" {
+			defer func() {
+				err := os.Chdir(wd)
+				if err != nil {
+					log.Printf("error changing back to working directory: %v", err)
+				}
+			}()
 
-		err = os.Chdir(state.pkg.Dir)
-		if err != nil {
-			return err
+			err = os.Chdir(state.pkg.Dir)
+			if err != nil {
+				return err
+			}
 		}
 
 		for module := range state.importsAdded {
-			err := exec.Command("go", "get", module).Run()
+			if module == "" {
+				continue
+			}
+
+			goGet := exec.Command("go", "get", module)
+			err := goGet.Run()
 			if err != nil {
-				return fmt.Errorf("error Getting GO module %s: %v", module, err)
+				return fmt.Errorf("failed to execute \"%s\": %v", goGet.String(), err)
 			}
 		}
 	}
@@ -361,17 +434,24 @@ func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions 
 	return nil
 }
 
+func errorNoMain(path string) error {
+	return fmt.Errorf("cannot find a main method in %s; instrumenting applications without a main method is not supported", path)
+}
+
 // traceFunctionCalls discovers and sets up tracing for all function calls in the current package
 func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFunctions ...FactDiscoveryFunction) error {
 	hasMain := false
 	var errReturn error
 
 	for packageName, pkg := range manager.packages {
+		if util.IsTestPackage(pkg.pkg) {
+			continue
+		}
 		manager.setPackage(packageName)
 
 		for _, file := range pkg.pkg.Syntax {
 			pos := util.Position(file, pkg.pkg)
-			if pos != nil && strings.Contains(pos.Filename, ".pb.go") {
+			if pos != nil && util.IsGenerated(pkg.pkg.Decorator, file) {
 				continue
 			}
 
@@ -402,7 +482,11 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFun
 	}
 
 	if !hasMain {
-		errors.Join(errReturn, errors.New("cannot find a main method for this application; applications without main methods can not be instrumented"))
+		noMain := errorNoMain(manager.userAppPath)
+		if errReturn != nil {
+			return fmt.Errorf("%w; %w", errReturn, noMain)
+		}
+		return noMain
 	}
 	return errReturn
 }
@@ -410,6 +494,9 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFun
 // apply instrumentation to the package
 func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessTracingFunction) {
 	for pkgName, pkgState := range manager.packages {
+		if util.IsTestPackage(pkgState.pkg) {
+			continue
+		}
 		manager.setPackage(pkgName)
 		for _, file := range pkgState.pkg.Syntax {
 			for _, decl := range file.Decls {
@@ -424,4 +511,66 @@ func instrumentPackages(manager *InstrumentationManager, instrumentationFunction
 			}
 		}
 	}
+}
+
+func (m *InstrumentationManager) ResolveUnitTests() error {
+	for _, pkgState := range m.packages {
+		// vet that this is a package created to test another package
+		pkg := pkgState.pkg
+		// NOTE: do not switch this to util.IsTestPackage(), it will not work
+		if pkg.ForTest == "" {
+			continue
+		}
+
+		for _, file := range pkg.Syntax {
+			if util.IsGenerated(pkg.Decorator, file) {
+				continue
+			}
+			for i, decl := range file.Decls {
+				fn, ok := decl.(*dst.FuncDecl)
+				if !ok {
+					continue
+				}
+
+				// pointers to decls from the package being tested are coppied in test packages
+				// and will modify the original decl if incorrectly modified by this function
+				if m.isDefinedInPackage(fn.Name.Name, pkg.ForTest) {
+					continue
+				}
+
+				// find all function calls and check if they are any of the functions we modified the parameters for
+				// and update them accordingly.
+				newDecl := dstutil.Apply(decl, func(c *dstutil.Cursor) bool {
+					switch call := c.Node().(type) {
+					case *dst.CallExpr:
+						inv := m.getInvocationInfoFromCall(call, pkg.ForTest)
+						if inv != nil && inv.decl != nil && inv.decl.Type.Params.List != nil && len(inv.decl.Type.Params.List) > 0 {
+							// if the function declaration has a transaction as its last parameter, the test needs to be updated to do the same
+							star, ok := inv.decl.Type.Params.List[len(inv.decl.Type.Params.List)-1].Type.(*dst.StarExpr)
+							if !ok {
+								return true
+							}
+
+							// guard agains duplicate parameters being added
+							numParams := inv.decl.Type.Params.NumFields()
+							if len(call.Args) == numParams {
+								return true
+							}
+
+							txnIdent, ok := star.X.(*dst.Ident)
+							if ok && txnIdent.Name == "Transaction" && txnIdent.Path == codegen.NewRelicAgentImportPath {
+								// we have a match, now we need to update the call to include a transaction
+								inv.call.Args = append(inv.call.Args, &dst.Ident{Name: "nil"})
+							}
+						}
+					}
+					return true
+				}, nil)
+
+				file.Decls[i] = newDecl.(dst.Decl)
+			}
+		}
+	}
+
+	return nil
 }

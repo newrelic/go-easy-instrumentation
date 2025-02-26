@@ -28,8 +28,11 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 	// add needed tracing object to function declaration parameters
 	// this must be the first thing done, since it double checks the type assignment for tracing and will change it
-	tracingImport := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
-	manager.addImport(tracingImport)
+	tracingImport, ok := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
+	if ok {
+		manager.addImport(tracingImport)
+		TopLevelFunctionChanged = true
+	}
 
 	// create segment if needed
 	segmentImport, ok := tracing.CreateSegment(node)
@@ -70,7 +73,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 			default:
 				rootPkg := manager.currentPackage
-				invInfo := manager.getPackageFunctionInvocation(v.Call, tracing)
+				invInfo := manager.findInvocationInfo(v.Call, tracing)
 				if invInfo != nil {
 					childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), v.Call, true)
 					manager.addImport(tracingImport)
@@ -79,7 +82,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 					if manager.shouldInstrumentFunction(invInfo) {
 						manager.setPackage(invInfo.packageName)
-						TraceFunction(manager, manager.getDeclaration(invInfo.functionName), childState)
+						TraceFunction(manager, invInfo.decl, childState)
 						manager.setPackage(rootPkg)
 					}
 				}
@@ -105,7 +108,8 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 			}
 
 			rootPkg := manager.currentPackage
-			invInfo := manager.getPackageFunctionInvocation(v, tracing)
+			invInfo := manager.findInvocationInfo(v, tracing)
+
 			// inv info will be nil if the function is not declared in this application
 			if invInfo != nil {
 				tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable) // if a trasaction needs to be created, it will be created here
@@ -115,7 +119,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 				if manager.shouldInstrumentFunction(invInfo) {
 					manager.setPackage(invInfo.packageName)
-					TraceFunction(manager, manager.getDeclaration(invInfo.functionName), childState)
+					TraceFunction(manager, invInfo.decl, childState)
 					downstreamFunctionTraced = true
 					manager.setPackage(rootPkg)
 				}

@@ -266,8 +266,9 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 
 // What if there are two instrumentable function invocations in a statement?
 func Test_GetPackageFunctionInvocation(t *testing.T) {
+	testFuncDecl := &dst.FuncDecl{}
 	state := map[string]*packageState{"foo": {
-		tracedFuncs: map[string]*tracedFunctionDecl{"bar": {body: &dst.FuncDecl{}}},
+		tracedFuncs: map[string]*tracedFunctionDecl{"bar": {body: testFuncDecl}},
 	}}
 	type fields struct {
 		userAppPath       string
@@ -293,7 +294,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}},
-			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}, decl: testFuncDecl},
 		},
 		{
 			name: "empty_path_passes",
@@ -302,7 +303,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}},
-			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: testFuncDecl},
 		},
 		{
 			name: "finds_call_in_complex_node",
@@ -311,7 +312,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.ExprStmt{X: &dst.CallExpr{Fun: &dst.Ident{Name: "Sprintf", Path: "fmt"}, Args: []dst.Expr{&dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}}}}},
-			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: testFuncDecl},
 		},
 		{
 			name: "ignore_functions_not_in_package",
@@ -352,7 +353,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 			defer panicRecovery(t)
-			got := m.getPackageFunctionInvocation(tt.args.node, tracestate.FunctionBody(codegen.DefaultTransactionVariable))
+			got := m.findInvocationInfo(tt.args.node, tracestate.FunctionBody(codegen.DefaultTransactionVariable))
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -428,6 +429,74 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("InstrumentationManager.ShouldInstrumentFunction() = %v, want %v", got, tt.want)
 			}
+		})
+	}
+}
+
+func Test_GetInvocationInfoFromCall(t *testing.T) {
+	testFuncDecl := &dst.FuncDecl{}
+	state := map[string]*packageState{"foo": {
+		tracedFuncs: map[string]*tracedFunctionDecl{"bar": {body: testFuncDecl}},
+	}}
+	type fields struct {
+		userAppPath       string
+		diffFile          string
+		appName           string
+		agentVariableName string
+		currentPackage    string
+		packages          map[string]*packageState
+	}
+	type args struct {
+		call    *dst.CallExpr
+		forTest string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   *invocationInfo
+	}{
+		{
+			name: "basic_passing_case",
+			fields: fields{
+				packages:       state,
+				currentPackage: "foo",
+			},
+			args: args{call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}, forTest: ""},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}, decl: testFuncDecl},
+		},
+		{
+			name: "ignore_functions_not_in_package",
+			fields: fields{
+				packages:       state,
+				currentPackage: "foo",
+			},
+			args: args{call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "fmt"}}, forTest: ""},
+			want: nil,
+		},
+		{
+			name: "forTest_path_passes",
+			fields: fields{
+				packages:       state,
+				currentPackage: "foo",
+			},
+			args: args{call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, forTest: "foo"},
+			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: testFuncDecl},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &InstrumentationManager{
+				userAppPath:       tt.fields.userAppPath,
+				diffFile:          tt.fields.diffFile,
+				appName:           tt.fields.appName,
+				agentVariableName: tt.fields.agentVariableName,
+				currentPackage:    tt.fields.currentPackage,
+				packages:          tt.fields.packages,
+			}
+			defer panicRecovery(t)
+			got := m.getInvocationInfoFromCall(tt.args.call, tt.args.forTest)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }

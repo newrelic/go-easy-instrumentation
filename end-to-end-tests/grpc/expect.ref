@@ -121,9 +121,9 @@
  }
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-+	if err != nil {
-+		panic(err)
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
 +	}
 +
  	conn, err := grpc.Dial(
@@ -258,9 +258,9 @@
  }
  
  func main() {
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-+	if err != nil {
-+		panic(err)
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
 +	}
 +
  	lis, err := net.Listen("tcp", "localhost:8080")

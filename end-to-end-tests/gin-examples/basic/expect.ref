@@ -89,9 +89,9 @@
  
  func main() {
 -	r := setupRouter()
-+	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-+	if err != nil {
-+		panic(err)
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
 +	}
 +
 +	nrTxn := NewRelicAgent.StartTransaction("setupRouter")
@@ -102,3 +102,14 @@
 +
 +	NewRelicAgent.Shutdown(5 * time.Second)
  }
+--- a/main_test.go
++++ b/main_test.go
+@@ -9,7 +9,7 @@
+ )
+ 
+ func TestPingRoute(t *testing.T) {
+-	router := setupRouter()
++	router := setupRouter(nil)
+ 
+ 	w := httptest.NewRecorder()
+ 	req, _ := http.NewRequest("GET", "/ping", nil)

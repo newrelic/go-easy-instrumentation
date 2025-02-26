@@ -23,5 +23,9 @@
 	{
 		"name": "gin - multiple services",
 		"dir": "end-to-end-tests/gin-examples/multiple-service"
+	},
+	{
+		"name": "unit tests",
+		"dir": "end-to-end-tests/unit-tests"
 	}
 ]}

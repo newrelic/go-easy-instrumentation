@@ -41,9 +41,9 @@ import (
 )
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	router := gin.Default()
@@ -90,9 +90,9 @@ func setupRouter(nrTxn *newrelic.Transaction) {
 }
 
 func main() {
-	NewRelicAgent, err := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if err != nil {
-		panic(err)
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
 	}
 
 	nrTxn := NewRelicAgent.StartTransaction("setupRouter")
