@@ -59,7 +59,9 @@ func IsUnderlyingType(underlyingType types.Type, name string) bool {
 	if underlyingType == nil {
 		return false
 	}
-	return strings.Contains(underlyingType.String(), name)
+
+	typeString := underlyingType.String()
+	return strings.Contains(typeString, name) || typeString == name
 }
 
 // FunctionName returns the name of the function being invoked in a call expression

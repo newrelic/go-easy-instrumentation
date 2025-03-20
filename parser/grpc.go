@@ -187,7 +187,7 @@ func isGrpcRegisterServerCall(call *dst.CallExpr, pkg *decorator.Package) bool {
 	if strings.Index(callFuncName, "Register") == 0 && strings.Index(callFuncName, "Server") == len(callFuncName)-6 {
 		if serverIdent, ok := call.Args[0].(*dst.Ident); ok {
 			serverType := util.TypeOf(serverIdent, pkg)
-			return serverType != nil && serverType.String() == grpcServerType
+			return serverType != nil && serverType.String() == grpcServerType || util.IsUnderlyingType(serverType.Underlying(), grpcServerType)
 		}
 	}
 	return false
