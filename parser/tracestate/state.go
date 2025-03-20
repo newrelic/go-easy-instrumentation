@@ -51,7 +51,9 @@ func Main(agentVariable string) *State {
 	}
 }
 
-// FunctionBody creates a trace state for tracing a function body.
+// FunctionBody creates a trace state for the body of a non-main function.
+// The transactionVariable is the name of the transaction variable in the current scope.
+// The object is the object that contains the transaction, along with helper functions for how to utilize it.
 func FunctionBody(transactionVariable string, obj ...traceobject.TraceObject) *State {
 	var object traceobject.TraceObject
 	if len(obj) > 0 {

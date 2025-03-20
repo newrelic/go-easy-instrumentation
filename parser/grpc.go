@@ -11,6 +11,7 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate/traceobject"
 )
 
 const (
@@ -71,10 +72,16 @@ func grpcNewServerCall(node dst.Node) (*dst.CallExpr, bool) {
 // Stateless Tracing Functions
 // ////////////////////////////////////////////
 
+// traceObject must not be nil if grpcServerTxnData is returned
+type grpcServerTxnData struct {
+	assignment  *dst.AssignStmt
+	traceObject traceobject.TraceObject
+}
+
 // getTxnFromGrpcServer finds the transaction object from a gRPC server method
 // This is done by looking for a context object or a stream server object in the function parameters
 // and then pulling the transaction from that object and assigning it to a variable.
-func getTxnFromGrpcServer(manager *InstrumentationManager, params []*dst.Field, txnVariableName string) (*dst.AssignStmt, bool) {
+func getTxnFromGrpcServer(manager *InstrumentationManager, params []*dst.Field, txnVariableName string) (*grpcServerTxnData, bool) {
 	// Find stream server object parameters first
 	var streamServerIdent *dst.Ident
 	var contextIdent *dst.Ident
@@ -96,13 +103,22 @@ func getTxnFromGrpcServer(manager *InstrumentationManager, params []*dst.Field, 
 		}
 	}
 
+	var txnData *grpcServerTxnData
+	var ok bool
 	if streamServerIdent != nil {
-		return codegen.TxnFromContext(txnVariableName, codegen.GrpcStreamContext(streamServerIdent)), true
+		ok = true
+		txnData = &grpcServerTxnData{
+			assignment:  codegen.TxnFromContext(txnVariableName, codegen.GrpcStreamContext(streamServerIdent)),
+			traceObject: traceobject.NewTransaction(),
+		}
 	} else if contextIdent != nil {
-		return codegen.TxnFromContext(txnVariableName, contextIdent), true
+		ok = true
+		txnData = &grpcServerTxnData{
+			traceObject: traceobject.NewContext(contextIdent.Name),
+		}
 	}
 
-	return nil, false
+	return txnData, ok
 }
 
 // isGrpcServerMethod checks if a function declaration is a method of the user's gRPC server
@@ -129,18 +145,22 @@ func isGrpcServerMethod(manager *InstrumentationManager, funcDecl *dst.FuncDecl)
 func InstrumentGrpcServerMethod(manager *InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
 	funcDecl, ok := n.(*dst.FuncDecl)
-	if ok && isGrpcServerMethod(manager, funcDecl) {
-		// find either a context or a server stream object
-		txnAssignment, ok := getTxnFromGrpcServer(manager, funcDecl.Type.Params.List, codegen.DefaultTransactionVariable)
-		if ok {
-			// ok is true if the body of this function has any tracing code added to it. If this is true, we know it needs a transaction to get
-			// pulled from the grpc server object
-			node, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(codegen.DefaultTransactionVariable))
-			decl := node.(*dst.FuncDecl)
-			if ok {
-				decl.Body.List = append([]dst.Stmt{txnAssignment}, decl.Body.List...)
-			}
-		}
+	if !ok || !isGrpcServerMethod(manager, funcDecl) {
+		return
+	}
+
+	// find either a context or a server stream object
+	txnData, ok := getTxnFromGrpcServer(manager, funcDecl.Type.Params.List, codegen.DefaultTransactionVariable)
+	if !ok {
+		return
+	}
+
+	// ok is true if the body of this function has any tracing code added to it. If this is true, we know it needs a transaction to get
+	// pulled from the grpc server object
+	node, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(codegen.DefaultTransactionVariable, txnData.traceObject))
+	decl := node.(*dst.FuncDecl)
+	if ok && txnData.assignment != nil {
+		decl.Body.List = append([]dst.Stmt{txnData.assignment}, decl.Body.List...)
 	}
 }
 

@@ -29,6 +29,14 @@ func doSomething() {
 	time.Sleep(1 * time.Second)
 }
 
+func checkMessage(message *sampleapp.Message) (*sampleapp.Message, error) {
+	if message == nil {
+		return message, fmt.Errorf("message is nil")
+	}
+
+	return message, nil
+}
+
 // DoUnaryUnary is a unary request, unary response method.
 func (s *Server) DoUnaryUnary(ctx context.Context, msg *sampleapp.Message) (*sampleapp.Message, error) {
 	processMessage(ctx, msg)
@@ -36,7 +44,7 @@ func (s *Server) DoUnaryUnary(ctx context.Context, msg *sampleapp.Message) (*sam
 	if err != nil {
 		return &sampleapp.Message{Text: "DoUnaryUnary Error"}, err
 	}
-	return &sampleapp.Message{Text: "Hello from DoUnaryUnary"}, nil
+	return checkMessage(&sampleapp.Message{Text: "Hello from DoUnaryUnary"})
 }
 
 // DoUnaryStream is a unary request, stream response method.
