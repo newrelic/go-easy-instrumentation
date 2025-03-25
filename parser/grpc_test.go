@@ -11,6 +11,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
+	"github.com/newrelic/go-easy-instrumentation/parser/tracestate/traceobject"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/tools/go/packages"
 )
@@ -556,6 +557,7 @@ func TestFindGrpcServerObject(t *testing.T) {
 		}
 	}
 }
+
 func TestGetTxnFromGrpcServer(t *testing.T) {
 	grpcServerStreamType := types.NewNamed(
 		types.NewTypeName(0, nil, "mainType", nil), // Main Type
@@ -614,7 +616,7 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 	tests := []struct {
 		name string
 		args
-		want   *dst.AssignStmt
+		want   *grpcServerTxnData
 		expect bool
 	}{
 		{
@@ -627,7 +629,10 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 					},
 				},
 			},
-			want:   codegen.TxnFromContext("txn", codegen.GrpcStreamContext(serverStreamParamName)),
+			want: &grpcServerTxnData{
+				codegen.TxnFromContext("txn", codegen.GrpcStreamContext(serverStreamParamName)),
+				traceobject.NewTransaction(),
+			},
 			expect: true,
 		},
 		{
@@ -640,7 +645,9 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 					},
 				},
 			},
-			want:   codegen.TxnFromContext("txn", contextParamName),
+			want: &grpcServerTxnData{
+				traceObject: traceobject.NewContext(contextParamName.Name),
+			},
 			expect: true,
 		},
 		{

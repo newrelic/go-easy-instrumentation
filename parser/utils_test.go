@@ -174,9 +174,7 @@ func testStatelessTracingFunction(t *testing.T, code string, tracingFunc Statele
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
 
-	for _, statefulTracingFunc := range statefulTracingFuncs {
-		manager.tracingFunctions.stateful = append(manager.tracingFunctions.stateful, statefulTracingFunc)
-	}
+	manager.tracingFunctions.stateful = append(manager.tracingFunctions.stateful, statefulTracingFuncs...)
 
 	err = manager.InstrumentApplication(tracingFunc)
 	if err != nil {

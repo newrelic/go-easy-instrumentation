@@ -20,7 +20,10 @@ type Context struct {
 	contextParameterName string // the name of the context parameter for a function declaration
 }
 
-func NewContext() *Context {
+func NewContext(name ...string) *Context {
+	if len(name) > 0 {
+		return &Context{contextParameterName: name[0]}
+	}
 	return &Context{}
 }
 
