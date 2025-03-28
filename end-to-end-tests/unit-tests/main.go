@@ -7,6 +7,7 @@ import (
 	"unit-tests/pkg1"
 	"unit-tests/pkg2"
 	"unit-tests/pkg3"
+	"unit-tests/pkg4"
 )
 
 func main() {
@@ -30,4 +31,6 @@ func main() {
 	fmt.Println(pkg3.UnrulyFunction("hello", "world", context.Background()))
 	fmt.Println(pkg3.CrazyFunction("hello", 42, []string{"foo", "bar"}, map[string]int{"baz": 1, "qux": 2}, struct{ X, Y int }{X: 3, Y: 4}, context.Background()))
 
+	counter := pkg4.NewCounter(pkg3.Concat("hello ", "world")) // Use pkg3.Concat to set the name
+	counter.GetChild().DecodeSecret()
 }

@@ -268,8 +268,12 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 func Test_GetPackageFunctionInvocation(t *testing.T) {
 	testFuncDecl := &dst.FuncDecl{}
 	state := map[string]*packageState{"foo": {
-		tracedFuncs: map[string]*tracedFunctionDecl{"bar": {body: testFuncDecl}},
+		tracedFuncs: map[string]*tracedFunctionDecl{
+			"bar": {body: testFuncDecl},
+			"bax": {body: testFuncDecl},
+		},
 	}}
+
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -285,7 +289,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 		name   string
 		fields fields
 		args   args
-		want   *invocationInfo
+		want   []*invocationInfo
 	}{
 		{
 			name: "basic_passing_case",
@@ -294,7 +298,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}},
-			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}, decl: testFuncDecl},
+			want: []*invocationInfo{{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}, decl: testFuncDecl}},
 		},
 		{
 			name: "empty_path_passes",
@@ -303,7 +307,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}},
-			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: testFuncDecl},
+			want: []*invocationInfo{{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: testFuncDecl}},
 		},
 		{
 			name: "finds_call_in_complex_node",
@@ -312,7 +316,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.ExprStmt{X: &dst.CallExpr{Fun: &dst.Ident{Name: "Sprintf", Path: "fmt"}, Args: []dst.Expr{&dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}}}}},
-			want: &invocationInfo{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: testFuncDecl},
+			want: []*invocationInfo{{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}, decl: testFuncDecl}},
 		},
 		{
 			name: "ignore_functions_not_in_package",
@@ -321,7 +325,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "fmt"}}},
-			want: nil,
+			want: []*invocationInfo{},
 		},
 		{
 			name: "ignore_functions_not_declared_in_app",
@@ -330,16 +334,82 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.CallExpr{Fun: &dst.Ident{Name: "baz", Path: "foo"}}},
-			want: nil,
+			want: []*invocationInfo{},
 		},
 		{
-			name: "ignore_block_statements",
+			name: "do_not_traverse_block_statements",
 			fields: fields{
 				packages:       state,
 				currentPackage: "foo",
 			},
 			args: args{node: &dst.BlockStmt{List: []dst.Stmt{&dst.ExprStmt{X: &dst.CallExpr{Fun: &dst.Ident{Name: "bar"}}}}}},
-			want: nil,
+			want: []*invocationInfo{},
+		},
+		// Chained Methods: bax().bar() should return an invocation for bax and bar
+		{
+			name: "chain_of_methods",
+			fields: fields{
+				packages:       state,
+				currentPackage: "foo",
+			},
+			args: args{
+				node: &dst.ExprStmt{
+					X: &dst.CallExpr{Fun: &dst.SelectorExpr{
+						X:   &dst.CallExpr{Fun: &dst.Ident{Name: "bax"}},
+						Sel: &dst.Ident{Name: "bar", Path: "foo"},
+					}},
+				},
+			},
+			want: []*invocationInfo{
+				{
+					packageName:  "foo",
+					functionName: "bar",
+					call: &dst.CallExpr{Fun: &dst.SelectorExpr{
+						X:   &dst.CallExpr{Fun: &dst.Ident{Name: "bax"}},
+						Sel: &dst.Ident{Name: "bar", Path: "foo"},
+					}},
+					decl: testFuncDecl},
+				{packageName: "foo", functionName: "bax", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bax"}}, decl: testFuncDecl},
+			},
+		},
+		// Nested Methods: bax(bar()) should return an invocation for bax and bar
+		{
+			name: "nested_invocations",
+			fields: fields{
+				packages:       state,
+				currentPackage: "foo",
+			},
+			args: args{
+				node: &dst.ExprStmt{
+					X: &dst.CallExpr{
+						Fun: &dst.Ident{
+							Name: "bax", Path: "foo", // This is the outer function call
+						},
+						Args: []dst.Expr{
+							&dst.CallExpr{ // This is the inner function call
+								Fun: &dst.Ident{Name: "bar", Path: "foo"}, // This should be resolved to bar
+							},
+						},
+					},
+				},
+			},
+			want: []*invocationInfo{
+				{
+					packageName:  "foo",
+					functionName: "bax",
+					call: &dst.CallExpr{
+						Fun: &dst.Ident{
+							Name: "bax", Path: "foo",
+						},
+						Args: []dst.Expr{
+							&dst.CallExpr{
+								Fun: &dst.Ident{Name: "bar", Path: "foo"},
+							},
+						},
+					},
+					decl: testFuncDecl},
+				{packageName: "foo", functionName: "bar", call: &dst.CallExpr{Fun: &dst.Ident{Name: "bar", Path: "foo"}}, decl: testFuncDecl},
+			},
 		},
 	}
 	for _, tt := range tests {
