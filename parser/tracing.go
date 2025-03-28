@@ -73,8 +73,8 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 			default:
 				rootPkg := manager.currentPackage
-				invInfo := manager.findInvocationInfo(v.Call, tracing)
-				if invInfo != nil {
+				tracableInvocations := manager.findInvocationInfo(v.Call, tracing)
+				for _, invInfo := range tracableInvocations {
 					childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), v.Call, true)
 					manager.addImport(tracingImport)
 					c.Replace(v)
@@ -108,10 +108,10 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 			}
 
 			rootPkg := manager.currentPackage
-			invInfo := manager.findInvocationInfo(v, tracing)
+			tracableInvocations := manager.findInvocationInfo(v, tracing)
 
 			// inv info will be nil if the function is not declared in this application
-			if invInfo != nil {
+			for _, invInfo := range tracableInvocations {
 				tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable) // if a trasaction needs to be created, it will be created here
 				childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
 				manager.addImport(tracingImport)

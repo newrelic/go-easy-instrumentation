@@ -91,7 +91,7 @@ func CrazyFunction(a string, b int, c []string, d map[string]int, e struct{ X, Y
 		result = Concat(result, fmt.Sprintf("%s%d", k, v))
 	}
 
-	result = Concat(result, fmt.Sprintf("%d%d", e.X, e.Y))
+	result = Concat(result, Concat(" ", "%"))
 
 	return result, nil
 }
