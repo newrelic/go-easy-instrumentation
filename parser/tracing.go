@@ -109,10 +109,14 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 			rootPkg := manager.currentPackage
 			tracableInvocations := manager.findInvocationInfo(v, tracing)
+			transactionCreatedForStatement := false // prevent multiple transactions from being created for the same statement
 
 			// inv info will be nil if the function is not declared in this application
 			for _, invInfo := range tracableInvocations {
-				tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable) // if a trasaction needs to be created, it will be created here
+				if !transactionCreatedForStatement {
+					tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable) // if a trasaction needs to be created, it will be created here
+					transactionCreatedForStatement = true
+				}
 				childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
 				manager.addImport(tracingImport)
 				TopLevelFunctionChanged = true
