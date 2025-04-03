@@ -239,10 +239,10 @@ func (m *InstrumentationManager) getInvocationInfoFromCall(call *dst.CallExpr, f
 	return nil
 }
 
-// findInvocationInfo recursively searches for a call expression and
-// returns a collection of data about the discovered function call if it was defined
-// in the scope of this application. If the expression passed does not contain a valid function
-// call, this method will return nil.
+// findInvocationInfo post order traverses the node and searches for function calls that are defined
+// within the current application and is reachable by tracing. This method
+// returns a slice of data about the discovered function call(s) that can have tracing propagated
+// to them automatically. If no matches are found, an empty list will be returned.
 //
 // The node passed is a dst node that you want to search for a function call in.
 // The state passed is the current state of the application, and is used to resolve function literals.
@@ -251,8 +251,13 @@ func (m *InstrumentationManager) getInvocationInfoFromCall(call *dst.CallExpr, f
 // function calls in unit tests becasue the package linking is not handled the same way as in the main application.
 //
 // If the node does not contain a function call made to a function declared in this application, this method will return nil.
-func (m *InstrumentationManager) findInvocationInfo(node dst.Node, state *tracestate.State) *invocationInfo {
-	var invInfo *invocationInfo
+//
+// Possible cases:
+// 1. A function call to a function in the current package: f()
+// 2. A function call chain of functions: f().g().x()
+// 3. A function call containing nested function calls: f(g(x()))
+func (m *InstrumentationManager) findInvocationInfo(node dst.Node, state *tracestate.State) []*invocationInfo {
+	invInfo := []*invocationInfo{}
 
 	dst.Inspect(node, func(n dst.Node) bool {
 		switch v := n.(type) {
@@ -262,29 +267,42 @@ func (m *InstrumentationManager) findInvocationInfo(node dst.Node, state *traces
 			call := v
 			_, ok := state.GetFuncLitVariable(m.getDecoratorPackage(), call.Fun)
 			if ok {
-				invInfo = &invocationInfo{
+				invInfo = append(invInfo, &invocationInfo{
 					functionName: "Function Literal",
 					packageName:  m.getPackageName(),
 					call:         call,
+				})
+			}
+			switch fun := call.Fun.(type) {
+			case *dst.Ident:
+				path := resolvePath(fun.Path, m.getPackageName(), "")
+				pkg, ok := m.packages[path]
+				if ok && pkg.tracedFuncs[fun.Name] != nil {
+					invInfo = append(invInfo, &invocationInfo{
+						functionName: fun.Name,
+						packageName:  path,
+						call:         call,
+						decl:         pkg.tracedFuncs[fun.Name].body,
+					})
+				}
+			case *dst.SelectorExpr:
+				// Handle selector expressions like `f().g().x()`
+				pkgName := util.PackagePath(fun.Sel, m.getDecoratorPackage())
+				path := resolvePath(pkgName, m.getPackageName(), "")
+				pkg, ok := m.packages[path]
+				functionName := fun.Sel.Name
+
+				// Check if the function is defined in a package of this application.
+				// If true, tracing can be passed into it.
+				if ok && pkg.tracedFuncs[functionName] != nil {
+					invInfo = append(invInfo, &invocationInfo{
+						functionName: functionName,
+						packageName:  path,
+						call:         call,
+						decl:         pkg.tracedFuncs[functionName].body,
+					})
 				}
 			}
-			functionCallIdent, ok := call.Fun.(*dst.Ident)
-			if !ok {
-				return true
-			}
-
-			path := resolvePath(functionCallIdent.Path, m.getPackageName(), "")
-			pkg, ok := m.packages[path]
-			if ok && pkg.tracedFuncs[functionCallIdent.Name] != nil {
-				invInfo = &invocationInfo{
-					functionName: functionCallIdent.Name,
-					packageName:  path,
-					call:         call,
-					decl:         pkg.tracedFuncs[functionCallIdent.Name].body,
-				}
-				return false
-			}
-
 			return true
 		}
 		return true
