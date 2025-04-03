@@ -285,20 +285,25 @@ func (m *InstrumentationManager) findInvocationInfo(node dst.Node, state *traces
 						decl:         pkg.tracedFuncs[fun.Name].body,
 					})
 				}
-				return true
 			case *dst.SelectorExpr:
 				// Handle selector expressions like `f().g().x()`
-				path := resolvePath(fun.Sel.Path, m.getPackageName(), "")
+				pkgName := util.PackagePath(fun.Sel, m.getDecoratorPackage())
+				path := resolvePath(pkgName, m.getPackageName(), "")
 				pkg, ok := m.packages[path]
-				if ok && pkg.tracedFuncs[fun.Sel.Name] != nil {
+				functionName := fun.Sel.Name
+
+				// Check if the function is defined in a package of this application.
+				// If true, tracing can be passed into it.
+				if ok && pkg.tracedFuncs[functionName] != nil {
 					invInfo = append(invInfo, &invocationInfo{
-						functionName: fun.Sel.Name,
+						functionName: functionName,
 						packageName:  path,
 						call:         call,
-						decl:         pkg.tracedFuncs[fun.Sel.Name].body,
+						decl:         pkg.tracedFuncs[functionName].body,
 					})
 				}
 			}
+			return true
 		}
 		return true
 	})
