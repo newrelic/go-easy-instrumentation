@@ -1,6 +1,6 @@
 --- a/main.go
 +++ b/main.go
-@@ -4,30 +4,61 @@
+@@ -4,33 +4,69 @@
  	// "context"
  	"context"
  	"fmt"
@@ -8,6 +8,7 @@
  	"unit-tests/pkg1"
  	"unit-tests/pkg2"
  	"unit-tests/pkg3"
+ 	"unit-tests/pkg4"
 +
 +	"github.com/newrelic/go-agent/v3/newrelic"
  )
@@ -71,6 +72,15 @@
 +	fmt.Println(pkg3.CrazyFunction("hello", 42, []string{"foo", "bar"}, map[string]int{"baz": 1, "qux": 2}, struct{ X, Y int }{X: 3, Y: 4}, newrelic.NewContext(context.Background(), nrTxn)))
 +	nrTxn.End()
  
+-	counter := pkg4.NewCounter(pkg3.Concat("hello ", "world")) // Use pkg3.Concat to set the name
+-	counter.GetChild().DecodeSecret()
++	nrTxn = NewRelicAgent.StartTransaction("NewCounter")
++	counter := pkg4.NewCounter(pkg3.Concat("hello ", "world", nrTxn), nrTxn)
++	nrTxn.End() // Use pkg3.Concat to set the name
++	nrTxn = NewRelicAgent.StartTransaction("DecodeSecret")
++	counter.GetChild(nrTxn).DecodeSecret(nrTxn)
++	nrTxn.End()
++
 +	NewRelicAgent.Shutdown(5 * time.Second)
  }
 --- a/pkg1/pkg1.go
@@ -399,8 +409,8 @@
 +		result = Concat(result, fmt.Sprintf("%s%d", k, v), nrTxn)
  	}
  
--	result = Concat(result, fmt.Sprintf("%d%d", e.X, e.Y))
-+	result = Concat(result, fmt.Sprintf("%d%d", e.X, e.Y), nrTxn)
+-	result = Concat(result, Concat(" ", "%"))
++	result = Concat(result, Concat(" ", "%", nrTxn), nrTxn)
  
  	return result, nil
  }
@@ -443,3 +453,51 @@
  }
  
  func TestThingWithContext(t *testing.T) {
+--- a/pkg4/obj.go
++++ b/pkg4/obj.go
+@@ -3,17 +3,22 @@
+ import (
+ 	"encoding/base64"
+ 	"fmt"
++
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ type Child struct {
+ 	secret string
+ }
+ 
+-func (c *Child) DecodeSecret() string {
++func (c *Child) DecodeSecret(nrTxn *newrelic.Transaction) string {
++	defer nrTxn.StartSegment("DecodeSecret").End()
++
+ 	// Decode the base64 encoded secret
+ 	decodedBytes, err := base64.StdEncoding.DecodeString(c.secret)
+ 	if err != nil {
+ 		// Handle error in decoding
++		nrTxn.NoticeError(err)
+ 		return "Error decoding secret: " + err.Error()
+ 	}
+ 	// Return the decoded string
+@@ -26,7 +21,9 @@
+ 	child *Child // Embedding Child struct to demonstrate composition
+ }
+ 
+-func NewCounter(name string) *Counter {
++func NewCounter(name string, nrTxn *newrelic.Transaction) *Counter {
++	defer nrTxn.StartSegment("NewCounter").End()
++
+ 	return &Counter{
+ 		name:  name,
+ 		count: 0, // Initialize count to 0
+@@ -44,7 +41,9 @@
+ 	return e.count
+ }
+ 
+-func (e *Counter) GetChild() *Child {
++func (e *Counter) GetChild(nrTxn *newrelic.Transaction) *Child {
++	defer nrTxn.StartSegment("GetChild").End()
++
+ 	return e.child
+ }
+
