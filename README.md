@@ -66,7 +66,7 @@ Installation Steps have been moved to: https://docs.newrelic.com/docs/apm/agents
     ```
 4. Build and run from the root of the repo:
     ```
-    go run . -path $MY_APP
+    go run . instrument $MY_APP
     ```
 
 ### Manually Run Unit Tests
