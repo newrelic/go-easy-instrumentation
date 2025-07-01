@@ -23,7 +23,7 @@ func ginMiddlewareCall(stmt dst.Stmt) string {
 	}
 	if call, ok := v.Rhs[0].(*dst.CallExpr); ok {
 		if ident, ok := call.Fun.(*dst.Ident); ok {
-			if ident.Name == "Default" || ident.Name == "New" && ident.Path == ginImportPath {
+			if (ident.Name == "Default" || ident.Name == "New") && ident.Path == ginImportPath {
 				if v.Lhs != nil {
 					return v.Lhs[0].(*dst.Ident).Name
 				}
