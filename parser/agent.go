@@ -93,18 +93,38 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
 		// only inject go agent into the main.main function
 		if decl.Name.Name == "main" {
-			agentDecl := codegen.InitializeAgent(manager.appName, manager.agentVariableName)
-			decl.Body.List = append(agentDecl, decl.Body.List...)
-			decl.Body.List = append(decl.Body.List, codegen.ShutdownAgent(manager.agentVariableName))
-
-			// add go-agent/v3/newrelic to imports
-			manager.addImport(codegen.NewRelicAgentImportPath)
+			if !CheckForExistingApplication(manager, decl) {
+				agentDecl := codegen.InitializeAgent(manager.appName, manager.agentVariableName)
+				decl.Body.List = append(agentDecl, decl.Body.List...)
+				decl.Body.List = append(decl.Body.List, codegen.ShutdownAgent(manager.agentVariableName))
+				// add go-agent/v3/newrelic to imports
+				manager.addImport(codegen.NewRelicAgentImportPath)
+			}
 			newMain, _ := TraceFunction(manager, decl, tracestate.Main(manager.agentVariableName))
 
 			// this will skip the tracing of this function in the outer tree walking algorithm
 			c.Replace(newMain)
+
 		}
 	}
+}
+
+func CheckForExistingApplication(manager *InstrumentationManager, decl *dst.FuncDecl) bool {
+	for _, stmt := range decl.Body.List {
+		if assign, ok := stmt.(*dst.AssignStmt); ok {
+			if call, ok := assign.Rhs[0].(*dst.CallExpr); ok {
+				if path, ok := call.Fun.(*dst.Ident); ok {
+					if path.Path == codegen.NewRelicAgentImportPath {
+						manager.agentVariableName = assign.Lhs[0].(*dst.Ident).Name
+						return true
+					}
+				}
+			}
+		}
+
+	}
+	return false
+
 }
 
 // errNilCheck tests if an if statement contains a conditional check that an error is not nil
