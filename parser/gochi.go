@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	gochiImportPath = "github.com/go-chi/chi"
+	gochiImportPath = "github.com/go-chi/chi/v5"
 )
 
 // Return the variable name of the Chi router object.
