@@ -1,0 +1,35 @@
+--- a/main.go
++++ b/main.go
+@@ -2,9 +2,12 @@
+ 
+ import (
+ 	"net/http"
++	"time"
+ 
+ 	"github.com/go-chi/chi/v5"
+ 	"github.com/go-chi/chi/v5/middleware"
++	"github.com/newrelic/go-agent/v3/integrations/nrgochi"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func endpoint404(w http.ResponseWriter, r *http.Request) {
+@@ -13,11 +13,19 @@
+ }
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	r := chi.NewRouter()
++	r.Use(nrgochi.Middleware(NewRelicAgent))
+ 	r.Use(middleware.Logger)
+ 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+ 		w.Write([]byte("welcome"))
+ 	})
+ 	r.Get("/404", endpoint404)
+ 	http.ListenAndServe(":3000", r)
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
