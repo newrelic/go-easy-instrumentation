@@ -1,8 +1,8 @@
 --- a/main.go
 +++ b/main.go
-@@ -2,9 +2,12 @@
- 
- import (
+@@ -4,9 +4,12 @@
+ 	"io"
+ 	"log/slog"
  	"net/http"
 +	"time"
  
@@ -13,7 +13,24 @@
  )
  
  func endpoint404(w http.ResponseWriter, r *http.Request) {
-@@ -13,11 +13,19 @@
+@@ -15,9 +15,16 @@
+ }
+ 
+ func basicExternal(w http.ResponseWriter, r *http.Request) {
++	nrTxn := newrelic.FromContext(r.Context())
++
++	// the "http.Get()" net/http method can not be instrumented and its outbound traffic can not be traced
++	// please see these examples of code patterns for external http calls that can be instrumented:
++	// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
++	//
+ 	// Make an http request to an external address
+ 	resp, err := http.Get("https://example.com")
+ 	if err != nil {
++		nrTxn.NoticeError(err)
+ 		slog.Error(err.Error())
+ 		io.WriteString(w, err.Error())
+ 		return
+@@ -28,7 +32,13 @@
  }
  
  func main() {
@@ -27,8 +44,9 @@
  	r.Use(middleware.Logger)
  	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
  		w.Write([]byte("welcome"))
- 	})
+@@ -36,4 +45,6 @@
  	r.Get("/404", endpoint404)
+ 	r.Get("/external", basicExternal)
  	http.ListenAndServe(":3000", r)
 +
 +	NewRelicAgent.Shutdown(5 * time.Second)

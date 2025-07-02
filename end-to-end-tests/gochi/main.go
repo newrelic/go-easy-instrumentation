@@ -1,6 +1,8 @@
 package main
 
 import (
+	"io"
+	"log/slog"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,6 +14,19 @@ func endpoint404(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("returning 404"))
 }
 
+func basicExternal(w http.ResponseWriter, r *http.Request) {
+	// Make an http request to an external address
+	resp, err := http.Get("https://example.com")
+	if err != nil {
+		slog.Error(err.Error())
+		io.WriteString(w, err.Error())
+		return
+	}
+
+	defer resp.Body.Close()
+	io.Copy(w, resp.Body)
+}
+
 func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -19,5 +34,6 @@ func main() {
 		w.Write([]byte("welcome"))
 	})
 	r.Get("/404", endpoint404)
+	r.Get("/external", basicExternal)
 	http.ListenAndServe(":3000", r)
 }
