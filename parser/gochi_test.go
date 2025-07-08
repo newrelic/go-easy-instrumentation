@@ -18,7 +18,7 @@ func TestInstrumentChiRouter(t *testing.T) {
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	chi "github.com/go-chi/chi/v5"
 )
 
 func main() {
@@ -32,7 +32,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	chi "github.com/go-chi/chi/v5"
 	"github.com/newrelic/go-agent/v3/integrations/nrgochi"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
@@ -57,7 +57,7 @@ func main() {
 import (
 	"net/http"
 
-	"github.com/go-chi/chi/v5"
+	chi "github.com/go-chi/chi/v5"
 )
 
 func setupRouter() {
@@ -76,7 +76,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/go-chi/chi/v5"
+	chi "github.com/go-chi/chi/v5"
 	"github.com/newrelic/go-agent/v3/integrations/nrgochi"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
