@@ -1,8 +1,10 @@
 package parser
 
 import (
+	"go/token"
 	"testing"
 
+	"github.com/dave/dst"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -109,6 +111,82 @@ func main() {
 			defer panicRecovery(t)
 			got := testStatelessTracingFunction(t, tt.code, InstrumentMain, InstrumentChiMiddleware)
 			assert.Equal(t, tt.expect, got)
+		})
+	}
+}
+
+func TestChiMiddlewareCall(t *testing.T) {
+	tests := []struct {
+		name string
+		stmt dst.Stmt
+		want string
+	}{
+		{
+			name: "detect chi middleware call",
+			stmt: &dst.AssignStmt{
+				Lhs: []dst.Expr{
+					&dst.Ident{
+						Name: "router",
+					},
+				},
+				Tok: token.DEFINE,
+				Rhs: []dst.Expr{
+					&dst.CallExpr{
+						Fun: &dst.Ident{
+							Name: "NewRouter",
+							Path: gochiImportPath,
+						},
+					},
+				},
+			},
+			want: "router",
+		},
+		{
+			name: "detect chi middleware call - Incorrect Import Path",
+			stmt: &dst.AssignStmt{
+				Lhs: []dst.Expr{
+					&dst.Ident{
+						Name: "router",
+					},
+				},
+				Tok: token.DEFINE,
+				Rhs: []dst.Expr{
+					&dst.CallExpr{
+						Fun: &dst.Ident{
+							Name: "New",
+							Path: "blah",
+						},
+					},
+				},
+			},
+			want: "",
+		},
+		{
+			name: "detect chi middleware call - Incorrect Function",
+			stmt: &dst.AssignStmt{
+				Lhs: []dst.Expr{
+					&dst.Ident{
+						Name: "router",
+					},
+				},
+				Tok: token.DEFINE,
+				Rhs: []dst.Expr{
+					&dst.CallExpr{
+						Fun: &dst.Ident{
+							Name: "New",
+							Path: gochiImportPath,
+						},
+					},
+				},
+			},
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := getChiRouterName(tt.stmt)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
