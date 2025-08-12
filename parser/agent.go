@@ -87,13 +87,14 @@ func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
 //////////////////////////////////////////////
 
 // InstrumentMain looks for the main method of a program, and uses this as an instrumentation initialization and injection point
-// TODO: Can this be refactored to be part of the Trace Function algorithm?
 func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 	mainFunctionNode := c.Node()
 	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
-		// only inject go agent into the main.main function
+		// Check functions return signatures for newrelic.Application and if it exists, load it into manager.setupFunc
+		// We don't want to propagate tracing into the setup function so later on in our trace function we will ignore it
+		CheckForExistingApplicationInFunctions(manager, decl, c)
 		if decl.Name.Name == "main" {
-			if !CheckForExistingApplication(manager, decl) {
+			if !CheckForExistingApplicationInMain(manager, decl) {
 				agentDecl := codegen.InitializeAgent(manager.appName, manager.agentVariableName)
 				decl.Body.List = append(agentDecl, decl.Body.List...)
 				decl.Body.List = append(decl.Body.List, codegen.ShutdownAgent(manager.agentVariableName))
@@ -104,27 +105,73 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 
 			// this will skip the tracing of this function in the outer tree walking algorithm
 			c.Replace(newMain)
-
 		}
 	}
 }
 
-func CheckForExistingApplication(manager *InstrumentationManager, decl *dst.FuncDecl) bool {
-	for _, stmt := range decl.Body.List {
-		if assign, ok := stmt.(*dst.AssignStmt); ok {
-			if call, ok := assign.Rhs[0].(*dst.CallExpr); ok {
-				if path, ok := call.Fun.(*dst.Ident); ok {
-					if path.Path == codegen.NewRelicAgentImportPath {
-						manager.agentVariableName = assign.Lhs[0].(*dst.Ident).Name
-						return true
+func CheckForExistingApplicationInFunctions(manager *InstrumentationManager, decl *dst.FuncDecl, c *dstutil.Cursor) {
+	dstutil.Apply(c.Node(), func(cursor *dstutil.Cursor) bool {
+		if decl, ok := cursor.Node().(*dst.FuncDecl); ok {
+			// Print out return values before caching them
+			if decl.Type.Results != nil {
+				for _, result := range decl.Type.Results.List {
+					// Checking if return type of function is a new relic application
+					if starExpr, ok := result.Type.(*dst.StarExpr); ok {
+						if ident, ok := starExpr.X.(*dst.Ident); ok {
+							if ident.Path == codegen.NewRelicAgentImportPath && ident.Name == "Application" {
+								manager.setupFunc = decl
+							}
+						}
+					}
+				}
+			}
+
+		}
+		if assign, ok := cursor.Node().(*dst.AssignStmt); ok {
+			for pos, rhs := range assign.Rhs {
+				if call, ok := rhs.(*dst.CallExpr); ok {
+					if ident, ok := call.Fun.(*dst.Ident); ok {
+						if ident.Obj != nil {
+							if funcCall, ok := ident.Obj.Decl.(*dst.FuncDecl); ok {
+								// This is our setup function. We can now get the appName!
+								if manager.setupFunc == funcCall {
+									if ident, ok := assign.Lhs[pos].(*dst.Ident); ok {
+										manager.agentVariableName = ident.Name
+									}
+
+								}
+							}
+						}
 					}
 				}
 			}
 		}
 
+		return true
+	}, nil)
+
+}
+
+// Checks for existing application in main. If an application is detected in a function inside of main, we mark that one as a setup function and will not conduct tracing on it.
+func CheckForExistingApplicationInMain(manager *InstrumentationManager, decl *dst.FuncDecl) bool {
+	// App already exists in a setup function inside of main.
+	if manager.setupFunc != nil {
+		return true
+	}
+	for _, stmt := range decl.Body.List {
+		if assign, ok := stmt.(*dst.AssignStmt); ok {
+			if len(assign.Rhs) > 0 {
+				if call, ok := assign.Rhs[0].(*dst.CallExpr); ok {
+					if path, ok := call.Fun.(*dst.Ident); ok && path.Path == codegen.NewRelicAgentImportPath {
+						manager.agentVariableName = assign.Lhs[0].(*dst.Ident).Name
+						manager.setupFunc = decl
+						return true
+					}
+				}
+			}
+		}
 	}
 	return false
-
 }
 
 // errNilCheck tests if an if statement contains a conditional check that an error is not nil

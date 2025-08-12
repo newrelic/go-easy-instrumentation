@@ -113,6 +113,10 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 			// inv info will be nil if the function is not declared in this application
 			for _, invInfo := range tracableInvocations {
+				// If the current function is the function that declares the NR App, we do not want to propagate tracing to it
+				if manager.setupFunc == invInfo.decl {
+					continue
+				}
 				if !transactionCreatedForStatement {
 					tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable) // if a trasaction needs to be created, it will be created here
 					transactionCreatedForStatement = true
