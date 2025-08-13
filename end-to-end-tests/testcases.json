@@ -25,6 +25,10 @@
 		"dir": "end-to-end-tests/gin-examples/multiple-service"
 	},
 	{
+		"name": "semi-instrumented - app outside of main",
+		"dir": "end-to-end-tests/semi-instrumented/app-outside-main"
+	},
+	{
 		"name": "unit tests",
 		"dir": "end-to-end-tests/unit-tests"
 	}
