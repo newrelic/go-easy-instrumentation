@@ -79,7 +79,7 @@ func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 // txnFromCtx injects a line of code that extracts a transaction from the context into the body of a function
 func defineTxnFromCtx(fn *dst.FuncDecl, txnVariable string) {
 	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
-	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext())
+	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext("r"))
 	for i, stmt := range fn.Body.List {
 		stmts[i+1] = stmt
 	}
