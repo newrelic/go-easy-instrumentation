@@ -35,5 +35,13 @@ func main() {
 	})
 	r.Get("/404", endpoint404)
 	r.Get("/external", basicExternal)
+	r.Get("/literal", func(w http.ResponseWriter, r *http.Request) {
+
+		_, err := http.Get("https://newrelic.com")
+		if err != nil {
+			slog.Error(err.Error())
+		}
+		w.Write([]byte("function literal example"))
+	})
 	http.ListenAndServe(":3000", r)
 }
