@@ -552,7 +552,7 @@ func Test_TxnFromCtx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			expectStmt := codegen.TxnFromContext(tt.args.txnVariable, codegen.HttpRequestContext())
+			expectStmt := codegen.TxnFromContext(tt.args.txnVariable, codegen.HttpRequestContext("r"))
 			defineTxnFromCtx(tt.args.fn, tt.args.txnVariable)
 			if !reflect.DeepEqual(tt.args.fn.Body.List[0], expectStmt) {
 				t.Errorf("expected the function body to contain the statement %v but got %v", expectStmt, tt.args.fn.Body.List[0])
