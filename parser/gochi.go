@@ -147,6 +147,9 @@ func InstrumentChiLiteral(manager *InstrumentationManager, stmt dst.Stmt, c *dst
 	}
 
 	reqArgName := getChiHTTPRequestArgName(fnLit)
+	if reqArgName == "" {
+		return false
+	}
 
 	txn := codegen.TxnFromContext(codegen.DefaultTransactionVariable, codegen.HttpRequestContext(reqArgName))
 	if txn == nil {
