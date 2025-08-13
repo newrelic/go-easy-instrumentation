@@ -1,6 +1,10 @@
 package parser
 
 import (
+	"go/token"
+	"strconv"
+	"strings"
+
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
@@ -48,6 +52,73 @@ func getChiRouterName(stmt dst.Stmt) string {
 	return v.Lhs[0].(*dst.Ident).Name
 }
 
+// Extract the HTTP method type and CallExpr node from the current cursor node
+func getChiHTTPMethod(node dst.Node) (string, *dst.CallExpr) {
+	switch v := node.(type) {
+	case *dst.ExprStmt:
+		call, ok := v.X.(*dst.CallExpr)
+		if !ok {
+			return "", nil
+		}
+
+		selExpr, ok := call.Fun.(*dst.SelectorExpr)
+		if !ok {
+			return "", nil
+		}
+
+		method := selExpr.Sel.Name
+		switch strings.ToUpper(method) {
+		case "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "TRACE", "CONNECT", "PATCH":
+			return strings.ToUpper(method), call
+		default:
+			return "", nil
+		}
+	}
+	return "", nil
+}
+
+// Get the name of the route being registered to the handler for naming purposes
+func getChiHTTPHandlerRouteName(callExpr *dst.CallExpr) (string, *dst.FuncLit) {
+	if callExpr == nil {
+		return "", nil
+	}
+
+	if len(callExpr.Args) != 2 {
+		return "", nil
+	}
+
+	routeName, ok := callExpr.Args[0].(*dst.BasicLit)
+	if !ok || routeName.Kind != token.STRING {
+		return "", nil
+	}
+
+	fnLit, ok := callExpr.Args[1].(*dst.FuncLit)
+	if !ok {
+		return "", nil
+	}
+
+	return routeName.Value, fnLit
+}
+
+// Get the name of the *http.Request arg in the function literal http handler
+func getChiHTTPRequestArgName(fnLit *dst.FuncLit) string {
+	if fnLit == nil {
+		return ""
+	}
+
+	if len(fnLit.Type.Params.List) != 2 {
+		return ""
+	}
+
+	reqArg := fnLit.Type.Params.List[1]
+
+	if len(reqArg.Names) != 1 {
+		return ""
+	}
+
+	return reqArg.Names[0].Name
+}
+
 // Inject New Relic Middleware to the Chi router via the `Use` directive
 func InstrumentChiMiddleware(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	routerName := getChiRouterName(stmt)
@@ -59,5 +130,33 @@ func InstrumentChiMiddleware(manager *InstrumentationManager, stmt dst.Stmt, c *
 	middleware, goGet := codegen.NrChiMiddleware(routerName, tracing.AgentVariable())
 	c.InsertAfter(middleware)
 	manager.addImport(goGet)
+	return true
+}
+
+func InstrumentChiLiteral(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
+	// Detect if we are in a Chi HTTP Method
+	methodName, callExpr := getChiHTTPMethod(c.Node())
+	if methodName == "" || callExpr == nil {
+		return false
+	}
+
+	routeName, fnLit := getChiHTTPHandlerRouteName(callExpr)
+	routeName, err := strconv.Unquote(routeName)
+	if routeName == "" || fnLit == nil || err != nil {
+		return false
+	}
+
+	reqArgName := getChiHTTPRequestArgName(fnLit)
+
+	txn := codegen.TxnFromContext(codegen.DefaultTransactionVariable, codegen.HttpRequestContext(reqArgName))
+	if txn == nil {
+		return false
+	}
+
+	segmentName := methodName + ":" + routeName
+
+	codegen.PrependStatementToFunctionLit(fnLit, codegen.DeferSegment(segmentName, tracing.TransactionVariable()))
+	codegen.PrependStatementToFunctionLit(fnLit, txn)
+
 	return true
 }
