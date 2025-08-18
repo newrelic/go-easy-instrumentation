@@ -119,7 +119,9 @@ func getChiHTTPRequestArgName(fnLit *dst.FuncLit) string {
 	return reqArg.Names[0].Name
 }
 
-// Inject New Relic Middleware to the Chi router via the `Use` directive
+// InstrumentChiMiddleware detects whether a Chi Router has been initialized
+// and adds New Relic Go Agent Middleware via the router.Use() method to
+// instrument the routes registered to the router.
 func InstrumentChiMiddleware(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	routerName := getChiRouterName(stmt)
 	if routerName == "" {
@@ -133,8 +135,10 @@ func InstrumentChiMiddleware(manager *InstrumentationManager, stmt dst.Stmt, c *
 	return true
 }
 
-func InstrumentChiLiteral(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
-	// Detect if we are in a Chi HTTP Method
+// InstrumentChiRouterLiteral detects if a Chi Router route uses a function
+// literal and adds Txn/Segment tracing logic directly to the function literal
+// block.
+func InstrumentChiRouterLiteral(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	methodName, callExpr := getChiHTTPMethod(c.Node())
 	if methodName == "" || callExpr == nil {
 		return false
