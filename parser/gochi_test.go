@@ -191,7 +191,7 @@ func TestChiMiddlewareCall(t *testing.T) {
 	}
 }
 
-func TestInstrumentChiLiteral(t *testing.T) {
+func TestInstrumentChiRouterLiteral(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -248,7 +248,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, InstrumentMain, InstrumentChiLiteral)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentMain, InstrumentChiRouterLiteral)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
