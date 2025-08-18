@@ -242,6 +242,80 @@ func main() {
 	NewRelicAgent.Shutdown(5 * time.Second)
 }
 `,
+		}, {
+			name: "Instrument Chi Liter in non-Main function",
+			code: `package main
+
+import (
+	"net/http"
+
+	chi "github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+)
+
+func endpoint404(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(404)
+	w.Write([]byte("returning 404"))
+}
+
+func setupRouter(r *chi.Mux) {
+	r.Get("/literal", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("welcome"))
+	})
+	r.Get("/404", endpoint404)
+}
+
+func main() {
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	setupRouter(r)
+	http.ListenAndServe(":3000", r)
+}`,
+			expect: `package main
+
+import (
+	"net/http"
+	"time"
+
+	chi "github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func endpoint404(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(404)
+	w.Write([]byte("returning 404"))
+}
+
+func setupRouter(r *chi.Mux, nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("setupRouter").End()
+
+	r.Get("/literal", func(w http.ResponseWriter, r *http.Request) {
+		nrTxn := newrelic.FromContext(r.Context())
+
+		defer nrTxn.StartSegment("GET:/literal").End()
+
+		w.Write([]byte("welcome"))
+	})
+	r.Get("/404", endpoint404)
+}
+
+func main() {
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
+	}
+
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	nrTxn := NewRelicAgent.StartTransaction("setupRouter")
+	setupRouter(r, nrTxn)
+	nrTxn.End()
+	http.ListenAndServe(":3000", r)
+
+	NewRelicAgent.Shutdown(5 * time.Second)
+}
+`,
 		},
 	}
 
