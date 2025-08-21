@@ -92,7 +92,7 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
 		// Check functions return signatures for newrelic.Application and if it exists, load it into manager.setupFunc
 		// We don't want to propagate tracing into the setup function so later on in our trace function we will ignore it
-		CheckForExistingApplicationInFunctions(manager, decl, c)
+		checkForExistingApplicationInFunctions(manager, c)
 		if decl.Name.Name == "main" {
 			if !CheckForExistingApplicationInMain(manager, decl) {
 				agentDecl := codegen.InitializeAgent(manager.appName, manager.agentVariableName)
@@ -109,36 +109,44 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 	}
 }
 
-func CheckForExistingApplicationInFunctions(manager *InstrumentationManager, decl *dst.FuncDecl, c *dstutil.Cursor) {
+func checkForExistingApplicationInFunctions(manager *InstrumentationManager, c *dstutil.Cursor) {
 	dstutil.Apply(c.Node(), func(cursor *dstutil.Cursor) bool {
-		if decl, ok := cursor.Node().(*dst.FuncDecl); ok {
-			// Print out return values before caching them
-			if decl.Type.Results != nil {
-				for _, result := range decl.Type.Results.List {
-					// Checking if return type of function is a new relic application
-					if starExpr, ok := result.Type.(*dst.StarExpr); ok {
-						if ident, ok := starExpr.X.(*dst.Ident); ok {
-							if ident.Path == codegen.NewRelicAgentImportPath && ident.Name == "Application" {
-								manager.setupFunc = decl
-							}
+		checkFuncDeclForApplication(manager, cursor.Node())
+		handleAssignStmtForAgentVariable(manager, cursor.Node())
+		return true
+	}, nil)
+}
+
+// Checks return values of a given function. If the function returns a new relic application, it is marked as a "setup" function
+func checkFuncDeclForApplication(manager *InstrumentationManager, node dst.Node) {
+	decl, ok := node.(*dst.FuncDecl)
+	if ok {
+		if decl.Type.Results != nil {
+			for _, result := range decl.Type.Results.List {
+				// Checking if return type of function is a new relic application
+				if starExpr, ok := result.Type.(*dst.StarExpr); ok {
+					if ident, ok := starExpr.X.(*dst.Ident); ok {
+						if ident.Path == codegen.NewRelicAgentImportPath && ident.Name == "Application" {
+							manager.setupFunc = decl
 						}
 					}
 				}
 			}
-
 		}
-		if assign, ok := cursor.Node().(*dst.AssignStmt); ok {
-			for pos, rhs := range assign.Rhs {
-				if call, ok := rhs.(*dst.CallExpr); ok {
-					if ident, ok := call.Fun.(*dst.Ident); ok {
-						if ident.Obj != nil {
-							if funcCall, ok := ident.Obj.Decl.(*dst.FuncDecl); ok {
-								// This is our setup function. We can now get the appName!
-								if manager.setupFunc == funcCall {
-									if ident, ok := assign.Lhs[pos].(*dst.Ident); ok {
-										manager.agentVariableName = ident.Name
-									}
-
+	}
+}
+func handleAssignStmtForAgentVariable(manager *InstrumentationManager, node dst.Node) {
+	assign, ok := node.(*dst.AssignStmt)
+	if ok {
+		for pos, rhs := range assign.Rhs {
+			if call, ok := rhs.(*dst.CallExpr); ok {
+				if ident, ok := call.Fun.(*dst.Ident); ok {
+					if ident.Obj != nil {
+						if funcCall, ok := ident.Obj.Decl.(*dst.FuncDecl); ok {
+							// This is our setup function. We can now get the appName!
+							if manager.setupFunc == funcCall {
+								if ident, ok := assign.Lhs[pos].(*dst.Ident); ok {
+									manager.agentVariableName = ident.Name
 								}
 							}
 						}
@@ -146,10 +154,7 @@ func CheckForExistingApplicationInFunctions(manager *InstrumentationManager, dec
 				}
 			}
 		}
-
-		return true
-	}, nil)
-
+	}
 }
 
 // Checks for existing application in main. If an application is detected in a function inside of main, we mark that one as a setup function and will not conduct tracing on it.
@@ -158,6 +163,7 @@ func CheckForExistingApplicationInMain(manager *InstrumentationManager, decl *ds
 	if manager.setupFunc != nil {
 		return true
 	}
+	// No setup function detected, check for application initialization in main
 	for _, stmt := range decl.Body.List {
 		if assign, ok := stmt.(*dst.AssignStmt); ok {
 			if len(assign.Rhs) > 0 {
