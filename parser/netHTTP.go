@@ -368,8 +368,11 @@ func getHTTPHandleFunc(node dst.Node) *dst.CallExpr {
 			return nil
 		}
 
-		method := strings.ToUpper(ident.Name)
-		if method != "HANDLEFUNC" {
+		if ident.Path != codegen.HttpImportPath {
+			return nil
+		}
+
+		if ident.Name != "HandleFunc" {
 			return nil
 		}
 
