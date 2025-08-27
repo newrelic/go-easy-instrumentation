@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"go/ast"
 	"go/token"
+	"strconv"
+	"strings"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -28,6 +30,18 @@ const (
 	// default net/http client variable
 	httpDefaultClientVariable = "DefaultClient"
 )
+
+// all valid generic HTTP method types, or net/http's HandleFunc
+var httpMethodTypes = map[string]struct{}{
+	"GET":     {},
+	"POST":    {},
+	"PUT":     {},
+	"DELETE":  {},
+	"HEAD":    {},
+	"TRACE":   {},
+	"CONNECT": {},
+	"PATCH":   {},
+}
 
 // GetNetHttpClientVariableName looks for an http client in the call expression n. If it finds one, the name
 // of the variable containing the client will be returned as a string.
@@ -79,7 +93,8 @@ func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 // txnFromCtx injects a line of code that extracts a transaction from the context into the body of a function
 func defineTxnFromCtx(fn *dst.FuncDecl, txnVariable string) {
 	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
-	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext())
+	reqArgName := getHTTPRequestArgNameFnDecl(fn)
+	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext(reqArgName))
 	for i, stmt := range fn.Body.List {
 		stmts[i+1] = stmt
 	}
@@ -338,4 +353,200 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 		return true
 	})
 	return wasModified
+}
+
+func getHTTPHandleFunc(node dst.Node) (string, *dst.CallExpr) {
+	switch v := node.(type) {
+	case *dst.ExprStmt:
+		call, ok := v.X.(*dst.CallExpr)
+		if !ok {
+			return "", nil
+		}
+
+		ident, ok := call.Fun.(*dst.Ident)
+		if !ok {
+			return "", nil
+		}
+
+		method := strings.ToUpper(ident.Name)
+		if method != "HANDLEFUNC" {
+			return "", nil
+		}
+
+		return method, call
+	}
+
+	return "", nil
+}
+
+// extract the HTTP method type from the route handler declaration
+// r.Get("/routename", func(w,r){...})
+// __^^^
+func getHTTPMethodType(node dst.Node) (string, *dst.CallExpr) {
+	switch v := node.(type) {
+	case *dst.ExprStmt:
+		call, ok := v.X.(*dst.CallExpr)
+		if !ok {
+			return "", nil
+		}
+
+		selExpr, ok := call.Fun.(*dst.SelectorExpr)
+		if !ok {
+			return "", nil
+		}
+
+		method := strings.ToUpper(selExpr.Sel.Name)
+		_, ok = httpMethodTypes[method]
+		if !ok {
+			return "", nil
+		}
+
+		return method, call
+	}
+	return "", nil
+}
+
+// extract the route name from the route handler declaration
+// r.Get("/routename", func(w,r){...})
+// _______^^^^^^^^^^
+func getHTTPHandlerRouteName(callExpr *dst.CallExpr) (string, *dst.FuncLit) {
+	if callExpr == nil {
+		return "", nil
+	}
+
+	if len(callExpr.Args) != 2 {
+		return "", nil
+	}
+
+	routeName, ok := callExpr.Args[0].(*dst.BasicLit)
+	if !ok || routeName.Kind != token.STRING {
+		return "", nil
+	}
+
+	fnLit, ok := callExpr.Args[1].(*dst.FuncLit)
+	if !ok {
+		return "", nil
+	}
+
+	return routeName.Value, fnLit
+}
+
+// extract the request arg name from the declared route handler
+// func fnDecl(w http.ResponseWriter, r *http.Request) {...}
+// ___________________________________^
+func getHTTPRequestArgNameFnDecl(fnDecl *dst.FuncDecl) string {
+	if fnDecl == nil {
+		return ""
+	}
+
+	if fnDecl.Type == nil || fnDecl.Type.Params == nil || fnDecl.Type.Params.List == nil {
+		return ""
+	}
+
+	if len(fnDecl.Type.Params.List) != 2 {
+		return ""
+	}
+
+	reqArg := fnDecl.Type.Params.List[1]
+
+	if len(reqArg.Names) != 1 {
+		return ""
+	}
+
+	return reqArg.Names[0].Name
+}
+
+// extract the request arg name from the anonymous route handler
+// r.Get("/routename", func(w http.ResponseWriter, r *http.Request){...})
+// ________________________________________________^
+func getHTTPRequestArgNameFnLit(fnLit *dst.FuncLit) string {
+	if fnLit == nil {
+		return ""
+	}
+
+	if fnLit.Type == nil || fnLit.Type.Params == nil || fnLit.Type.Params.List == nil {
+		return ""
+	}
+
+	if len(fnLit.Type.Params.List) != 2 {
+		return ""
+	}
+
+	reqArg := fnLit.Type.Params.List[1]
+
+	if len(reqArg.Names) != 1 {
+		return ""
+	}
+
+	return reqArg.Names[0].Name
+}
+
+// InstrumentRouteHandlerFuncLit adds instrumentation for router function literal handlers
+// For a Route Handler function literal to be considered, it must satisfy the following constraints:
+// 1. A valid HTTP method type (GET, POST, DELETE, etc)
+// 2. A valid route name (/index, /route/literal, etc) defined as the first argument to the route method
+// 3. A function literal as the second argument to the route method
+// 4. An http.ResponseWriter and http.Request argument to the function literal
+//
+// If all constraints above are satisfied, an NR txn object is retreived via the request context, and
+// injected alongside a defer segment start with the segment name comprising of the HTTP method +":routename"
+func InstrumentRouteHandlerFuncLit(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
+	methodName, callExpr := getHTTPMethodType(c.Node())
+
+	if methodName == "" || callExpr == nil {
+		return false
+	}
+
+	routeName, fnLit := getHTTPHandlerRouteName(callExpr)
+	if routeName == "" || fnLit == nil {
+		return false
+	}
+
+	reqArgName := getHTTPRequestArgNameFnLit(fnLit)
+	if reqArgName == "" {
+		return false
+	}
+
+	txn := codegen.TxnFromContext(codegen.DefaultTransactionVariable, codegen.HttpRequestContext(reqArgName))
+	if txn == nil {
+		return false
+	}
+
+	segmentName := methodName + ":" + routeName
+	codegen.PrependStatementToFunctionLit(fnLit, codegen.DeferSegment(segmentName, tracing.TransactionVariable()))
+	codegen.PrependStatementToFunctionLit(fnLit, txn)
+	manager.addImport(codegen.NewRelicAgentImportPath)
+
+	return true
+}
+
+func InstrumentHTTPHandleFuncLit(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
+	methodName, callExpr := getHTTPHandleFunc(c.Node())
+
+	if methodName == "" || callExpr == nil {
+		return false
+	}
+
+	routeName, fnLit := getHTTPHandlerRouteName(callExpr)
+	routeName, err := strconv.Unquote(routeName)
+	if routeName == "" || fnLit == nil || err != nil {
+		return false
+	}
+
+	reqArgName := getHTTPRequestArgNameFnLit(fnLit)
+	if reqArgName == "" {
+		return false
+	}
+
+	txn := codegen.TxnFromContext(codegen.DefaultTransactionVariable, codegen.HttpRequestContext(reqArgName))
+	if txn == nil {
+		return false
+	}
+
+	segmentName := methodName + ":" + routeName
+	codegen.PrependStatementToFunctionLit(fnLit, codegen.DeferSegment(segmentName, dst.NewIdent(codegen.DefaultTransactionVariable)))
+	codegen.PrependStatementToFunctionLit(fnLit, txn)
+	manager.addImport(codegen.NewRelicAgentImportPath)
+
+	return true
 }

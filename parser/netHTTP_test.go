@@ -529,6 +529,20 @@ func Test_TxnFromCtx(t *testing.T) {
 			name: "txn_from_ctx",
 			args: args{
 				fn: &dst.FuncDecl{
+					Type: &dst.FuncType{
+						Params: &dst.FieldList{
+							List: []*dst.Field{
+								0: {},
+								1: {
+									Names: []*dst.Ident{
+										0: {
+											Name: "r",
+										},
+									},
+								},
+							},
+						},
+					},
 					Body: &dst.BlockStmt{
 						List: []dst.Stmt{},
 					},
@@ -540,6 +554,20 @@ func Test_TxnFromCtx(t *testing.T) {
 			name: "txn_from_ctx",
 			args: args{
 				fn: &dst.FuncDecl{
+					Type: &dst.FuncType{
+						Params: &dst.FieldList{
+							List: []*dst.Field{
+								0: {},
+								1: {
+									Names: []*dst.Ident{
+										0: {
+											Name: "r",
+										},
+									},
+								},
+							},
+						},
+					},
 					Body: &dst.BlockStmt{
 						List: []dst.Stmt{
 							&dst.ReturnStmt{},
@@ -552,7 +580,7 @@ func Test_TxnFromCtx(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			expectStmt := codegen.TxnFromContext(tt.args.txnVariable, codegen.HttpRequestContext())
+			expectStmt := codegen.TxnFromContext(tt.args.txnVariable, codegen.HttpRequestContext("r"))
 			defineTxnFromCtx(tt.args.fn, tt.args.txnVariable)
 			if !reflect.DeepEqual(tt.args.fn.Body.List[0], expectStmt) {
 				t.Errorf("expected the function body to contain the statement %v but got %v", expectStmt, tt.args.fn.Body.List[0])
@@ -1477,4 +1505,55 @@ func main() {
 			assert.Equal(t, tt.expect, got)
 		})
 	}
+}
+
+func TestInstrumentHTTPFunctionLiteral(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "HTTP function literal instrumentation in main",
+			code: `package main
+
+import (
+	"net/http"
+)
+
+func main() {
+	http.HandleFunc("/literal", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, literal"))
+	})
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	http.HandleFunc("/literal", func(w http.ResponseWriter, r *http.Request) {
+		nrTxn := newrelic.FromContext(r.Context())
+
+		defer nrTxn.StartSegment("HANDLEFUNC:/literal").End()
+
+		w.Write([]byte("Hello, literal"))
+	})
+}
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatefulTracingFunction(t, tt.code, InstrumentHTTPHandleFuncLit, true)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+
 }
