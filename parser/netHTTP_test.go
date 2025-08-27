@@ -1539,7 +1539,7 @@ func main() {
 	http.HandleFunc("/literal", func(w http.ResponseWriter, r *http.Request) {
 		nrTxn := newrelic.FromContext(r.Context())
 
-		defer nrTxn.StartSegment("HANDLEFUNC:/literal").End()
+		defer nrTxn.StartSegment("http.HandleFunc:/literal").End()
 
 		w.Write([]byte("Hello, literal"))
 	})

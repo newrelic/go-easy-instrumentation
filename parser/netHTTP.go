@@ -355,28 +355,28 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 	return wasModified
 }
 
-func getHTTPHandleFunc(node dst.Node) (string, *dst.CallExpr) {
+func getHTTPHandleFunc(node dst.Node) *dst.CallExpr {
 	switch v := node.(type) {
 	case *dst.ExprStmt:
 		call, ok := v.X.(*dst.CallExpr)
 		if !ok {
-			return "", nil
+			return nil
 		}
 
 		ident, ok := call.Fun.(*dst.Ident)
 		if !ok {
-			return "", nil
+			return nil
 		}
 
 		method := strings.ToUpper(ident.Name)
 		if method != "HANDLEFUNC" {
-			return "", nil
+			return nil
 		}
 
-		return method, call
+		return call
 	}
 
-	return "", nil
+	return nil
 }
 
 // extract the HTTP method type from the route handler declaration
@@ -520,10 +520,19 @@ func InstrumentRouteHandlerFuncLit(manager *InstrumentationManager, stmt dst.Stm
 	return true
 }
 
+// InstrumentHTTPHandleFuncLit adds instrumentation for http HandleFunc function literals
+// For an http Handler function literal to be considered, it must satisfy the following constraints:
+// 1. A call to HandleFunc
+// 2. A valid route name (/index, /route/literal, etc) defined as the first argument to the route method
+// 3. A function literal as the second argument to the route method
+// 4. An http.ResponseWriter and http.Request argument to the function literal
+//
+// If all constraints above are satisfied, an NR txn object is retreived via the request context, and
+// injected alongside a defer segment start with the segment name comprising of the HTTP method +":routename"
 func InstrumentHTTPHandleFuncLit(manager *InstrumentationManager, c *dstutil.Cursor) {
-	methodName, callExpr := getHTTPHandleFunc(c.Node())
+	callExpr := getHTTPHandleFunc(c.Node())
 
-	if methodName == "" || callExpr == nil {
+	if callExpr == nil {
 		return
 	}
 
@@ -543,7 +552,7 @@ func InstrumentHTTPHandleFuncLit(manager *InstrumentationManager, c *dstutil.Cur
 		return
 	}
 
-	segmentName := methodName + ":" + routeName
+	segmentName := "http.HandleFunc" + ":" + routeName
 	codegen.PrependStatementToFunctionLit(fnLit, codegen.DeferSegment(segmentName, dst.NewIdent(codegen.DefaultTransactionVariable)))
 	codegen.PrependStatementToFunctionLit(fnLit, txn)
 	manager.addImport(codegen.NewRelicAgentImportPath)
