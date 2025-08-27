@@ -520,27 +520,27 @@ func InstrumentRouteHandlerFuncLit(manager *InstrumentationManager, stmt dst.Stm
 	return true
 }
 
-func InstrumentHTTPHandleFuncLit(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
+func InstrumentHTTPHandleFuncLit(manager *InstrumentationManager, c *dstutil.Cursor) {
 	methodName, callExpr := getHTTPHandleFunc(c.Node())
 
 	if methodName == "" || callExpr == nil {
-		return false
+		return
 	}
 
 	routeName, fnLit := getHTTPHandlerRouteName(callExpr)
 	routeName, err := strconv.Unquote(routeName)
 	if routeName == "" || fnLit == nil || err != nil {
-		return false
+		return
 	}
 
 	reqArgName := getHTTPRequestArgNameFnLit(fnLit)
 	if reqArgName == "" {
-		return false
+		return
 	}
 
 	txn := codegen.TxnFromContext(codegen.DefaultTransactionVariable, codegen.HttpRequestContext(reqArgName))
 	if txn == nil {
-		return false
+		return
 	}
 
 	segmentName := methodName + ":" + routeName
@@ -548,5 +548,5 @@ func InstrumentHTTPHandleFuncLit(manager *InstrumentationManager, stmt dst.Stmt,
 	codegen.PrependStatementToFunctionLit(fnLit, txn)
 	manager.addImport(codegen.NewRelicAgentImportPath)
 
-	return true
+	return
 }
