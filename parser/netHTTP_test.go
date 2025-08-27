@@ -1546,6 +1546,141 @@ func main() {
 }
 `,
 		},
+		{
+			name: "HTTP function literal instrumentation in non-main",
+			code: `package main
+
+import (
+	"net/http"
+)
+
+func setup() {
+	http.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, setup literal"))
+	})
+}
+
+func main() {
+	setup()
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func setup() {
+	http.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
+		nrTxn := newrelic.FromContext(r.Context())
+
+		defer nrTxn.StartSegment("http.HandleFunc:/setup").End()
+
+		w.Write([]byte("Hello, setup literal"))
+	})
+}
+
+func main() {
+	setup()
+}
+`,
+		},
+		{
+			name: "HTTP functio literal instrumentation mixed case",
+			code: `package main
+
+import (
+	"net/http"
+)
+
+func setup() {
+	http.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, setup literal"))
+	})
+}
+
+func declaredHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello, declared"))
+}
+
+func main() {
+	http.HandleFunc("/index", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, index"))
+	})
+	setup()
+	http.HandleFunc("/declared", declaredHandler)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func setup() {
+	http.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
+		nrTxn := newrelic.FromContext(r.Context())
+
+		defer nrTxn.StartSegment("http.HandleFunc:/setup").End()
+
+		w.Write([]byte("Hello, setup literal"))
+	})
+}
+
+func declaredHandler(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello, declared"))
+}
+
+func main() {
+	http.HandleFunc("/index", func(w http.ResponseWriter, r *http.Request) {
+		nrTxn := newrelic.FromContext(r.Context())
+
+		defer nrTxn.StartSegment("http.HandleFunc:/index").End()
+
+		w.Write([]byte("Hello, index"))
+	})
+	setup()
+	http.HandleFunc("/declared", declaredHandler)
+}
+`,
+		},
+		{
+			name: "HTTP function literal instrumentation request object naming",
+			code: `package main
+
+import (
+	"net/http"
+)
+
+func main() {
+	http.HandleFunc("/literal", func(w http.ResponseWriter, req *http.Request) {
+		w.Write([]byte("Hello, literal"))
+	})
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	http.HandleFunc("/literal", func(w http.ResponseWriter, req *http.Request) {
+		nrTxn := newrelic.FromContext(req.Context())
+
+		defer nrTxn.StartSegment("http.HandleFunc:/literal").End()
+
+		w.Write([]byte("Hello, literal"))
+	})
+}
+`,
+		},
 	}
 
 	for _, tt := range tests {

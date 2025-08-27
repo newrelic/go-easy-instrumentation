@@ -355,6 +355,9 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 	return wasModified
 }
 
+// verify the existence of the HandleFunc call
+// http.HandleFunc("/route", func(w, r){...})
+// _____^^^^^^^^^^
 func getHTTPHandleFunc(node dst.Node) *dst.CallExpr {
 	switch v := node.(type) {
 	case *dst.ExprStmt:
