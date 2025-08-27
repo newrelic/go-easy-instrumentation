@@ -556,6 +556,4 @@ func InstrumentHTTPHandleFuncLit(manager *InstrumentationManager, c *dstutil.Cur
 	codegen.PrependStatementToFunctionLit(fnLit, codegen.DeferSegment(segmentName, dst.NewIdent(codegen.DefaultTransactionVariable)))
 	codegen.PrependStatementToFunctionLit(fnLit, txn)
 	manager.addImport(codegen.NewRelicAgentImportPath)
-
-	return
 }
