@@ -1525,6 +1525,7 @@ func main() {
 	http.HandleFunc("/literal", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, literal"))
 	})
+	http.ListenAndServe(":8080", nil)
 }
 `,
 			expect: `package main
@@ -1543,6 +1544,7 @@ func main() {
 
 		w.Write([]byte("Hello, literal"))
 	})
+	http.ListenAndServe(":8080", nil)
 }
 `,
 		},
@@ -1562,6 +1564,7 @@ func setup() {
 
 func main() {
 	setup()
+	http.ListenAndServe(":8080", nil)
 }
 `,
 			expect: `package main
@@ -1584,11 +1587,12 @@ func setup() {
 
 func main() {
 	setup()
+	http.ListenAndServe(":8080", nil)
 }
 `,
 		},
 		{
-			name: "HTTP functio literal instrumentation mixed case",
+			name: "HTTP function literal instrumentation mixed case",
 			code: `package main
 
 import (
@@ -1611,6 +1615,7 @@ func main() {
 	})
 	setup()
 	http.HandleFunc("/declared", declaredHandler)
+	http.ListenAndServe(":8080", nil)
 }
 `,
 			expect: `package main
@@ -1645,6 +1650,7 @@ func main() {
 	})
 	setup()
 	http.HandleFunc("/declared", declaredHandler)
+	http.ListenAndServe(":8080", nil)
 }
 `,
 		},
@@ -1660,6 +1666,7 @@ func main() {
 	http.HandleFunc("/literal", func(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte("Hello, literal"))
 	})
+	http.ListenAndServe(":8080", nil)
 }
 `,
 			expect: `package main
@@ -1678,6 +1685,7 @@ func main() {
 
 		w.Write([]byte("Hello, literal"))
 	})
+	http.ListenAndServe(":8080", nil)
 }
 `,
 		},
