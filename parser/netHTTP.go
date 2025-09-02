@@ -504,7 +504,8 @@ func InstrumentRouteHandlerFuncLit(manager *InstrumentationManager, c *dstutil.C
 	}
 
 	routeName, fnLit := getHTTPHandlerRouteName(callExpr)
-	if routeName == "" || fnLit == nil {
+	routeName, err := strconv.Unquote(routeName)
+	if routeName == "" || fnLit == nil || err != nil {
 		return
 	}
 

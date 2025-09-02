@@ -1700,3 +1700,61 @@ func main() {
 	}
 
 }
+
+func TestInstrumentRouterFunctionLiteral(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "Router literal function instrumentation in main",
+			code: `package main
+
+import (
+	"net/http"
+
+	chi "github.com/go-chi/chi/v5"
+)
+
+func main() {
+	router := chi.NewRouter()
+	router.GET("/lit-main", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, main"))
+	})
+	http.ListenAndServe(":8080", r)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	chi "github.com/go-chi/chi/v5"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	router := chi.NewRouter()
+	router.GET("/lit-main", func(w http.ResponseWriter, r *http.Request) {
+		nrTxn := newrelic.FromContext(r.Context())
+
+		defer nrTxn.StartSegment("GET:/lit-main").End()
+
+		w.Write([]byte("Hello, main"))
+	})
+	http.ListenAndServe(":8080", r)
+}
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			got := testStatelessTracingFunction(t, tt.code, InstrumentRouteHandlerFuncLit)
+			assert.Equal(t, tt.expect, got)
+		})
+	}
+
+}
