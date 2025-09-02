@@ -496,34 +496,32 @@ func getHTTPRequestArgNameFnLit(fnLit *dst.FuncLit) string {
 //
 // If all constraints above are satisfied, an NR txn object is retreived via the request context, and
 // injected alongside a defer segment start with the segment name comprising of the HTTP method +":routename"
-func InstrumentRouteHandlerFuncLit(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
+func InstrumentRouteHandlerFuncLit(manager *InstrumentationManager, c *dstutil.Cursor) {
 	methodName, callExpr := getHTTPMethodType(c.Node())
 
 	if methodName == "" || callExpr == nil {
-		return false
+		return
 	}
 
 	routeName, fnLit := getHTTPHandlerRouteName(callExpr)
 	if routeName == "" || fnLit == nil {
-		return false
+		return
 	}
 
 	reqArgName := getHTTPRequestArgNameFnLit(fnLit)
 	if reqArgName == "" {
-		return false
+		return
 	}
 
 	txn := codegen.TxnFromContext(codegen.DefaultTransactionVariable, codegen.HttpRequestContext(reqArgName))
 	if txn == nil {
-		return false
+		return
 	}
 
 	segmentName := methodName + ":" + routeName
-	codegen.PrependStatementToFunctionLit(fnLit, codegen.DeferSegment(segmentName, tracing.TransactionVariable()))
+	codegen.PrependStatementToFunctionLit(fnLit, codegen.DeferSegment(segmentName, dst.NewIdent(codegen.DefaultTransactionVariable)))
 	codegen.PrependStatementToFunctionLit(fnLit, txn)
 	manager.addImport(codegen.NewRelicAgentImportPath)
-
-	return true
 }
 
 // InstrumentHTTPHandleFuncLit adds instrumentation for http HandleFunc function literals
