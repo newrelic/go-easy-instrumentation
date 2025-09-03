@@ -47,6 +47,7 @@ type InstrumentationManager struct {
 	facts             facts.Keeper
 	packages          map[string]*packageState // stores stateful information on packages by ID
 	errorCache        errorcache.ErrorCache    // stores error handling status for functions
+	setupFunc         *dst.FuncDecl
 }
 
 // PackageManager contains state relevant to tracing within a single package.
