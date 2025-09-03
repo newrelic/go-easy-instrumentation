@@ -1537,13 +1537,9 @@ import (
 )
 
 func main() {
-	http.HandleFunc("/literal", func(w http.ResponseWriter, r *http.Request) {
-		nrTxn := newrelic.FromContext(r.Context())
-
-		defer nrTxn.StartSegment("http.HandleFunc:/literal").End()
-
+	http.HandleFunc(newrelic.WrapHandleFunc(txn.Application(), "/literal", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, literal"))
-	})
+	}))
 	http.ListenAndServe(":8080", nil)
 }
 `,
@@ -1576,80 +1572,13 @@ import (
 )
 
 func setup() {
-	http.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
-		nrTxn := newrelic.FromContext(r.Context())
-
-		defer nrTxn.StartSegment("http.HandleFunc:/setup").End()
-
+	http.HandleFunc(newrelic.WrapHandleFunc(txn.Application(), "/setup", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, setup literal"))
-	})
+	}))
 }
 
 func main() {
 	setup()
-	http.ListenAndServe(":8080", nil)
-}
-`,
-		},
-		{
-			name: "HTTP function literal instrumentation mixed case",
-			code: `package main
-
-import (
-	"net/http"
-)
-
-func setup() {
-	http.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, setup literal"))
-	})
-}
-
-func declaredHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello, declared"))
-}
-
-func main() {
-	http.HandleFunc("/index", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello, index"))
-	})
-	setup()
-	http.HandleFunc("/declared", declaredHandler)
-	http.ListenAndServe(":8080", nil)
-}
-`,
-			expect: `package main
-
-import (
-	"net/http"
-
-	"github.com/newrelic/go-agent/v3/newrelic"
-)
-
-func setup() {
-	http.HandleFunc("/setup", func(w http.ResponseWriter, r *http.Request) {
-		nrTxn := newrelic.FromContext(r.Context())
-
-		defer nrTxn.StartSegment("http.HandleFunc:/setup").End()
-
-		w.Write([]byte("Hello, setup literal"))
-	})
-}
-
-func declaredHandler(w http.ResponseWriter, r *http.Request) {
-	w.Write([]byte("Hello, declared"))
-}
-
-func main() {
-	http.HandleFunc("/index", func(w http.ResponseWriter, r *http.Request) {
-		nrTxn := newrelic.FromContext(r.Context())
-
-		defer nrTxn.StartSegment("http.HandleFunc:/index").End()
-
-		w.Write([]byte("Hello, index"))
-	})
-	setup()
-	http.HandleFunc("/declared", declaredHandler)
 	http.ListenAndServe(":8080", nil)
 }
 `,
@@ -1678,13 +1607,9 @@ import (
 )
 
 func main() {
-	http.HandleFunc("/literal", func(w http.ResponseWriter, req *http.Request) {
-		nrTxn := newrelic.FromContext(req.Context())
-
-		defer nrTxn.StartSegment("http.HandleFunc:/literal").End()
-
+	http.HandleFunc(newrelic.WrapHandleFunc(txn.Application(), "/literal", func(w http.ResponseWriter, req *http.Request) {
 		w.Write([]byte("Hello, literal"))
-	})
+	}))
 	http.ListenAndServe(":8080", nil)
 }
 `,
@@ -1694,7 +1619,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, InstrumentHTTPHandleFuncLit)
+			got := testStatefulTracingFunction(t, tt.code, WrapNestedHandleFunction, true)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
@@ -1719,7 +1644,7 @@ import (
 
 func main() {
 	router := chi.NewRouter()
-	router.GET("/lit-main", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/lit-main", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("Hello, main"))
 	})
 	http.ListenAndServe(":8080", r)
@@ -1736,13 +1661,63 @@ import (
 
 func main() {
 	router := chi.NewRouter()
-	router.GET("/lit-main", func(w http.ResponseWriter, r *http.Request) {
+	router.Get("/lit-main", func(w http.ResponseWriter, r *http.Request) {
 		nrTxn := newrelic.FromContext(r.Context())
 
 		defer nrTxn.StartSegment("GET:/lit-main").End()
 
 		w.Write([]byte("Hello, main"))
 	})
+	http.ListenAndServe(":8080", r)
+}
+`,
+		},
+		{
+			name: `Router function instrumentation mixed case`,
+			code: `package main
+
+import (
+	"net/http"
+
+	chi "github.com/go-chi/chi/v5"
+)
+
+func declared(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("declared"))
+}
+
+func main() {
+	router := chi.NewRouter()
+	router.Get("/lit-main", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello, main"))
+	})
+	router.Get("/declared", declared)
+	http.ListenAndServe(":8080", r)
+}
+`,
+			expect: `package main
+
+import (
+	"net/http"
+
+	chi "github.com/go-chi/chi/v5"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func declared(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("declared"))
+}
+
+func main() {
+	router := chi.NewRouter()
+	router.Get("/lit-main", func(w http.ResponseWriter, r *http.Request) {
+		nrTxn := newrelic.FromContext(r.Context())
+
+		defer nrTxn.StartSegment("GET:/lit-main").End()
+
+		w.Write([]byte("Hello, main"))
+	})
+	router.Get("/declared", declared)
 	http.ListenAndServe(":8080", r)
 }
 `,
