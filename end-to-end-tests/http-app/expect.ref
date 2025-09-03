@@ -143,7 +143,7 @@
  		slog.Error(err.Error())
  		io.WriteString(w, err.Error())
  		return
-@@ -116,56 +107,79 @@
+@@ -116,62 +107,85 @@
  }
  
  func async(w http.ResponseWriter, r *http.Request) {
@@ -203,9 +203,10 @@
 -	http.HandleFunc("/async", async)
 -	http.HandleFunc("/async2", async2)
 -	http.HandleFunc("/packaged", pkg.PackagedHandler)
+-	http.HandleFunc("init-lit", func(w http.ResponseWriter, r *http.Request) {
 +func initServer(nrTxn *newrelic.Transaction) {
 +	defer nrTxn.StartSegment("initServer").End()
- 
++
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/", index))
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/error", noticeError))
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/external", external))
@@ -214,7 +215,11 @@
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/async", async))
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/async2", async2))
 +	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "/packaged", pkg.PackagedHandler))
-+
++	http.HandleFunc(newrelic.WrapHandleFunc(nrTxn.Application(), "init-lit", func(w http.ResponseWriter, r *http.Request) {
+ 		w.Write([]byte("Hello init"))
+-	})
++	}))
+ 
  	// this should no longer get ignored
 -	DoAThing(true)
 +	DoAThing(true, nrTxn)
@@ -230,7 +235,12 @@
  	slog.SetDefault(logger)
  
  	slog.Info("starting server at localhost:8000")
+-	http.HandleFunc("/main-lit", func(w http.ResponseWriter, r *http.Request) {
++	http.HandleFunc(newrelic.WrapHandleFunc(NewRelicAgent, "/main-lit", func(w http.ResponseWriter, r *http.Request) {
+ 		w.Write([]byte("Hello main"))
+-	})
 -	initServer()
++	}))
 +	nrTxn := NewRelicAgent.StartTransaction("initServer")
 +	initServer(nrTxn)
 +	nrTxn.End()
