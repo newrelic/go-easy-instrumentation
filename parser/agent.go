@@ -118,46 +118,66 @@ func checkForExistingApplicationInFunctions(manager *InstrumentationManager, c *
 }
 
 // Checks return values of a given function. If the function returns a new relic application, it is marked as a "setup" function
-func checkFuncDeclForApplication(manager *InstrumentationManager, node dst.Node) {
+func checkFuncDeclForApplication(manager *InstrumentationManager, node dst.Node) bool {
 	decl, ok := node.(*dst.FuncDecl)
-	if ok {
-		if decl.Type.Results != nil {
-			for _, result := range decl.Type.Results.List {
-				// Checking if return type of function is a new relic application
-				if starExpr, ok := result.Type.(*dst.StarExpr); ok {
-					if ident, ok := starExpr.X.(*dst.Ident); ok {
-						if ident.Path == codegen.NewRelicAgentImportPath && ident.Name == "Application" {
-							manager.setupFunc = decl
-						}
-					}
-				}
-			}
+	if !ok || decl.Type == nil || decl.Type.Results == nil {
+		return false
+	}
+
+	for _, result := range decl.Type.Results.List {
+		// Checking if return type of function is a new relic application
+		starExpr, ok := result.Type.(*dst.StarExpr)
+		if !ok {
+			continue
+		}
+
+		ident, ok := starExpr.X.(*dst.Ident)
+		if !ok {
+			continue
+		}
+
+		if ident.Path == codegen.NewRelicAgentImportPath && ident.Name == "Application" {
+			manager.setupFunc = decl
+			return true
 		}
 	}
-}
-func handleAssignStmtForAgentVariable(manager *InstrumentationManager, node dst.Node) {
-	assign, ok := node.(*dst.AssignStmt)
-	if ok {
-		for pos, rhs := range assign.Rhs {
-			if call, ok := rhs.(*dst.CallExpr); ok {
-				if ident, ok := call.Fun.(*dst.Ident); ok {
-					if ident.Obj != nil {
-						if funcCall, ok := ident.Obj.Decl.(*dst.FuncDecl); ok {
-							// This is our setup function. We can now get the appName!
-							if manager.setupFunc == funcCall {
-								if ident, ok := assign.Lhs[pos].(*dst.Ident); ok {
-									manager.agentVariableName = ident.Name
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
+	return false
 }
 
-// Checks for existing application in main. If an application is detected in a function inside of main, we mark that one as a setup function and will not conduct tracing on it.
+func handleAssignStmtForAgentVariable(manager *InstrumentationManager, node dst.Node) bool {
+	assign, ok := node.(*dst.AssignStmt)
+	if !ok {
+		return false
+	}
+
+	for pos, rhs := range assign.Rhs {
+		call, ok := rhs.(*dst.CallExpr)
+		if !ok {
+			continue
+		}
+
+		ident, ok := call.Fun.(*dst.Ident)
+		if !ok || ident.Obj == nil {
+			continue
+		}
+
+		funcCall, ok := ident.Obj.Decl.(*dst.FuncDecl)
+		if !ok || manager.setupFunc != funcCall {
+			continue
+		}
+
+		// This is our setup function. We can now get the appName!
+		if ident, ok := assign.Lhs[pos].(*dst.Ident); ok {
+			manager.agentVariableName = ident.Name
+			return true
+		}
+	}
+	return false
+}
+
+// CheckForExistingApplicationInMain checks for existing application in main.
+// If an application is detected in a function inside of main, we mark that one
+// as a setup function and will not conduct tracing on it.
 func CheckForExistingApplicationInMain(manager *InstrumentationManager, decl *dst.FuncDecl) bool {
 	// App already exists in a setup function inside of main.
 	if manager.setupFunc != nil {
@@ -165,15 +185,26 @@ func CheckForExistingApplicationInMain(manager *InstrumentationManager, decl *ds
 	}
 	// No setup function detected, check for application initialization in main
 	for _, stmt := range decl.Body.List {
-		if assign, ok := stmt.(*dst.AssignStmt); ok {
-			if len(assign.Rhs) > 0 {
-				if call, ok := assign.Rhs[0].(*dst.CallExpr); ok {
-					if path, ok := call.Fun.(*dst.Ident); ok && path.Path == codegen.NewRelicAgentImportPath {
-						manager.agentVariableName = assign.Lhs[0].(*dst.Ident).Name
-						manager.setupFunc = decl
-						return true
-					}
-				}
+		assign, ok := stmt.(*dst.AssignStmt)
+		if !ok {
+			continue
+		}
+
+		if len(assign.Rhs) > 0 {
+			call, ok := assign.Rhs[0].(*dst.CallExpr)
+			if !ok {
+				continue
+			}
+
+			path, ok := call.Fun.(*dst.Ident)
+			if !ok {
+				continue
+			}
+
+			if path.Path == codegen.NewRelicAgentImportPath {
+				manager.agentVariableName = assign.Lhs[0].(*dst.Ident).Name
+				manager.setupFunc = decl
+				return true
 			}
 		}
 	}
