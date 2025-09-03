@@ -155,6 +155,9 @@ func initServer() {
 	http.HandleFunc("/async", async)
 	http.HandleFunc("/async2", async2)
 	http.HandleFunc("/packaged", pkg.PackagedHandler)
+	http.HandleFunc("init-lit", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello init"))
+	})
 
 	// this should no longer get ignored
 	DoAThing(true)
@@ -165,6 +168,9 @@ func main() {
 	slog.SetDefault(logger)
 
 	slog.Info("starting server at localhost:8000")
+	http.HandleFunc("/main-lit", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello main"))
+	})
 	initServer()
 
 	http.ListenAndServe(":8000", nil)
