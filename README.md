@@ -69,6 +69,20 @@ Installation Steps have been moved to: https://docs.newrelic.com/docs/apm/agents
     go run . instrument $MY_APP
     ```
 
+
+### Updating an existing version of Go Easy Instrumentation
+Updating or Downgrading Go Easy Instrumentation is a straightforward process.
+
+ 1. Check for new [tagged releases](https://github.com/newrelic/go-easy-instrumentation/tags) OR run the following command within the project folder:
+    ```
+    git tag
+    ```
+ 2. Change the tag version:
+    ```
+    git checkout <tag_name>
+    ```
+
+
 ### Manually Run Unit Tests
 Unit tests can be run from the root of this repository with this command:
 ```sh
