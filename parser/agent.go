@@ -94,7 +94,7 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 		// We don't want to propagate tracing into the setup function so later on in our trace function we will ignore it
 		checkForExistingApplicationInFunctions(manager, c)
 		if decl.Name.Name == "main" {
-			if !CheckForExistingApplicationInMain(manager, decl) {
+			if !checkForExistingApplicationInMain(manager, decl) {
 				agentDecl := codegen.InitializeAgent(manager.appName, manager.agentVariableName)
 				decl.Body.List = append(agentDecl, decl.Body.List...)
 				decl.Body.List = append(decl.Body.List, codegen.ShutdownAgent(manager.agentVariableName))
