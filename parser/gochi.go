@@ -19,8 +19,7 @@ const (
 // Ex:
 //
 //	router := chi.NewRouter()
-//
-// would return "router"
+//	^^^^^^
 func getChiRouterName(stmt dst.Stmt) string {
 	// Verify we're dealing with an assignment operation
 	v, ok := stmt.(*dst.AssignStmt)
@@ -53,6 +52,9 @@ func getChiRouterName(stmt dst.Stmt) string {
 }
 
 // Extract the HTTP method type and CallExpr node from the current cursor node
+//
+//	router.Get("/", func(w, r){...})
+//	_______^^^
 func getChiHTTPMethod(node dst.Node) (string, *dst.CallExpr) {
 	switch v := node.(type) {
 	case *dst.ExprStmt:
@@ -78,6 +80,9 @@ func getChiHTTPMethod(node dst.Node) (string, *dst.CallExpr) {
 }
 
 // Get the name of the route being registered to the handler for naming purposes
+//
+//	router.Get("/routename", func(w, r){...})
+//	____________^^^^^^^^^^
 func getChiHTTPHandlerRouteName(callExpr *dst.CallExpr) (string, *dst.FuncLit) {
 	if callExpr == nil {
 		return "", nil
@@ -101,6 +106,9 @@ func getChiHTTPHandlerRouteName(callExpr *dst.CallExpr) (string, *dst.FuncLit) {
 }
 
 // Get the name of the *http.Request arg in the function literal http handler
+//
+//	router.Get("/" func(w http.ResponseWriter, req *http.Request){...})
+//	___________________________________________^^^
 func getChiHTTPRequestArgName(fnLit *dst.FuncLit) string {
 	if fnLit == nil {
 		return ""
