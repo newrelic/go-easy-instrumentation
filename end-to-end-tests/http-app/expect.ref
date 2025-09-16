@@ -57,9 +57,9 @@
  	return "thing complete", true, nil
  }
  
- func noticeError(w http.ResponseWriter, r *http.Request) {
+ func noticeError(w http.ResponseWriter, req *http.Request) {
 -	err := pkg.Service()
-+	nrTxn := newrelic.FromContext(r.Context())
++	nrTxn := newrelic.FromContext(req.Context())
 +
 +	err := pkg.Service(nrTxn)
  	if err != nil {
@@ -67,8 +67,8 @@
  		return
  	}
  
--	aFunctionWithContextArguments(r.Context())
-+	aFunctionWithContextArguments(newrelic.NewContext(r.Context(), nrTxn))
+-	aFunctionWithContextArguments(req.Context())
++	aFunctionWithContextArguments(newrelic.NewContext(req.Context(), nrTxn))
  
 -	str, _, err := DoAThing(true)
 +	str, _, err := DoAThing(true, nrTxn)
