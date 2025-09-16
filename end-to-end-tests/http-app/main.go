@@ -44,14 +44,14 @@ func DoAThing(willError bool) (string, bool, error) {
 	return "thing complete", true, nil
 }
 
-func noticeError(w http.ResponseWriter, r *http.Request) {
+func noticeError(w http.ResponseWriter, req *http.Request) {
 	err := pkg.Service()
 	if err != nil {
 		io.WriteString(w, err.Error())
 		return
 	}
 
-	aFunctionWithContextArguments(r.Context())
+	aFunctionWithContextArguments(req.Context())
 
 	str, _, err := DoAThing(true)
 	if err != nil {
