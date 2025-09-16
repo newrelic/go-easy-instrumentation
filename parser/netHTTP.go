@@ -54,6 +54,109 @@ func getNetHttpClientVariableName(n *dst.CallExpr, pkg *decorator.Package) strin
 	return ""
 }
 
+// extract the request arg name from a declared route handler
+// func handler(w http.ResponseWriter, r *http.Request)
+// ____________________________________^
+func getHTTPRequestArgNameDecl(fn *dst.FuncDecl) (bool, string) {
+	if fn.Type == nil || fn.Type.Params == nil || fn.Type.Params.List == nil {
+		return false, ""
+	}
+
+	if len(fn.Type.Params.List) != 2 {
+		return false, ""
+	}
+
+	reqArg := fn.Type.Params.List[1]
+
+	if len(reqArg.Names) != 1 {
+		return false, ""
+	}
+
+	starExpr, ok := fn.Type.Params.List[1].Type.(*dst.StarExpr)
+	if !ok {
+		return false, ""
+	}
+
+	// check for http.Request
+	// NOTE: This should be an Ident, not a SelectorExpr, since package.Func() is
+	// considered a Qualified Identifier in Go, not a Selector
+	// Sources:
+	// - https://go.dev/ref/spec#Selectors
+	// - https://go.dev/ref/spec#Qualified_identifiers
+	ident, ok := starExpr.X.(*dst.Ident)
+	if !ok {
+		return false, ""
+	}
+
+	if ident.Path != codegen.HttpImportPath {
+		return false, ""
+	}
+
+	return true, reqArg.Names[0].Name
+}
+
+// extract the request arg name from a literal route handler
+// func(w http.ResponseWriter, r *http.Request)
+// ____________________________^
+func getHTTPRequestArgNameLit(fn *dst.FuncLit) (bool, string) {
+	if fn.Type == nil || fn.Type.Params == nil || fn.Type.Params.List == nil {
+		return false, ""
+	}
+
+	if len(fn.Type.Params.List) != 2 {
+		return false, ""
+	}
+
+	reqArg := fn.Type.Params.List[1]
+
+	if len(reqArg.Names) != 1 {
+		return false, ""
+	}
+
+	starExpr, ok := fn.Type.Params.List[1].Type.(*dst.StarExpr)
+	if !ok {
+		return false, ""
+	}
+
+	// check for http.Request
+	// NOTE: This should be an Ident, not a SelectorExpr, since package.Func() is
+	// considered a Qualified Identifier in Go, not a Selector
+	// Sources:
+	// - https://go.dev/ref/spec#Selectors
+	// - https://go.dev/ref/spec#Qualified_identifiers
+	ident, ok := starExpr.X.(*dst.Ident)
+	if !ok {
+		return false, ""
+	}
+	if ident.Path != codegen.HttpImportPath {
+		return false, ""
+	}
+
+	return true, reqArg.Names[0].Name
+}
+
+// wrapper for HTTP request arg extraction.
+// take in `any` and filter non FuncDecl and non FuncLit, then
+// dispatch to appropriate function.
+func getHTTPRequestArgName(fn any) (bool, string) {
+	if fn == nil {
+		return false, ""
+	}
+
+	var ok = false
+	var name = ""
+
+	switch f := fn.(type) {
+	case *dst.FuncDecl:
+		ok, name = getHTTPRequestArgNameDecl(f)
+	case *dst.FuncLit:
+		ok, name = getHTTPRequestArgNameLit(f)
+	default:
+		return false, ""
+	}
+	return ok, name
+}
+
 // GetNetHttpMethod gets an http method if one is invoked in the call expression n, and returns the name of it as a string
 func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 	if n == nil {
@@ -79,7 +182,12 @@ func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 // txnFromCtx injects a line of code that extracts a transaction from the context into the body of a function
 func defineTxnFromCtx(fn *dst.FuncDecl, txnVariable string) {
 	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
-	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext())
+	ok, reqArgName := getHTTPRequestArgName(fn)
+	if !ok {
+		// TODO: consider injecting a comment or creating a log message describing the failure here.
+		return
+	}
+	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext(reqArgName))
 	for i, stmt := range fn.Body.List {
 		stmts[i+1] = stmt
 	}
