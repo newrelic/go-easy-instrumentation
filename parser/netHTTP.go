@@ -209,10 +209,6 @@ func isHTTPHandlerDecl(fn *dst.FuncDecl) bool {
 	respW := fn.Type.Params.List[0]
 	req := fn.Type.Params.List[1]
 
-	// if len(respW.Names) != 1 || len(req.Names) != 1 {
-	// 	return false
-	// }
-	//
 	if !isHTTPResponseWriter(respW) {
 		return false
 	}
