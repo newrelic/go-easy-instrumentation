@@ -227,7 +227,7 @@ func isHTTPHandlerLit(fn *dst.FuncLit) bool {
 		return false
 	}
 
-	if identRespW.Path != codegen.HttpImportPath {
+	if identRespW.Path != codegen.HttpImportPath || identRespW.Name != "ResponseWriter" {
 		return false
 	}
 
@@ -241,7 +241,7 @@ func isHTTPHandlerLit(fn *dst.FuncLit) bool {
 		return false
 	}
 
-	if identReq.Path != codegen.HttpImportPath {
+	if identReq.Path != codegen.HttpImportPath || identReq.Name != "Request" {
 		return false
 	}
 
