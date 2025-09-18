@@ -146,23 +146,8 @@ func isHTTPHandler(fn any) bool {
 	}
 }
 
-// determine whether the funcdecl is an http handler by checking for http
-// handler argument signatures
-// func myHandler(w http.ResponseWriter, r *http.Request)
-// _______________^______________________^
-func isHTTPHandlerDecl(fn *dst.FuncDecl) bool {
-	if fn == nil || fn.Type == nil || fn.Type.Params == nil || fn.Type.Params.List == nil {
-		return false
-	}
-
-	if len(fn.Type.Params.List) != 2 {
-		return false
-	}
-
-	respW := fn.Type.Params.List[0]
-	req := fn.Type.Params.List[1]
-
-	if len(respW.Names) != 1 || len(req.Names) != 1 {
+func isHTTPResponseWriter(respW *dst.Field) bool {
+	if len(respW.Names) != 1 {
 		return false
 	}
 
@@ -179,18 +164,60 @@ func isHTTPHandlerDecl(fn *dst.FuncDecl) bool {
 	if identRespW.Path != codegen.HttpImportPath || identRespW.Name != "ResponseWriter" {
 		return false
 	}
+	return true
+}
+
+func isHTTPRequest(req *dst.Field) bool {
+	if len(req.Names) != 1 {
+		return false
+	}
 
 	starExprReq, ok := req.Type.(*dst.StarExpr)
 	if !ok {
 		return false
 	}
 
+	// NOTE: This should be an Ident, not a SelectorExpr, since package.Func() is
+	// considered a Qualified Identifier in Go, not a Selector
+	// Sources:
+	// - https://go.dev/ref/spec#Selectors
+	// - https://go.dev/ref/spec#Qualified_identifiers
 	identReq, ok := starExprReq.X.(*dst.Ident)
 	if !ok {
 		return false
 	}
 
 	if identReq.Path != codegen.HttpImportPath || identReq.Name != "Request" {
+		return false
+	}
+	return true
+}
+
+// determine whether the funcdecl is an http handler by checking for http
+// handler argument signatures
+// func myHandler(w http.ResponseWriter, r *http.Request)
+// _______________^______________________^
+func isHTTPHandlerDecl(fn *dst.FuncDecl) bool {
+	if fn == nil || fn.Type == nil || fn.Type.Params == nil || fn.Type.Params.List == nil {
+		return false
+	}
+
+	if len(fn.Type.Params.List) != 2 {
+		return false
+	}
+
+	respW := fn.Type.Params.List[0]
+	req := fn.Type.Params.List[1]
+
+	// if len(respW.Names) != 1 || len(req.Names) != 1 {
+	// 	return false
+	// }
+	//
+	if !isHTTPResponseWriter(respW) {
+		return false
+	}
+
+	if !isHTTPRequest(req) {
 		return false
 	}
 
@@ -213,35 +240,11 @@ func isHTTPHandlerLit(fn *dst.FuncLit) bool {
 	respW := fn.Type.Params.List[0]
 	req := fn.Type.Params.List[1]
 
-	if len(respW.Names) != 1 || len(req.Names) != 1 {
+	if !isHTTPResponseWriter(respW) {
 		return false
 	}
 
-	// NOTE: This should be an Ident, not a SelectorExpr, since package.Func() is
-	// considered a Qualified Identifier in Go, not a Selector
-	// Sources:
-	// - https://go.dev/ref/spec#Selectors
-	// - https://go.dev/ref/spec#Qualified_identifiers
-	identRespW, ok := respW.Type.(*dst.Ident)
-	if !ok {
-		return false
-	}
-
-	if identRespW.Path != codegen.HttpImportPath || identRespW.Name != "ResponseWriter" {
-		return false
-	}
-
-	starExprReq, ok := req.Type.(*dst.StarExpr)
-	if !ok {
-		return false
-	}
-
-	identReq, ok := starExprReq.X.(*dst.Ident)
-	if !ok {
-		return false
-	}
-
-	if identReq.Path != codegen.HttpImportPath || identReq.Name != "Request" {
+	if !isHTTPRequest(req) {
 		return false
 	}
 
