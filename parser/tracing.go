@@ -25,18 +25,29 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 	if nodeType != reflect.TypeOf(&dst.FuncDecl{}) && nodeType != reflect.TypeOf(&dst.FuncLit{}) {
 		panic(fmt.Sprintf("TraceFunction only accepts *dst.FuncDecl or *dst.FuncLit, got %s", nodeType))
 	}
+
 	var funcType *dst.FuncType
-	if decl, ok := node.(*dst.FuncDecl); ok {
+	var funcBody *dst.BlockStmt
+
+	// Determine the function type and body based on node type
+	decl, isFuncDecl := node.(*dst.FuncDecl)
+	lit, isFuncLit := node.(*dst.FuncLit)
+
+	if isFuncDecl {
 		funcType = decl.Type
-	} else if lit, ok := node.(*dst.FuncLit); ok {
+		funcBody = decl.Body
+	} else if isFuncLit {
 		funcType = lit.Type
+		funcBody = lit.Body
+	} else {
+		// This should not happen due to the initial type check, but it's a safeguard
+		return node, false
 	}
 
 	// Check if the function already has a transaction parameter
 	hasTransactionParam := false
 	for _, param := range funcType.Params.List {
 		for _, ident := range param.Names {
-			// Check if the parameter name matches any transaction name in the cache
 			if _, exists := manager.transactionCache.Transactions[ident.Name]; exists {
 				hasTransactionParam = true
 				break
@@ -51,11 +62,40 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 			TopLevelFunctionChanged = true
 		}
 	}
-	// create segment if needed
-	segmentImport, ok := tracing.CreateSegment(node)
-	if ok {
-		manager.addImport(segmentImport)
-		TopLevelFunctionChanged = true
+
+	// Check if a segment already exists within the transaction's lifespan
+	hasSegment := false
+	dstutil.Apply(funcBody, func(c *dstutil.Cursor) bool {
+		callExpr, ok := c.Node().(*dst.CallExpr)
+		if !ok {
+			return true
+		}
+
+		selExpr, ok := callExpr.Fun.(*dst.SelectorExpr)
+		if !ok || selExpr.Sel.Name != "StartSegment" {
+			return true
+		}
+
+		ident, ok := selExpr.X.(*dst.Ident)
+		if !ok {
+			return true
+		}
+
+		if _, exists := manager.transactionCache.Transactions[ident.Name]; exists {
+			hasSegment = true
+			return false // Stop further traversal
+		}
+
+		return true
+	}, nil)
+
+	// Create segment if needed
+	if !hasSegment {
+		segmentImport, ok := tracing.CreateSegment(node)
+		if ok {
+			manager.addImport(segmentImport)
+			TopLevelFunctionChanged = true
+		}
 	}
 
 	outputNode := dstutil.Apply(node, func(c *dstutil.Cursor) bool {
