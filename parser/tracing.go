@@ -25,13 +25,25 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 	if nodeType != reflect.TypeOf(&dst.FuncDecl{}) && nodeType != reflect.TypeOf(&dst.FuncLit{}) {
 		panic(fmt.Sprintf("TraceFunction only accepts *dst.FuncDecl or *dst.FuncLit, got %s", nodeType))
 	}
-
-	// add needed tracing object to function declaration parameters
-	// this must be the first thing done, since it double checks the type assignment for tracing and will change it
-	tracingImport, ok := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
-	if ok {
-		manager.addImport(tracingImport)
-		TopLevelFunctionChanged = true
+	if decl, ok := node.(*dst.FuncDecl); ok {
+		// Check if the function already has a transaction parameter
+		hasTransactionParam := false
+		for _, param := range decl.Type.Params.List {
+			for _, ident := range param.Names {
+				// Check if the parameter name matches any transaction name in the cache
+				if _, exists := manager.transactionCache.Transactions[ident.Name]; exists {
+					hasTransactionParam = true
+					break
+				}
+			}
+		}
+		if !hasTransactionParam {
+			tracingImport, ok := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
+			if ok {
+				manager.addImport(tracingImport)
+				TopLevelFunctionChanged = true
+			}
+		}
 	}
 
 	// create segment if needed
@@ -118,8 +130,12 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 					continue
 				}
 				if !transactionCreatedForStatement {
-					tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable) // if a trasaction needs to be created, it will be created here
-					transactionCreatedForStatement = true
+					// Check if the functionName is already present within transactions
+					if !manager.transactionCache.IsFunctionInTransactionScope(invInfo.functionName) {
+						// If not present, wrap the function with a transaction
+						tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable)
+						transactionCreatedForStatement = true
+					}
 				}
 				childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
 				manager.addImport(tracingImport)
