@@ -18,16 +18,16 @@ import (
 //   - TransactionState: A map that tracks whether a transaction is open or has ended, ensuring that
 //     no further expressions are added once a transaction is marked as ended.
 type TransactionCache struct {
-	Transactions     map[string][]dst.Expr
+	Transactions     map[*dst.Ident][]dst.Expr
 	Functions        map[string]*dst.FuncDecl
-	TransactionState map[string]bool // Track whether a transaction is closed
+	TransactionState map[*dst.Ident]bool // Track whether a transaction is closed
 }
 
 func NewTransactionCache() *TransactionCache {
 	return &TransactionCache{
-		Transactions:     make(map[string][]dst.Expr),
+		Transactions:     make(map[*dst.Ident][]dst.Expr),
 		Functions:        make(map[string]*dst.FuncDecl),
-		TransactionState: make(map[string]bool),
+		TransactionState: make(map[*dst.Ident]bool),
 	}
 }
 
@@ -35,23 +35,21 @@ func NewTransactionCache() *TransactionCache {
 // It first checks if the transaction is closed, and if so, it does not add the expression.
 // If the expression is an 'End' call directly on the transaction, it marks the transaction as closed.
 // If the 'End' call is part of a segment [ex: defer txn.StartSegment.End()], it does not mark the transaction as closed.
-func (tc *TransactionCache) AddCall(transactionName string, expr dst.Expr) {
+func (tc *TransactionCache) AddCall(transaction *dst.Ident, expr dst.Expr) {
 	if tc.Transactions == nil {
-		tc.Transactions = make(map[string][]dst.Expr)
+		tc.Transactions = make(map[*dst.Ident][]dst.Expr)
 	}
-
 	// Check if the transaction is closed
-	if closed, exists := tc.TransactionState[transactionName]; exists && closed {
+	if closed, exists := tc.TransactionState[transaction]; exists && closed {
 		return // Do not add calls to a closed transaction
 	}
-
 	// Check if the call is an End method directly on the transaction
 	if callExpr, ok := expr.(*dst.CallExpr); ok {
 		if selExpr, ok := callExpr.Fun.(*dst.SelectorExpr); ok {
 			if selExpr.Sel.Name == "End" {
 				// Check if the End method is called directly on the transaction
-				if ident, ok := selExpr.X.(*dst.Ident); ok && ident.Name == transactionName {
-					tc.TransactionState[transactionName] = true // Mark transaction as closed
+				if ident, ok := selExpr.X.(*dst.Ident); ok && ident.Name == transaction.Name {
+					tc.TransactionState[transaction] = true // Mark transaction as closed
 				} else if selExpr.X.(*dst.CallExpr) != nil {
 					// This is likely part of a segment operation, do not mark transaction as closed
 					return
@@ -59,7 +57,7 @@ func (tc *TransactionCache) AddCall(transactionName string, expr dst.Expr) {
 			}
 		}
 	}
-	tc.Transactions[transactionName] = append(tc.Transactions[transactionName], expr)
+	tc.Transactions[transaction] = append(tc.Transactions[transaction], expr)
 
 }
 
@@ -88,22 +86,22 @@ func (tc *TransactionCache) ExtractNames() (transactionNames []string, expressio
 	expressionNames = make(map[string][]string)
 
 	// Iterate over transactions and gather names
-	for txnName, exprs := range tc.Transactions {
-		transactionNames = append(transactionNames, txnName)
+	for txn, exprs := range tc.Transactions {
+		transactionNames = append(transactionNames, txn.Name)
 
 		for _, expr := range exprs {
 			switch e := expr.(type) {
 			case *dst.CallExpr:
 				if selExpr, ok := e.Fun.(*dst.SelectorExpr); ok {
 					if ident, identOk := selExpr.X.(*dst.Ident); identOk {
-						expressionNames[txnName] = append(expressionNames[txnName], fmt.Sprintf("%s.%s", ident.Name, selExpr.Sel.Name))
+						expressionNames[txn.Name] = append(expressionNames[txn.Name], fmt.Sprintf("%s.%s", ident.Name, selExpr.Sel.Name))
 					} else {
-						expressionNames[txnName] = append(expressionNames[txnName], selExpr.Sel.Name)
+						expressionNames[txn.Name] = append(expressionNames[txn.Name], selExpr.Sel.Name)
 					}
 				} else if ident, identOk := e.Fun.(*dst.Ident); identOk {
-					expressionNames[txnName] = append(expressionNames[txnName], ident.Name)
+					expressionNames[txn.Name] = append(expressionNames[txn.Name], ident.Name)
 				} else {
-					expressionNames[txnName] = append(expressionNames[txnName], "Unknown")
+					expressionNames[txn.Name] = append(expressionNames[txn.Name], "Unknown")
 				}
 			default:
 				continue
@@ -113,11 +111,19 @@ func (tc *TransactionCache) ExtractNames() (transactionNames []string, expressio
 
 	return transactionNames, expressionNames
 }
+func (tc *TransactionCache) CheckTransactionExists(transaction *dst.Ident) bool {
+	for txn := range tc.Transactions {
+		if txn.Name == transaction.Name {
+			return true
+		}
+	}
+	return false
+}
 
 // Debug printing of cache
 func (tc *TransactionCache) Print() {
 	for txn, exprs := range tc.Transactions {
-		fmt.Printf("Transaction: %s\n", txn)
+		fmt.Printf("Transaction: %s\n", txn.Name)
 		for _, expr := range exprs {
 			switch e := expr.(type) {
 			case *dst.CallExpr:

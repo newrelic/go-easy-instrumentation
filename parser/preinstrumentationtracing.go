@@ -12,7 +12,7 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 	if decl, ok := funcNode.(*dst.FuncDecl); ok {
 		manager.transactionCache.Functions[decl.Name.Name] = decl
 
-		var currentTransaction string
+		var currentTransaction *dst.Ident
 		var recording bool
 		dstutil.Apply(decl.Body, func(c *dstutil.Cursor) bool {
 			node := c.Node()
@@ -25,7 +25,7 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 								// Capture the transaction variable name
 								if len(stmt.Lhs) > 0 {
 									if txnVar, ok := stmt.Lhs[0].(*dst.Ident); ok {
-										currentTransaction = txnVar.Name
+										currentTransaction = txnVar
 										recording = true
 									}
 								}
@@ -38,7 +38,7 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 					if callExpr, ok := stmt.X.(*dst.CallExpr); ok {
 						manager.transactionCache.AddCall(currentTransaction, callExpr)
 						if selExpr, ok := callExpr.Fun.(*dst.SelectorExpr); ok {
-							if selExpr.Sel.Name == "End" && selExpr.X.(*dst.Ident).Name == currentTransaction {
+							if selExpr.Sel.Name == "End" && selExpr.X.(*dst.Ident) == currentTransaction {
 								recording = false
 								return false
 							}
@@ -46,7 +46,7 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 
 						// Check if the transaction is passed to another function, if so track its calls
 						for _, arg := range callExpr.Args {
-							if ident, ok := arg.(*dst.Ident); ok && ident.Name == currentTransaction {
+							if ident, ok := arg.(*dst.Ident); ok && ident.Name == currentTransaction.Name {
 								if ident, ok := callExpr.Fun.(*dst.Ident); ok {
 									if funcDecl, exists := manager.transactionCache.Functions[ident.Name]; exists {
 										trackFunctionCalls(manager, funcDecl, currentTransaction)
@@ -64,24 +64,23 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 
 // trackFunctionCalls traverses the body of a function declaration to track expressions related to a transaction.
 // It updates the transaction cache with expressions found within the function body.
-func trackFunctionCalls(manager *InstrumentationManager, funcDecl *dst.FuncDecl, transactionName string) {
+func trackFunctionCalls(manager *InstrumentationManager, funcDecl *dst.FuncDecl, txn *dst.Ident) {
 	// Traverse the function body to track calls
 	dstutil.Apply(funcDecl.Body, func(c *dstutil.Cursor) bool {
 		if callExpr, ok := c.Node().(*dst.CallExpr); ok {
-			manager.transactionCache.AddCall(transactionName, callExpr)
+			manager.transactionCache.AddCall(txn, callExpr)
 
 			// Check if the call is an End method directly on the transaction
 			if selExpr, ok := callExpr.Fun.(*dst.SelectorExpr); ok {
-				if ident, ok := selExpr.X.(*dst.Ident); ok && selExpr.Sel.Name == "End" && ident.Name == transactionName {
-					manager.transactionCache.TransactionState[transactionName] = true // Mark transaction as closed
-					return false                                                      // Stop further traversal
+				if ident, ok := selExpr.X.(*dst.Ident); ok && selExpr.Sel.Name == "End" && ident == txn {
+					manager.transactionCache.TransactionState[txn] = true // Mark transaction as closed
+					return false                                          // Stop further traversal
 				}
 			}
-
 			// Recursively track calls within functions that are called with the transaction
 			if ident, ok := callExpr.Fun.(*dst.Ident); ok {
 				if funcDecl, exists := manager.transactionCache.Functions[ident.Name]; exists {
-					trackFunctionCalls(manager, funcDecl, transactionName)
+					trackFunctionCalls(manager, funcDecl, txn)
 				}
 			}
 		}

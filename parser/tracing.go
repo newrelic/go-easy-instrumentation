@@ -48,13 +48,12 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 	hasTransactionParam := false
 	for _, param := range funcType.Params.List {
 		for _, ident := range param.Names {
-			if _, exists := manager.transactionCache.Transactions[ident.Name]; exists {
+			if manager.transactionCache.CheckTransactionExists(ident) {
 				hasTransactionParam = true
 				break
 			}
 		}
 	}
-
 	if !hasTransactionParam {
 		tracingImport, ok := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
 		if ok {
@@ -81,7 +80,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 			return true
 		}
 
-		if _, exists := manager.transactionCache.Transactions[ident.Name]; exists {
+		if manager.transactionCache.CheckTransactionExists(ident) {
 			hasSegment = true
 			return false // Stop further traversal
 		}
@@ -174,24 +173,26 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 				if manager.setupFunc == invInfo.decl {
 					continue
 				}
+				funcAlreadyTraced := manager.transactionCache.IsFunctionInTransactionScope(invInfo.functionName)
 				if !transactionCreatedForStatement {
 					// Check if the functionName is already present within transactions
-					if !manager.transactionCache.IsFunctionInTransactionScope(invInfo.functionName) {
+					if !funcAlreadyTraced {
 						// If not present, wrap the function with a transaction
 						tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable)
 						transactionCreatedForStatement = true
+						childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
+						manager.addImport(tracingImport)
+						TopLevelFunctionChanged = true
+
+						if manager.shouldInstrumentFunction(invInfo) && !funcAlreadyTraced {
+							manager.setPackage(invInfo.packageName)
+							TraceFunction(manager, invInfo.decl, childState)
+							downstreamFunctionTraced = true
+							manager.setPackage(rootPkg)
+						}
 					}
 				}
-				childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
-				manager.addImport(tracingImport)
-				TopLevelFunctionChanged = true
 
-				if manager.shouldInstrumentFunction(invInfo) {
-					manager.setPackage(invInfo.packageName)
-					TraceFunction(manager, invInfo.decl, childState)
-					downstreamFunctionTraced = true
-					manager.setPackage(rootPkg)
-				}
 			}
 
 			ok = NoticeError(manager, v, c, tracing, downstreamFunctionTraced)
