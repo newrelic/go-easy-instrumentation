@@ -11,18 +11,18 @@ import (
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
-func anotherFunc(nrTxn *newrelic.Transaction) {
+func anotherFunc(txn *newrelic.Transaction) {
 	fmt.Println("Hello from anotherFunc!")
-	nrTxn.Ignore()
+	txn.Ignore()
 }
 
-func hello(nrTxn *newrelic.Transaction) {
-	defer nrTxn.StartSegment("hello").End()
+func hello(txn *newrelic.Transaction) {
+	defer txn.StartSegment("hello").End()
 	fmt.Println("Hello, World!")
-	anotherFunc(nrTxn)
-	nrTxn.AddAttribute("color", "red")
+	anotherFunc(txn)
+	txn.AddAttribute("color", "red")
 	fmt.Println("test")
-	nrTxn.End()
+	txn.End()
 }
 
 func noNRInstrumentation() {
@@ -61,8 +61,8 @@ func main() {
 		})
 	}
 
-	nrTxn := app.StartTransaction("hello")
-	hello(nrTxn)
+	txn := app.StartTransaction("hello")
+	hello(txn)
 
 	noNRInstrumentation()
 
