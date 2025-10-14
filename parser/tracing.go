@@ -174,25 +174,24 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 					continue
 				}
 				funcAlreadyTraced := manager.transactionCache.IsFunctionInTransactionScope(invInfo.functionName)
-				if !transactionCreatedForStatement {
+				if !transactionCreatedForStatement && !funcAlreadyTraced {
 					// Check if the functionName is already present within transactions
-					if !funcAlreadyTraced {
-						// If not present, wrap the function with a transaction
-						tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable)
-						transactionCreatedForStatement = true
-						childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
-						manager.addImport(tracingImport)
-						TopLevelFunctionChanged = true
-
-						if manager.shouldInstrumentFunction(invInfo) && !funcAlreadyTraced {
-							manager.setPackage(invInfo.packageName)
-							TraceFunction(manager, invInfo.decl, childState)
-							downstreamFunctionTraced = true
-							manager.setPackage(rootPkg)
-						}
-					}
+					tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable)
+					transactionCreatedForStatement = true
 				}
+				if !funcAlreadyTraced {
+					childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
+					manager.addImport(tracingImport)
+					TopLevelFunctionChanged = true
+					// If not present, wrap the function with a transaction
+					if manager.shouldInstrumentFunction(invInfo) {
+						manager.setPackage(invInfo.packageName)
+						TraceFunction(manager, invInfo.decl, childState)
+						downstreamFunctionTraced = true
+						manager.setPackage(rootPkg)
+					}
 
+				}
 			}
 
 			ok = NoticeError(manager, v, c, tracing, downstreamFunctionTraced)
