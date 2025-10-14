@@ -79,27 +79,21 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 func trackFunctionCalls(manager *InstrumentationManager, funcDecl *dst.FuncDecl, txn *dst.Ident) {
 	// Traverse the function body to track calls
 	dstutil.Apply(funcDecl.Body, func(c *dstutil.Cursor) bool {
-		callExpr, ok := c.Node().(*dst.CallExpr)
-		if !ok {
-			return false
-		}
-		manager.transactionCache.AddCall(txn, callExpr)
+		if callExpr, ok := c.Node().(*dst.CallExpr); ok {
+			manager.transactionCache.AddCall(txn, callExpr)
 
-		// Check if the call is an End method directly on the transaction
-		selExpr, ok := callExpr.Fun.(*dst.SelectorExpr)
-		if ok {
-			ident, ok := selExpr.X.(*dst.Ident)
-			if ok && selExpr.Sel.Name == "End" && ident == txn {
-				manager.transactionCache.TransactionState[txn] = true // Mark transaction as closed
-				return false                                          // Stop further traversal
+			// Check if the call is an End method directly on the transaction
+			if selExpr, ok := callExpr.Fun.(*dst.SelectorExpr); ok {
+				if ident, ok := selExpr.X.(*dst.Ident); ok && selExpr.Sel.Name == "End" && ident == txn {
+					manager.transactionCache.TransactionState[txn] = true // Mark transaction as closed
+					return false                                          // Stop further traversal
+				}
 			}
-		}
-		// Recursively track calls within functions that are called with the transaction
-		ident, ok := callExpr.Fun.(*dst.Ident)
-		if ok {
-			funcDecl, exists := manager.transactionCache.Functions[ident.Name]
-			if exists {
-				trackFunctionCalls(manager, funcDecl, txn)
+			// Recursively track calls within functions that are called with the transaction
+			if ident, ok := callExpr.Fun.(*dst.Ident); ok {
+				if funcDecl, exists := manager.transactionCache.Functions[ident.Name]; exists {
+					trackFunctionCalls(manager, funcDecl, txn)
+				}
 			}
 		}
 		return true
