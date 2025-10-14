@@ -83,6 +83,37 @@ func (tc *TransactionCache) IsFunctionInTransactionScope(functionName string) bo
 	return false
 }
 
+// ExtractNames returns the transaction names and the corresponding expression names (For Testing)
+func (tc *TransactionCache) ExtractNames() (transactionNames []string, expressionNames map[string][]string) {
+	expressionNames = make(map[string][]string)
+
+	// Iterate over transactions and gather names
+	for txnName, exprs := range tc.Transactions {
+		transactionNames = append(transactionNames, txnName)
+
+		for _, expr := range exprs {
+			switch e := expr.(type) {
+			case *dst.CallExpr:
+				if selExpr, ok := e.Fun.(*dst.SelectorExpr); ok {
+					if ident, identOk := selExpr.X.(*dst.Ident); identOk {
+						expressionNames[txnName] = append(expressionNames[txnName], fmt.Sprintf("%s.%s", ident.Name, selExpr.Sel.Name))
+					} else {
+						expressionNames[txnName] = append(expressionNames[txnName], selExpr.Sel.Name)
+					}
+				} else if ident, identOk := e.Fun.(*dst.Ident); identOk {
+					expressionNames[txnName] = append(expressionNames[txnName], ident.Name)
+				} else {
+					expressionNames[txnName] = append(expressionNames[txnName], "Unknown")
+				}
+			default:
+				continue
+			}
+		}
+	}
+
+	return transactionNames, expressionNames
+}
+
 // Debug printing of cache
 func (tc *TransactionCache) Print() {
 	for txn, exprs := range tc.Transactions {
