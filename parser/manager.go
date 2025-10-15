@@ -469,11 +469,21 @@ func (m *InstrumentationManager) ScanApplication(instrumentationFunctions ...Pre
 // This will not generate any changes to the actual source code, just the abstract syntax tree generated from it.
 // Note: only pass tracing functions to this method for testing, or if you sincerely know what you are doing.
 func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions ...StatelessTracingFunction) error {
-	// Call graph was already made during Scanning Phase
-	if m.currentPackage != "" {
-		return nil
+	tracingFunctions := m.tracingFunctions.stateless
+	if len(instrumentationFunctions) != 0 {
+		tracingFunctions = instrumentationFunctions
 	}
-	// Create a call graph of all calls made to functions in this package (Will only be used during tests)
+
+	instrumentPackages(m, tracingFunctions...)
+
+	return nil
+}
+
+// TESTING FUNCTION ONLY - This function is identical to InstrumentApplication, except function calls are traced.
+// This is required because ScanApplication already creates a call graph of all functions, and we do not want
+// to duplicate work for tracing.
+func (m *InstrumentationManager) InstrumentTestApplication(instrumentationFunctions ...StatelessTracingFunction) error {
+
 	err := tracePackageFunctionCalls(m, m.tracingFunctions.dependency...)
 	if err != nil {
 		return err
