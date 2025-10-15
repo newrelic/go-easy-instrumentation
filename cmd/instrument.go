@@ -113,7 +113,6 @@ func Instrument(packagePath string) {
 	// write debug comments before writing diff so that
 	// diff file console log is still easy to see
 	comment.WriteAll()
-	manager.DebugTransactionCache()
 	err = manager.WriteDiff()
 	cobra.CheckErr(err)
 }
