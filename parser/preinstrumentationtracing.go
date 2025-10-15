@@ -13,7 +13,6 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 		manager.transactionCache.Functions[decl.Name.Name] = decl
 
 		var currentTransaction *dst.Ident
-		var recording bool
 		dstutil.Apply(decl.Body, func(c *dstutil.Cursor) bool {
 			node := c.Node()
 			switch stmt := node.(type) {
@@ -32,16 +31,15 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 						// Capture the transaction variable name
 						if len(stmt.Lhs) > 0 {
 							txnVar, ok := stmt.Lhs[0].(*dst.Ident)
-							if ok {
+							if ok && txnVar != nil {
 								currentTransaction = txnVar
-								recording = true
 							}
 						}
 					}
 
 				}
 			case *dst.ExprStmt:
-				if recording {
+				if currentTransaction != nil {
 					callExpr, ok := stmt.X.(*dst.CallExpr)
 					if !ok {
 						break
@@ -50,7 +48,6 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 					selExpr, ok := callExpr.Fun.(*dst.SelectorExpr)
 					if ok {
 						if selExpr.Sel.Name == "End" && selExpr.X.(*dst.Ident) == currentTransaction {
-							recording = false
 							return false
 						}
 					}
