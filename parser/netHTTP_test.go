@@ -256,7 +256,7 @@ func index(w http.ResponseWriter, r *http.Request, x string) {
 				t.Fatal("code must contain only one function declaration")
 			}
 
-			gotBool := isHttpHandler(decl, pkgs[0])
+			gotBool := isHTTPHandler(decl)
 			if gotBool != tt.wantBool {
 				t.Errorf("isNetHttpMethodCannotInstrument() = %v, want %v", gotBool, tt.wantBool)
 			}
@@ -532,7 +532,17 @@ func Test_TxnFromCtx(t *testing.T) {
 					Type: &dst.FuncType{
 						Params: &dst.FieldList{
 							List: []*dst.Field{
-								0: {},
+								0: {
+									Names: []*dst.Ident{
+										0: {
+											Name: "w",
+										},
+									},
+									Type: &dst.Ident{
+										Name: "ResponseWriter",
+										Path: codegen.HttpImportPath,
+									},
+								},
 								1: {
 									Names: []*dst.Ident{
 										0: {
@@ -541,6 +551,7 @@ func Test_TxnFromCtx(t *testing.T) {
 									},
 									Type: &dst.StarExpr{
 										X: &dst.Ident{
+											Name: "Request",
 											Path: codegen.HttpImportPath,
 										},
 									},
@@ -562,7 +573,17 @@ func Test_TxnFromCtx(t *testing.T) {
 					Type: &dst.FuncType{
 						Params: &dst.FieldList{
 							List: []*dst.Field{
-								0: {},
+								0: {
+									Names: []*dst.Ident{
+										0: {
+											Name: "w",
+										},
+									},
+									Type: &dst.Ident{
+										Name: "ResponseWriter",
+										Path: codegen.HttpImportPath,
+									},
+								},
 								1: {
 									Names: []*dst.Ident{
 										0: {
@@ -571,6 +592,7 @@ func Test_TxnFromCtx(t *testing.T) {
 									},
 									Type: &dst.StarExpr{
 										X: &dst.Ident{
+											Name: "Request",
 											Path: codegen.HttpImportPath,
 										},
 									},
@@ -1528,7 +1550,17 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 			Type: &dst.FuncType{
 				Params: &dst.FieldList{
 					List: []*dst.Field{
-						0: {},
+						0: {
+							Names: []*dst.Ident{
+								0: {
+									Name: "w",
+								},
+							},
+							Type: &dst.Ident{
+								Name: "ResponseWriter",
+								Path: codegen.HttpImportPath,
+							},
+						},
 						1: {
 							Names: []*dst.Ident{
 								0: {
@@ -1537,6 +1569,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 							},
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
+									Name: "Request",
 									Path: codegen.HttpImportPath,
 								},
 							},
@@ -1552,7 +1585,17 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 			Type: &dst.FuncType{
 				Params: &dst.FieldList{
 					List: []*dst.Field{
-						0: {},
+						0: {
+							Names: []*dst.Ident{
+								0: {
+									Name: "w",
+								},
+							},
+							Type: &dst.Ident{
+								Name: "ResponseWriter",
+								Path: codegen.HttpImportPath,
+							},
+						},
 						1: {
 							Names: []*dst.Ident{
 								0: {
@@ -1561,6 +1604,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 							},
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
+									Name: "Request",
 									Path: codegen.HttpImportPath,
 								},
 							},
@@ -1576,7 +1620,17 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 			Type: &dst.FuncType{
 				Params: &dst.FieldList{
 					List: []*dst.Field{
-						0: {},
+						0: {
+							Names: []*dst.Ident{
+								0: {
+									Name: "w",
+								},
+							},
+							Type: &dst.Ident{
+								Name: "ResponseWriter",
+								Path: codegen.HttpImportPath,
+							},
+						},
 						1: {
 							Names: []*dst.Ident{
 								0: {
@@ -1585,6 +1639,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 							},
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
+									Name: "Request",
 									Path: codegen.HttpImportPath,
 								},
 							},
@@ -1617,7 +1672,17 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 			Type: &dst.FuncType{
 				Params: &dst.FieldList{
 					List: []*dst.Field{
-						0: {},
+						0: {
+							Names: []*dst.Ident{
+								0: {
+									Name: "w",
+								},
+							},
+							Type: &dst.Ident{
+								Name: "ResponseWriter",
+								Path: codegen.HttpImportPath,
+							},
+						},
 						1: {
 							Names: []*dst.Ident{
 								0: {
@@ -1626,6 +1691,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 							},
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
+									Name: "Request",
 									Path: codegen.HttpImportPath,
 								},
 							},
@@ -1641,7 +1707,17 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 			Type: &dst.FuncType{
 				Params: &dst.FieldList{
 					List: []*dst.Field{
-						0: {},
+						0: {
+							Names: []*dst.Ident{
+								0: {
+									Name: "w",
+								},
+							},
+							Type: &dst.Ident{
+								Name: "ResponseWriter",
+								Path: codegen.HttpImportPath,
+							},
+						},
 						1: {
 							Names: []*dst.Ident{
 								0: {
@@ -1650,6 +1726,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 							},
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
+									Name: "Request",
 									Path: codegen.HttpImportPath,
 								},
 							},
@@ -1665,7 +1742,17 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 			Type: &dst.FuncType{
 				Params: &dst.FieldList{
 					List: []*dst.Field{
-						0: {},
+						0: {
+							Names: []*dst.Ident{
+								0: {
+									Name: "w",
+								},
+							},
+							Type: &dst.Ident{
+								Name: "ResponseWriter",
+								Path: codegen.HttpImportPath,
+							},
+						},
 						1: {
 							Names: []*dst.Ident{
 								0: {
@@ -1674,6 +1761,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 							},
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
+									Name: "Request",
 									Path: codegen.HttpImportPath,
 								},
 							},
