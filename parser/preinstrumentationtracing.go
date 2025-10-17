@@ -3,6 +3,7 @@ package parser
 import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/parser/transactioncache"
 )
 
 // DetectTransactions analyzes the AST to identify and track transactions within function declarations.
@@ -54,14 +55,16 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 					// Check if the transaction is passed to another function, if so track its calls
 					for _, arg := range callExpr.Args {
 						ident, ok := arg.(*dst.Ident)
-						if ok && ident.Name == currentTransaction.Name {
-							ident, ok := callExpr.Fun.(*dst.Ident)
-							if ok {
-								funcDecl, exists := manager.transactionCache.Functions[ident.Name]
-								if exists {
-									trackFunctionCalls(manager, funcDecl, currentTransaction)
-								}
-							}
+						if !ok || ident.Name != currentTransaction.Name {
+							continue
+						}
+						ident, ok = callExpr.Fun.(*dst.Ident)
+						if !ok {
+							continue
+						}
+						funcDecl, exists := manager.transactionCache.Functions[ident.Name]
+						if exists {
+							trackFunctionCalls(manager, funcDecl, currentTransaction)
 						}
 					}
 				}
@@ -76,21 +79,30 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 func trackFunctionCalls(manager *InstrumentationManager, funcDecl *dst.FuncDecl, txn *dst.Ident) {
 	// Traverse the function body to track calls
 	dstutil.Apply(funcDecl.Body, func(c *dstutil.Cursor) bool {
-		if callExpr, ok := c.Node().(*dst.CallExpr); ok {
-			manager.transactionCache.AddCall(txn, callExpr)
+		callExpr, ok := c.Node().(*dst.CallExpr)
+		if !ok {
+			return true
+		}
 
-			// Check if the call is an End method directly on the transaction
-			if selExpr, ok := callExpr.Fun.(*dst.SelectorExpr); ok {
-				if ident, ok := selExpr.X.(*dst.Ident); ok && selExpr.Sel.Name == "End" && ident == txn {
-					manager.transactionCache.TransactionState[txn] = true // Mark transaction as closed
-					return false                                          // Stop further traversal
-				}
+		// Validate that we are able to add calls to the cache. Fail and bail if we are not.
+		if !manager.transactionCache.AddCall(txn, callExpr) {
+			return false
+		}
+
+		// Check if the call is an End method directly on the transaction
+		if transactioncache.IsTxnEnd(txn, callExpr) {
+			txnData, ok := manager.transactionCache.Transactions[txn]
+			if !ok {
+				return false
 			}
-			// Recursively track calls within functions that are called with the transaction
-			if ident, ok := callExpr.Fun.(*dst.Ident); ok {
-				if funcDecl, exists := manager.transactionCache.Functions[ident.Name]; exists {
-					trackFunctionCalls(manager, funcDecl, txn)
-				}
+			txnData.SetClosed(true)
+			return false // Stop further traversal
+		}
+
+		// Recursively track calls within functions that are called with the transaction
+		if ident, ok := callExpr.Fun.(*dst.Ident); ok {
+			if funcDecl, exists := manager.transactionCache.Functions[ident.Name]; exists {
+				trackFunctionCalls(manager, funcDecl, txn)
 			}
 		}
 		return true
