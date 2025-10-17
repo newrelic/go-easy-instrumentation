@@ -6,23 +6,26 @@ import (
 	"github.com/dave/dst"
 )
 
-// TransactionCache is responsible for tracking existing transactions within a Go application.
-// It maintains the following components:
+// TransactionData is responsible for maintaining metadata related to an individual transaction
+// It contains the following components:
 //
-//   - Transactions: A map where each key is a transaction name, and the value is a list of expressions
-//     that are active within the lifespan of the transaction.
+//   - Expressions: A list of dst.Expr statements active within the lifespan of the transaction
 //
-//   - Functions: A map that stores already seen functions alongside their declarations. This is useful
-//     for tracking transactions that span multiple function calls.
-//
-//   - TransactionState: A map that tracks whether a transaction is open or has ended, ensuring that
-//     no further expressions are added once a transaction is marked as ended.
-
+//   - IsClosed: A boolean to indicate whether a transaction is open or has ended, ensures that no
+//     further expressions are added once a transaction is marked as ended
 type TransactionData struct {
 	Expressions []dst.Expr
 	IsClosed    bool
 }
 
+// TransactionCache is responsible for tracking existing transactions within a Go application.
+// It maintains the following components:
+//
+//   - Transactions: A map where each key is a transaction name, and the value is a pointer to a
+//     TransactionData struct
+//
+//   - Functions: A map that stores already seen functions alongside their declarations. This is useful
+//     for tracking transactions that span multiple function calls.
 type TransactionCache struct {
 	Transactions map[*dst.Ident]*TransactionData
 	Functions    map[string]*dst.FuncDecl
