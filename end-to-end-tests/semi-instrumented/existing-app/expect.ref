@@ -1,0 +1,27 @@
+--- a/main.go
++++ b/main.go
+@@ -18,10 +18,13 @@
+ }
+ 
+ func noticeErrorWithAttributes(w http.ResponseWriter, r *http.Request) {
++	nrTxn := newrelic.FromContext(r.Context())
++
+ 	io.WriteString(w, "Noticing an error")
+ 
+ 	err := errors.New("error with attributes")
+ 	if err != nil {
++		nrTxn.NoticeError(err)
+ 		fmt.Println(err)
+ 	}
+ }
+@@ -41,8 +40,8 @@
+ 	}
+ 	myapp.WaitForConnection(5 * time.Second)
+ 
+-	http.HandleFunc("/", index)
+-	http.HandleFunc("/notice_error_with_attributes", noticeErrorWithAttributes)
++	http.HandleFunc(newrelic.WrapHandleFunc(myapp, "/", index))
++	http.HandleFunc(newrelic.WrapHandleFunc(myapp, "/notice_error_with_attributes", noticeErrorWithAttributes))
+ 
+ 	http.ListenAndServe(":8000", nil)
+ }
