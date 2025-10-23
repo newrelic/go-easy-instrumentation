@@ -105,28 +105,6 @@ func getChiHTTPHandlerRouteName(callExpr *dst.CallExpr) (string, *dst.FuncLit) {
 	return routeName.Value, fnLit
 }
 
-// Get the name of the *http.Request arg in the function literal http handler
-//
-//	router.Get("/" func(w http.ResponseWriter, req *http.Request){...})
-//	___________________________________________^^^
-func getChiHTTPRequestArgName(fnLit *dst.FuncLit) string {
-	if fnLit == nil {
-		return ""
-	}
-
-	if len(fnLit.Type.Params.List) != 2 {
-		return ""
-	}
-
-	reqArg := fnLit.Type.Params.List[1]
-
-	if len(reqArg.Names) != 1 {
-		return ""
-	}
-
-	return reqArg.Names[0].Name
-}
-
 // InstrumentChiMiddleware detects whether a Chi Router has been initialized
 // and adds New Relic Go Agent Middleware via the router.Use() method to
 // instrument the routes registered to the router.
@@ -158,8 +136,8 @@ func InstrumentChiRouterLiteral(manager *InstrumentationManager, stmt dst.Stmt, 
 		return false
 	}
 
-	reqArgName := getChiHTTPRequestArgName(fnLit)
-	if reqArgName == "" {
+	ok, reqArgName := getHTTPRequestArgName(fnLit)
+	if reqArgName == "" || !ok {
 		return false
 	}
 
