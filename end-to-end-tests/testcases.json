@@ -1,31 +1,36 @@
 {
-	"tests": [
-	{
-		"name": "http web app",
-		"dir": "end-to-end-tests/http-app"
-	},
-	{
-		"name": "http-mux web app",
-		"dir": "end-to-end-tests/http-mux-app"
-	},
-	{
-		"name": "grpc app",
-		"dir": "end-to-end-tests/grpc",
-		"builds": [
-			"end-to-end-tests/grpc/server",
-			"end-to-end-tests/grpc/client"
-		]
-	},
-	{
-		"name": "gin - basic",
-		"dir": "end-to-end-tests/gin-examples/basic"
-	},
-	{
-		"name": "gin - multiple services",
-		"dir": "end-to-end-tests/gin-examples/multiple-service"
-	},
-	{
-		"name": "unit tests",
-		"dir": "end-to-end-tests/unit-tests"
-	}
-]}
+  "tests": [
+    {
+      "name": "http web app",
+      "dir": "end-to-end-tests/http-app"
+    },
+    {
+      "name": "http-mux web app",
+      "dir": "end-to-end-tests/http-mux-app"
+    },
+    {
+      "name": "grpc app",
+      "dir": "end-to-end-tests/grpc",
+      "builds": [
+        "end-to-end-tests/grpc/server",
+        "end-to-end-tests/grpc/client"
+      ]
+    },
+    {
+      "name": "gin - basic",
+      "dir": "end-to-end-tests/gin-examples/basic"
+    },
+    {
+      "name": "gin - multiple services",
+      "dir": "end-to-end-tests/gin-examples/multiple-service"
+    },
+    {
+      "name": "unit tests",
+      "dir": "end-to-end-tests/unit-tests"
+    },
+    {
+      "name": "gochi app",
+      "dir": "end-to-end-tests/gochi"
+    }
+  ]
+}

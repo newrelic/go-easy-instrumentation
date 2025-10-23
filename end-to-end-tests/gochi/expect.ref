@@ -1,0 +1,71 @@
+--- a/main.go
++++ b/main.go
+@@ -4,9 +4,12 @@
+ 	"io"
+ 	"log/slog"
+ 	"net/http"
++	"time"
+ 
+ 	"github.com/go-chi/chi/v5"
+ 	"github.com/go-chi/chi/v5/middleware"
++	"github.com/newrelic/go-agent/v3/integrations/nrgochi"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func endpoint404(w http.ResponseWriter, r *http.Request) {
+@@ -15,9 +15,16 @@
+ }
+ 
+ func basicExternal(w http.ResponseWriter, r *http.Request) {
++	nrTxn := newrelic.FromContext(r.Context())
++
++	// the "http.Get()" net/http method can not be instrumented and its outbound traffic can not be traced
++	// please see these examples of code patterns for external http calls that can be instrumented:
++	// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
++	//
+ 	// Make an http request to an external address
+ 	resp, err := http.Get("https://example.com")
+ 	if err != nil {
++		nrTxn.NoticeError(err)
+ 		slog.Error(err.Error())
+ 		io.WriteString(w, err.Error())
+ 		return
+@@ -28,15 +32,31 @@
+ }
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	r := chi.NewRouter()
++	r.Use(nrgochi.Middleware(NewRelicAgent))
+ 	r.Use(middleware.Logger)
+ 	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
++		nrTxn := newrelic.FromContext(r.Context())
++
++		defer nrTxn.StartSegment("GET:/").End()
++
+ 		w.Write([]byte("welcome"))
+ 	})
+ 	r.Get("/404", endpoint404)
+ 	r.Get("/external", basicExternal)
+ 	r.Get("/literal", func(w http.ResponseWriter, r *http.Request) {
++		nrTxn := newrelic.FromContext(r.Context())
+ 
++		defer nrTxn.StartSegment("GET:/literal").End()
++
++		// the "http.Get()" net/http method can not be instrumented and its outbound traffic can not be traced
++		// please see these examples of code patterns for external http calls that can be instrumented:
++		// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
+ 		_, err := http.Get("https://newrelic.com")
+ 		if err != nil {
+ 			slog.Error(err.Error())
+@@ -44,4 +55,6 @@
+ 		w.Write([]byte("function literal example"))
+ 	})
+ 	http.ListenAndServe(":3000", r)
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
