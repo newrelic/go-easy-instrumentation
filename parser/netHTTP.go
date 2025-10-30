@@ -54,6 +54,50 @@ func getNetHttpClientVariableName(n *dst.CallExpr, pkg *decorator.Package) strin
 	return ""
 }
 
+// extract the request arg name from a declared route handler
+// func handler(w http.ResponseWriter, r *http.Request)
+// ____________________________________^
+func getHTTPRequestArgNameDecl(fn *dst.FuncDecl) (bool, string) {
+	if !isHTTPHandlerDecl(fn) {
+		return false, ""
+	}
+
+	return true, fn.Type.Params.List[1].Names[0].Name
+}
+
+// extract the request arg name from a literal route handler
+// func(w http.ResponseWriter, r *http.Request)
+// ____________________________^
+func getHTTPRequestArgNameLit(fn *dst.FuncLit) (bool, string) {
+	if !isHTTPHandlerLit(fn) {
+		return false, ""
+	}
+
+	return true, fn.Type.Params.List[1].Names[0].Name
+}
+
+// wrapper for HTTP request arg extraction.
+// take in `any` and filter non FuncDecl and non FuncLit, then
+// dispatch to appropriate function.
+func getHTTPRequestArgName(fn any) (bool, string) {
+	if fn == nil {
+		return false, ""
+	}
+
+	var ok = false
+	var name = ""
+
+	switch f := fn.(type) {
+	case *dst.FuncDecl:
+		ok, name = getHTTPRequestArgNameDecl(f)
+	case *dst.FuncLit:
+		ok, name = getHTTPRequestArgNameLit(f)
+	default:
+		return false, ""
+	}
+	return ok, name
+}
+
 // GetNetHttpMethod gets an http method if one is invoked in the call expression n, and returns the name of it as a string
 func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 	if n == nil {
@@ -79,49 +123,128 @@ func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 // txnFromCtx injects a line of code that extracts a transaction from the context into the body of a function
 func defineTxnFromCtx(fn *dst.FuncDecl, txnVariable string) {
 	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
-	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext())
+	ok, reqArgName := getHTTPRequestArgName(fn)
+	if !ok {
+		// TODO: consider injecting a comment or creating a log message describing the failure here.
+		return
+	}
+	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext(reqArgName))
 	for i, stmt := range fn.Body.List {
 		stmts[i+1] = stmt
 	}
 	fn.Body.List = stmts
 }
 
-func isHttpHandler(decl *dst.FuncDecl, pkg *decorator.Package) bool {
-	if pkg == nil {
+func isHTTPHandler(fn any) bool {
+	switch f := fn.(type) {
+	case *dst.FuncLit:
+		return isHTTPHandlerLit(f)
+	case *dst.FuncDecl:
+		return isHTTPHandlerDecl(f)
+	default:
+		return false
+	}
+}
+
+func isHTTPResponseWriter(respW *dst.Field) bool {
+	if len(respW.Names) != 1 {
 		return false
 	}
 
-	params := decl.Type.Params.List
-	if len(params) == 2 {
-		var rw, req bool
-		for _, param := range params {
-			ident, ok := param.Type.(*dst.Ident)
-			star, okStar := param.Type.(*dst.StarExpr)
-			if ok {
-				astNode := pkg.Decorator.Ast.Nodes[ident]
-				astIdent, ok := astNode.(*ast.SelectorExpr)
-				if ok && pkg.TypesInfo != nil {
-					paramType := pkg.TypesInfo.Types[astIdent]
-					t := paramType.Type.String()
-					if t == "net/http.ResponseWriter" {
-						rw = true
-					}
-				}
-			} else if okStar {
-				astNode := pkg.Decorator.Ast.Nodes[star]
-				astStar, ok := astNode.(*ast.StarExpr)
-				if ok && pkg.TypesInfo != nil {
-					paramType := pkg.TypesInfo.Types[astStar]
-					t := paramType.Type.String()
-					if t == "*net/http.Request" {
-						req = true
-					}
-				}
-			}
-		}
-		return rw && req
+	// NOTE: This should be an Ident, not a SelectorExpr, since package.Func() is
+	// considered a Qualified Identifier in Go, not a Selector
+	// Sources:
+	// - https://go.dev/ref/spec#Selectors
+	// - https://go.dev/ref/spec#Qualified_identifiers
+	identRespW, ok := respW.Type.(*dst.Ident)
+	if !ok {
+		return false
 	}
-	return false
+
+	if identRespW.Path != codegen.HttpImportPath || identRespW.Name != "ResponseWriter" {
+		return false
+	}
+	return true
+}
+
+func isHTTPRequest(req *dst.Field) bool {
+	if len(req.Names) != 1 {
+		return false
+	}
+
+	starExprReq, ok := req.Type.(*dst.StarExpr)
+	if !ok {
+		return false
+	}
+
+	// NOTE: This should be an Ident, not a SelectorExpr, since package.Func() is
+	// considered a Qualified Identifier in Go, not a Selector
+	// Sources:
+	// - https://go.dev/ref/spec#Selectors
+	// - https://go.dev/ref/spec#Qualified_identifiers
+	identReq, ok := starExprReq.X.(*dst.Ident)
+	if !ok {
+		return false
+	}
+
+	if identReq.Path != codegen.HttpImportPath || identReq.Name != "Request" {
+		return false
+	}
+	return true
+}
+
+// determine whether the funcdecl is an http handler by checking for http
+// handler argument signatures
+// func myHandler(w http.ResponseWriter, r *http.Request)
+// _______________^______________________^
+func isHTTPHandlerDecl(fn *dst.FuncDecl) bool {
+	if fn == nil || fn.Type == nil || fn.Type.Params == nil || fn.Type.Params.List == nil {
+		return false
+	}
+
+	if len(fn.Type.Params.List) != 2 {
+		return false
+	}
+
+	respW := fn.Type.Params.List[0]
+	req := fn.Type.Params.List[1]
+
+	if !isHTTPResponseWriter(respW) {
+		return false
+	}
+
+	if !isHTTPRequest(req) {
+		return false
+	}
+
+	return true
+}
+
+// determine whether the funclit is an http handler by checking for http
+// handler argument signatures
+// func(w http.ResponseWriter, r *http.Request)
+// _____^______________________^
+func isHTTPHandlerLit(fn *dst.FuncLit) bool {
+	if fn == nil || fn.Type == nil || fn.Type.Params == nil || fn.Type.Params.List == nil {
+		return false
+	}
+
+	if len(fn.Type.Params.List) != 2 {
+		return false
+	}
+
+	respW := fn.Type.Params.List[0]
+	req := fn.Type.Params.List[1]
+
+	if !isHTTPResponseWriter(respW) {
+		return false
+	}
+
+	if !isHTTPRequest(req) {
+		return false
+	}
+
+	return true
 }
 
 // more unit test friendly helper function
@@ -149,8 +272,8 @@ func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
 // down the call chain of the function it is invoked on.
 func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
-	fn, isFn := n.(*dst.FuncDecl)
-	if isFn && isHttpHandler(fn, manager.getDecoratorPackage()) {
+	fn, isFn := n.(*dst.FuncDecl) // TODO: 'isFn' should be renamed to 'ok' to match the paradigm in the rest of the codebase.
+	if isFn && isHTTPHandler(fn) {
 		txnName := codegen.DefaultTransactionVariable
 		newFn, ok := TraceFunction(manager, fn, tracestate.FunctionBody(txnName))
 		if ok {

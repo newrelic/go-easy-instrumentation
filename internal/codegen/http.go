@@ -10,11 +10,11 @@ const (
 	HttpImportPath = "net/http"
 )
 
-func HttpRequestContext() dst.Expr {
+func HttpRequestContext(reqArgName string) dst.Expr {
 	return &dst.CallExpr{
 		Fun: &dst.SelectorExpr{
 			X: &dst.Ident{
-				Name: "r",
+				Name: reqArgName,
 			},
 			Sel: &dst.Ident{
 				Name: "Context",
