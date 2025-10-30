@@ -448,7 +448,7 @@ func (m *InstrumentationManager) AddRequiredModules() error {
 
 // ScanApplication scans the existing Go application without adding instrumentation to the source code.
 // This will not generate any changes to the actual source code, just the abstract syntax tree generated from it.
-func (m *InstrumentationManager) ScanApplication(instrumentationFunctions ...PreInstrumentationTracingFunction) error {
+func (m *InstrumentationManager) ScanApplication() error {
 	// Create a call graph of all calls made to functions in this package
 	err := tracePackageFunctionCalls(m, m.tracingFunctions.dependency...)
 	if err != nil {
@@ -456,9 +456,6 @@ func (m *InstrumentationManager) ScanApplication(instrumentationFunctions ...Pre
 	}
 
 	tracingFunctions := m.tracingFunctions.preinstrumentation
-	if len(instrumentationFunctions) != 0 {
-		tracingFunctions = instrumentationFunctions
-	}
 
 	scanPackages(m, tracingFunctions...)
 
@@ -468,11 +465,8 @@ func (m *InstrumentationManager) ScanApplication(instrumentationFunctions ...Pre
 // InstrumentApplication applies instrumentation in place to the dst files stored in the InstrumentationManager.
 // This will not generate any changes to the actual source code, just the abstract syntax tree generated from it.
 // Note: only pass tracing functions to this method for testing, or if you sincerely know what you are doing.
-func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions ...StatelessTracingFunction) error {
+func (m *InstrumentationManager) InstrumentApplication() error {
 	tracingFunctions := m.tracingFunctions.stateless
-	if len(instrumentationFunctions) != 0 {
-		tracingFunctions = instrumentationFunctions
-	}
 
 	instrumentPackages(m, tracingFunctions...)
 

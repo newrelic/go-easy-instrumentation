@@ -151,7 +151,7 @@ func main() {
 			manager.tracingFunctions.preinstrumentation = append(manager.tracingFunctions.preinstrumentation, DetectTransactions)
 
 			manager.loadPreInstrumentationTracingFunctions(DetectTransactions)
-			err = manager.ScanApplication(DetectTransactions)
+			err = manager.ScanApplication()
 			if err != nil {
 				t.Fatalf("Failed to instrument packages: %v", err)
 			}
