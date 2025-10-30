@@ -175,11 +175,11 @@ func testStatelessTracingFunction(t *testing.T, code string, tracingFunc Statele
 	}
 
 	manager.tracingFunctions.stateful = append(manager.tracingFunctions.stateful, statefulTracingFuncs...)
+	manager.tracingFunctions.stateless = append(manager.tracingFunctions.stateless, tracingFunc)
 	err = manager.TracePackageCalls()
 	if err != nil {
 		t.Fatalf("Failed to trace package calls: %v", err)
 	}
-
 	err = manager.InstrumentApplication()
 	if err != nil {
 		t.Fatalf("Failed to instrument packages: %v", err)
