@@ -98,6 +98,12 @@ func Instrument(packagePath string) {
 	err = manager.DetectDependencyIntegrations()
 	cobra.CheckErr(err)
 
+	err = manager.TracePackageCalls()
+	cobra.CheckErr(err)
+
+	err = manager.ScanApplication()
+	cobra.CheckErr(err)
+
 	err = manager.InstrumentApplication()
 	cobra.CheckErr(err)
 
@@ -110,7 +116,6 @@ func Instrument(packagePath string) {
 	// write debug comments before writing diff so that
 	// diff file console log is still easy to see
 	comment.WriteAll()
-
 	err = manager.WriteDiff()
 	cobra.CheckErr(err)
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/parser/errorcache"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
+	"github.com/newrelic/go-easy-instrumentation/parser/transactioncache"
 	godiffpatch "github.com/sourcegraph/go-diff-patch"
 )
 
@@ -31,9 +32,10 @@ type tracedFunctionDecl struct {
 }
 
 type tracingFunctions struct {
-	stateless  []StatelessTracingFunction
-	stateful   []StatefulTracingFunction
-	dependency []FactDiscoveryFunction
+	stateless          []StatelessTracingFunction
+	stateful           []StatefulTracingFunction
+	dependency         []FactDiscoveryFunction
+	preinstrumentation []PreInstrumentationTracingFunction
 }
 
 // InstrumentationManager maintains state relevant to tracing across all files, packages and functions.
@@ -45,8 +47,10 @@ type InstrumentationManager struct {
 	currentPackage    string
 	tracingFunctions  tracingFunctions
 	facts             facts.Keeper
-	packages          map[string]*packageState // stores stateful information on packages by ID
-	errorCache        errorcache.ErrorCache    // stores error handling status for functions
+	packages          map[string]*packageState          // stores stateful information on packages by ID
+	errorCache        errorcache.ErrorCache             // stores error handling status for functions
+	transactionCache  transactioncache.TransactionCache // stores transaction status for functions
+	setupFunc         *dst.FuncDecl
 }
 
 // PackageManager contains state relevant to tracing within a single package.
@@ -66,10 +70,12 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 		packages:          map[string]*packageState{},
 		facts:             facts.NewKeeper(),
 		errorCache:        errorcache.ErrorCache{},
+		transactionCache:  *transactioncache.NewTransactionCache(),
 		tracingFunctions: tracingFunctions{
-			stateless:  []StatelessTracingFunction{},
-			stateful:   []StatefulTracingFunction{},
-			dependency: []FactDiscoveryFunction{},
+			stateless:          []StatelessTracingFunction{},
+			stateful:           []StatefulTracingFunction{},
+			dependency:         []FactDiscoveryFunction{},
+			preinstrumentation: []PreInstrumentationTracingFunction{},
 		},
 	}
 
@@ -86,10 +92,15 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 
 // DetectDependencyIntegrations
 func (m *InstrumentationManager) DetectDependencyIntegrations() error {
+	m.loadPreInstrumentationTracingFunctions(DetectTransactions)
 	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod, InstrumentGrpcDial, InstrumentGinFunction, InstrumentGrpcServerMethod)
 	m.loadStatefulTracingFunctions(ExternalHttpCall, WrapNestedHandleFunction, InstrumentGrpcServer, InstrumentGinMiddleware, InstrumentChiMiddleware, InstrumentChiRouterLiteral)
 	m.loadDependencyScans(FindGrpcServerObject)
 	return nil
+}
+
+func (m *InstrumentationManager) loadPreInstrumentationTracingFunctions(functions ...PreInstrumentationTracingFunction) {
+	m.tracingFunctions.preinstrumentation = append(m.tracingFunctions.preinstrumentation, functions...)
 }
 
 func (m *InstrumentationManager) loadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
@@ -110,6 +121,9 @@ func (m *InstrumentationManager) CreateDiffFile() error {
 	return err
 }
 
+func (m *InstrumentationManager) DebugTransactionCache() {
+	m.transactionCache.Print()
+}
 func (m *InstrumentationManager) setPackage(pkgName string) {
 	m.currentPackage = pkgName
 }
@@ -432,24 +446,28 @@ func (m *InstrumentationManager) AddRequiredModules() error {
 	return nil
 }
 
+func (m *InstrumentationManager) TracePackageCalls() error {
+	return tracePackageFunctionCalls(m, m.tracingFunctions.dependency...)
+
+}
+
+// ScanApplication scans the existing Go application without adding instrumentation to the source code.
+// This will not generate any changes to the actual source code, just the abstract syntax tree generated from it.
+func (m *InstrumentationManager) ScanApplication() error {
+
+	tracingFunctions := m.tracingFunctions.preinstrumentation
+
+	return scanPackages(m, tracingFunctions...)
+
+}
+
 // InstrumentApplication applies instrumentation in place to the dst files stored in the InstrumentationManager.
 // This will not generate any changes to the actual source code, just the abstract syntax tree generated from it.
 // Note: only pass tracing functions to this method for testing, or if you sincerely know what you are doing.
-func (m *InstrumentationManager) InstrumentApplication(instrumentationFunctions ...StatelessTracingFunction) error {
-	// Create a call graph of all calls made to functions in this package
-	err := tracePackageFunctionCalls(m, m.tracingFunctions.dependency...)
-	if err != nil {
-		return err
-	}
-
+func (m *InstrumentationManager) InstrumentApplication() error {
 	tracingFunctions := m.tracingFunctions.stateless
-	if len(instrumentationFunctions) != 0 {
-		tracingFunctions = instrumentationFunctions
-	}
 
-	instrumentPackages(m, tracingFunctions...)
-
-	return nil
+	return instrumentPackages(m, tracingFunctions...)
 }
 
 func errorNoMain(path string) error {
@@ -510,7 +528,10 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFun
 }
 
 // apply instrumentation to the package
-func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessTracingFunction) {
+func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessTracingFunction) error {
+	if instrumentationFunctions == nil {
+		return fmt.Errorf("error instrumenting packages: instrumentation functions are nil")
+	}
 	for pkgName, pkgState := range manager.packages {
 		if util.IsTestPackage(pkgState.pkg) {
 			continue
@@ -529,6 +550,33 @@ func instrumentPackages(manager *InstrumentationManager, instrumentationFunction
 			}
 		}
 	}
+	return nil
+}
+
+// Does not apply instrumentation to the package, only scans it.
+func scanPackages(manager *InstrumentationManager, instrumentationFunctions ...PreInstrumentationTracingFunction) error {
+	if instrumentationFunctions == nil {
+		return fmt.Errorf("error scanning packages: instrumentation functions are nil")
+	}
+	for pkgName, pkgState := range manager.packages {
+		if util.IsTestPackage(pkgState.pkg) {
+			continue
+		}
+		manager.setPackage(pkgName)
+		for _, file := range pkgState.pkg.Syntax {
+			for _, decl := range file.Decls {
+				if fn, isFn := decl.(*dst.FuncDecl); isFn {
+					dstutil.Apply(fn, nil, func(c *dstutil.Cursor) bool {
+						for _, instFunc := range instrumentationFunctions {
+							instFunc(manager, c)
+						}
+						return true
+					})
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (m *InstrumentationManager) ResolveUnitTests() error {

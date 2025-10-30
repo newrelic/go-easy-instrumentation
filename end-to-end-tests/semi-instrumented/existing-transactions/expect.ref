@@ -1,0 +1,36 @@
+--- a/main.go
++++ b/main.go
+@@ -25,11 +25,15 @@
+ 	txn.End()
+ }
+ 
+-func noNRInstrumentation() {
++func noNRInstrumentation(nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("noNRInstrumentation").End()
++
+ 	fmt.Println("hi")
+ }
+ 
+-func noNRInstrumentation2() {
++func noNRInstrumentation2(nrTxn *newrelic.Transaction) {
++	defer nrTxn.StartSegment("noNRInstrumentation2").End()
++
+ 	fmt.Println("hi")
+ }
+ func main() {
+@@ -64,9 +65,13 @@
+ 	txn := app.StartTransaction("hello")
+ 	hello(txn)
+ 
+-	noNRInstrumentation()
++	nrTxn := app.StartTransaction("noNRInstrumentation")
++	noNRInstrumentation(nrTxn)
++	nrTxn.End()
+ 
+-	noNRInstrumentation2()
++	nrTxn = app.StartTransaction("noNRInstrumentation2")
++	noNRInstrumentation2(nrTxn)
++	nrTxn.End()
+ 	// Shut down the application to flush data to New Relic.
+ 	app.Shutdown(10 * time.Second)
+ }
