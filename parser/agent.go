@@ -176,7 +176,7 @@ func handleAssignStmtForAgentVariable(manager *InstrumentationManager, node dst.
 }
 
 // checkForExistingApplicationInMain checks for existing application in main.
-// If an application is detected in a function inside of main, we mark that one
+// If an application is detected in the main function, we mark that one
 // as a setup function and will not conduct tracing on it.
 func checkForExistingApplicationInMain(manager *InstrumentationManager, decl *dst.FuncDecl) bool {
 	// App already exists in a setup function inside of main.
