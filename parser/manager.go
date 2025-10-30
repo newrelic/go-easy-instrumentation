@@ -446,20 +446,19 @@ func (m *InstrumentationManager) AddRequiredModules() error {
 	return nil
 }
 
+func (m *InstrumentationManager) TracePackageCalls() error {
+	return tracePackageFunctionCalls(m, m.tracingFunctions.dependency...)
+
+}
+
 // ScanApplication scans the existing Go application without adding instrumentation to the source code.
 // This will not generate any changes to the actual source code, just the abstract syntax tree generated from it.
 func (m *InstrumentationManager) ScanApplication() error {
-	// Create a call graph of all calls made to functions in this package
-	err := tracePackageFunctionCalls(m, m.tracingFunctions.dependency...)
-	if err != nil {
-		return err
-	}
 
 	tracingFunctions := m.tracingFunctions.preinstrumentation
 
-	scanPackages(m, tracingFunctions...)
+	return scanPackages(m, tracingFunctions...)
 
-	return nil
 }
 
 // InstrumentApplication applies instrumentation in place to the dst files stored in the InstrumentationManager.
@@ -468,29 +467,7 @@ func (m *InstrumentationManager) ScanApplication() error {
 func (m *InstrumentationManager) InstrumentApplication() error {
 	tracingFunctions := m.tracingFunctions.stateless
 
-	instrumentPackages(m, tracingFunctions...)
-
-	return nil
-}
-
-// TESTING FUNCTION ONLY - This function is identical to InstrumentApplication, except function calls are traced.
-// This is required because ScanApplication already creates a call graph of all functions, and we do not want
-// to duplicate work for tracing.
-func (m *InstrumentationManager) InstrumentTestApplication(instrumentationFunctions ...StatelessTracingFunction) error {
-
-	err := tracePackageFunctionCalls(m, m.tracingFunctions.dependency...)
-	if err != nil {
-		return err
-	}
-
-	tracingFunctions := m.tracingFunctions.stateless
-	if len(instrumentationFunctions) != 0 {
-		tracingFunctions = instrumentationFunctions
-	}
-
-	instrumentPackages(m, tracingFunctions...)
-
-	return nil
+	return instrumentPackages(m, tracingFunctions...)
 }
 
 func errorNoMain(path string) error {
@@ -551,7 +528,10 @@ func tracePackageFunctionCalls(manager *InstrumentationManager, factDiscoveryFun
 }
 
 // apply instrumentation to the package
-func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessTracingFunction) {
+func instrumentPackages(manager *InstrumentationManager, instrumentationFunctions ...StatelessTracingFunction) error {
+	if instrumentationFunctions == nil {
+		return fmt.Errorf("error instrumenting packages: instrumentation functions are nil")
+	}
 	for pkgName, pkgState := range manager.packages {
 		if util.IsTestPackage(pkgState.pkg) {
 			continue
@@ -570,10 +550,14 @@ func instrumentPackages(manager *InstrumentationManager, instrumentationFunction
 			}
 		}
 	}
+	return nil
 }
 
 // Does not apply instrumentation to the package, only scans it.
-func scanPackages(manager *InstrumentationManager, instrumentationFunctions ...PreInstrumentationTracingFunction) {
+func scanPackages(manager *InstrumentationManager, instrumentationFunctions ...PreInstrumentationTracingFunction) error {
+	if instrumentationFunctions == nil {
+		return fmt.Errorf("error scanning packages: instrumentation functions are nil")
+	}
 	for pkgName, pkgState := range manager.packages {
 		if util.IsTestPackage(pkgState.pkg) {
 			continue
@@ -592,6 +576,7 @@ func scanPackages(manager *InstrumentationManager, instrumentationFunctions ...P
 			}
 		}
 	}
+	return nil
 }
 
 func (m *InstrumentationManager) ResolveUnitTests() error {

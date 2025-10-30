@@ -98,6 +98,9 @@ func Instrument(packagePath string) {
 	err = manager.DetectDependencyIntegrations()
 	cobra.CheckErr(err)
 
+	err = manager.TracePackageCalls()
+	cobra.CheckErr(err)
+
 	err = manager.ScanApplication()
 	cobra.CheckErr(err)
 
