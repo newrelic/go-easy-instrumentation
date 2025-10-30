@@ -148,8 +148,6 @@ func main() {
 				t.Fatalf("Package was nil: %+v", manager.packages)
 			}
 
-			manager.tracingFunctions.preinstrumentation = append(manager.tracingFunctions.preinstrumentation, DetectTransactions)
-
 			manager.loadPreInstrumentationTracingFunctions(DetectTransactions)
 			err = manager.ScanApplication()
 			if err != nil {
