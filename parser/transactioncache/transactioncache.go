@@ -140,6 +140,9 @@ func (tc *TransactionCache) AddCall(transaction *dst.Ident, expr dst.Expr) bool 
 // IsFunctionInTransactionScope checks if a given function name is present within any transaction.
 // It iterates over all transactions and their expressions, returning true if the function name is found.
 func (tc *TransactionCache) IsFunctionInTransactionScope(functionName string) bool {
+	if functionName == "" {
+		return false
+	}
 	for _, txnData := range tc.Transactions {
 		for _, expr := range txnData.Expressions {
 			callExpr, ok := expr.(*dst.CallExpr)
