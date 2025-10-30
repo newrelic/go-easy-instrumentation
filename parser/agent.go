@@ -110,6 +110,9 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 }
 
 func checkForExistingApplicationInFunctions(manager *InstrumentationManager, c *dstutil.Cursor) {
+	if c == nil {
+		return
+	}
 	dstutil.Apply(c.Node(), func(cursor *dstutil.Cursor) bool {
 		checkFuncDeclForApplication(manager, cursor.Node())
 		handleAssignStmtForAgentVariable(manager, cursor.Node())
