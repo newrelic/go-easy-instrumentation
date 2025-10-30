@@ -173,7 +173,10 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 				if manager.setupFunc == invInfo.decl {
 					continue
 				}
-				funcAlreadyTraced := manager.transactionCache.IsFunctionInTransactionScope(invInfo.functionName)
+				funcAlreadyTraced := false
+				if invInfo.functionName != "" {
+					funcAlreadyTraced = manager.transactionCache.IsFunctionInTransactionScope(invInfo.functionName)
+				}
 				if !transactionCreatedForStatement && !funcAlreadyTraced {
 					// Check if the functionName is already present within transactions
 					tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable)
