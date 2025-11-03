@@ -109,6 +109,8 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 	}
 }
 
+// checkForExistingApplicationInFunctions calls functions related to application detection
+// It inspects the AST nodes within the cursor's scope to find any references to the New Relic application.
 func checkForExistingApplicationInFunctions(manager *InstrumentationManager, c *dstutil.Cursor) {
 	if c == nil {
 		return
@@ -182,6 +184,9 @@ func handleAssignStmtForAgentVariable(manager *InstrumentationManager, node dst.
 // If an application is detected in the main function, we mark that one
 // as a setup function and will not conduct tracing on it.
 func checkForExistingApplicationInMain(manager *InstrumentationManager, decl *dst.FuncDecl) bool {
+	if decl == nil {
+		return false
+	}
 	// App already exists in a setup function inside of main.
 	if manager.setupFunc != nil {
 		return true
