@@ -87,7 +87,7 @@ func (td *TransactionData) SetClosed(closed bool) bool {
 // AddExpr is a setter function for TransactionData to add an expression to the
 // list of expressions. Returns true on success.
 func (td *TransactionData) AddExpr(expr dst.Expr) bool {
-	if td == nil {
+	if td == nil || expr == nil {
 		return false
 	}
 	td.Expressions = append(td.Expressions, expr)
