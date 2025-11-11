@@ -258,17 +258,17 @@ func errNilCheck(stmt *dst.BinaryExpr, pkg *decorator.Package) bool {
 	return false
 }
 
-func shouldNoticeError(stmt dst.Stmt, pkg *decorator.Package, tracing *tracestate.State) bool {
+func shouldNoticeError(stmt dst.Stmt, manager *InstrumentationManager, tracing *tracestate.State) bool {
 	ifStmt, ok := stmt.(*dst.IfStmt)
 	if !ok {
 		return false
 	}
 	binExpr, ok := ifStmt.Cond.(*dst.BinaryExpr)
-	if ok && errNilCheck(binExpr, pkg) {
+	if ok && errNilCheck(binExpr, manager.getDecoratorPackage()) {
 		return true
 	}
 
-	return shouldNoticeError(ifStmt.Else, pkg, tracing)
+	return shouldNoticeError(ifStmt.Else, manager, tracing)
 }
 
 // StatefulTracingFunctions
@@ -324,7 +324,7 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 		if nodeVal.Init != nil {
 			NoticeError(manager, nodeVal.Init, c, tracing, functionCallWasTraced)
 		}
-		if shouldNoticeError(stmt, pkg, tracing) {
+		if shouldNoticeError(stmt, manager, tracing) {
 			errExpr := manager.errorCache.GetExpression()
 			if errExpr != nil {
 				var stmtBlock dst.Stmt
@@ -372,7 +372,9 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 				errStmt = parentStmt
 			}
 		}
-		manager.errorCache.Load(errExpr, errStmt)
+		if !manager.errorCache.IsExistingError(errExpr) {
+			manager.errorCache.Load(errExpr, errStmt)
+		}
 	}
 	return false
 }
