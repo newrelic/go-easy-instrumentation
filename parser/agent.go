@@ -324,7 +324,7 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 		if nodeVal.Init != nil {
 			NoticeError(manager, nodeVal.Init, c, tracing, functionCallWasTraced)
 		}
-		if shouldNoticeError(stmt, manager.getDecoratorPackage(), tracing) {
+		if shouldNoticeError(stmt, pkg, tracing) {
 			errExpr := manager.errorCache.GetExpression()
 			if errExpr != nil {
 				var stmtBlock dst.Stmt
