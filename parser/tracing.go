@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
@@ -45,16 +46,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 	}
 
 	// Check if the function already has a transaction parameter
-	hasTransactionParam := false
-	for _, param := range funcType.Params.List {
-		for _, ident := range param.Names {
-			if manager.transactionCache.CheckTransactionExists(ident) {
-				hasTransactionParam = true
-				break
-			}
-		}
-	}
-	if !hasTransactionParam {
+	if !manager.hasTransactionParameter(funcType) {
 		tracingImport, ok := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
 		if ok {
 			manager.addImport(tracingImport)
@@ -170,28 +162,25 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 			// inv info will be nil if the function is not declared in this application
 			for _, invInfo := range tracableInvocations {
 				// If the current function is the function that declares the NR App, we do not want to propagate tracing to it
-				if manager.setupFunc == invInfo.decl {
+				// Additionally, if the function is already being traced by an existing transaction we can skip it
+				if manager.setupFunc == invInfo.decl || manager.transactionCache.IsFunctionInTransactionScope(invInfo.functionName) {
 					continue
 				}
-				funcAlreadyTraced := manager.transactionCache.IsFunctionInTransactionScope(invInfo.functionName)
 
-				if !transactionCreatedForStatement && !funcAlreadyTraced {
+				if !transactionCreatedForStatement {
 					// Check if the functionName is already present within transactions
 					tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable)
 					transactionCreatedForStatement = true
 				}
-				if !funcAlreadyTraced {
-					childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
-					manager.addImport(tracingImport)
-					TopLevelFunctionChanged = true
-					// If not present, wrap the function with a transaction
-					if manager.shouldInstrumentFunction(invInfo) {
-						manager.setPackage(invInfo.packageName)
-						TraceFunction(manager, invInfo.decl, childState)
-						downstreamFunctionTraced = true
-						manager.setPackage(rootPkg)
-					}
-
+				childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
+				manager.addImport(tracingImport)
+				TopLevelFunctionChanged = true
+				// If not present, wrap the function with a transaction
+				if manager.shouldInstrumentFunction(invInfo) {
+					manager.setPackage(invInfo.packageName)
+					TraceFunction(manager, invInfo.decl, childState)
+					downstreamFunctionTraced = true
+					manager.setPackage(rootPkg)
 				}
 			}
 
@@ -227,4 +216,20 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 	}
 
 	return outputNode, TopLevelFunctionChanged
+}
+
+// hasTransactionParameter checks if a function has a transaction parameter
+// by examining the function's parameter list for any parameter names that exist
+// in the transaction cache.
+func (m *InstrumentationManager) hasTransactionParameter(funcType *dst.FuncType) bool {
+	if funcType == nil || funcType.Params == nil {
+		return false
+	}
+
+	for _, param := range funcType.Params.List {
+		if slices.ContainsFunc(param.Names, m.transactionCache.CheckTransactionExists) {
+			return true
+		}
+	}
+	return false
 }
