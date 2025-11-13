@@ -87,24 +87,139 @@ func findErrorVariable(stmt *dst.AssignStmt, pkg *decorator.Package) dst.Expr {
 //////////////////////////////////////////////
 
 // InstrumentMain looks for the main method of a program, and uses this as an instrumentation initialization and injection point
-// TODO: Can this be refactored to be part of the Trace Function algorithm?
 func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 	mainFunctionNode := c.Node()
 	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
-		// only inject go agent into the main.main function
+		// Check functions return signatures for newrelic.Application and if it exists, load it into manager.setupFunc
+		// We don't want to propagate tracing into the setup function so later on in our trace function we will ignore it
+		checkForExistingApplicationInFunctions(manager, c)
 		if decl.Name.Name == "main" {
-			agentDecl := codegen.InitializeAgent(manager.appName, manager.agentVariableName)
-			decl.Body.List = append(agentDecl, decl.Body.List...)
-			decl.Body.List = append(decl.Body.List, codegen.ShutdownAgent(manager.agentVariableName))
-
-			// add go-agent/v3/newrelic to imports
-			manager.addImport(codegen.NewRelicAgentImportPath)
+			if !checkForExistingApplicationInMain(manager, decl) {
+				agentDecl := codegen.InitializeAgent(manager.appName, manager.agentVariableName)
+				decl.Body.List = append(agentDecl, decl.Body.List...)
+				decl.Body.List = append(decl.Body.List, codegen.ShutdownAgent(manager.agentVariableName))
+				// add go-agent/v3/newrelic to imports
+				manager.addImport(codegen.NewRelicAgentImportPath)
+			}
 			newMain, _ := TraceFunction(manager, decl, tracestate.Main(manager.agentVariableName))
 
 			// this will skip the tracing of this function in the outer tree walking algorithm
 			c.Replace(newMain)
 		}
 	}
+}
+
+// checkForExistingApplicationInFunctions calls functions related to application detection
+// It inspects the AST nodes within the cursor's scope to find any references to the New Relic application.
+func checkForExistingApplicationInFunctions(manager *InstrumentationManager, c *dstutil.Cursor) {
+	if c == nil {
+		return
+	}
+	dstutil.Apply(c.Node(), func(cursor *dstutil.Cursor) bool {
+		checkFuncDeclForApplication(manager, cursor.Node())
+		handleAssignStmtForAgentVariable(manager, cursor.Node())
+		return true
+	}, nil)
+}
+
+// Checks return values of a given function. If the function returns a new relic application, it is marked as a "setup" function
+func checkFuncDeclForApplication(manager *InstrumentationManager, node dst.Node) bool {
+	decl, ok := node.(*dst.FuncDecl)
+	if !ok || decl.Type == nil || decl.Type.Results == nil {
+		return false
+	}
+
+	for _, result := range decl.Type.Results.List {
+		// Checking if return type of function is a new relic application
+		starExpr, ok := result.Type.(*dst.StarExpr)
+		if !ok {
+			continue
+		}
+
+		ident, ok := starExpr.X.(*dst.Ident)
+		if !ok {
+			continue
+		}
+
+		if ident.Path == codegen.NewRelicAgentImportPath && ident.Name == "Application" {
+			manager.setupFunc = decl
+			return true
+		}
+	}
+	return false
+}
+
+func handleAssignStmtForAgentVariable(manager *InstrumentationManager, node dst.Node) bool {
+	if manager.setupFunc == nil {
+		return false
+	}
+	assign, ok := node.(*dst.AssignStmt)
+	if !ok {
+		return false
+	}
+
+	for pos, rhs := range assign.Rhs {
+		call, ok := rhs.(*dst.CallExpr)
+		if !ok {
+			continue
+		}
+
+		ident, ok := call.Fun.(*dst.Ident)
+		if !ok || ident.Obj == nil {
+			continue
+		}
+
+		funcCall, ok := ident.Obj.Decl.(*dst.FuncDecl)
+		if !ok || manager.setupFunc != funcCall {
+			continue
+		}
+
+		// This is our setup function. We can now get the appName!
+		if ident, ok := assign.Lhs[pos].(*dst.Ident); ok {
+			manager.agentVariableName = ident.Name
+			return true
+		}
+	}
+	return false
+}
+
+// checkForExistingApplicationInMain checks for existing application in main.
+// If an application is detected in the main function, we mark that one
+// as a setup function and will not conduct tracing on it.
+func checkForExistingApplicationInMain(manager *InstrumentationManager, decl *dst.FuncDecl) bool {
+	if decl == nil {
+		return false
+	}
+	// App already exists in a setup function inside of main.
+	if manager.setupFunc != nil {
+		return true
+	}
+	// No setup function detected, check for application initialization in main
+	for _, stmt := range decl.Body.List {
+		assign, ok := stmt.(*dst.AssignStmt)
+		if !ok {
+			continue
+		}
+
+		if len(assign.Rhs) > 0 {
+			call, ok := assign.Rhs[0].(*dst.CallExpr)
+			if !ok {
+				continue
+			}
+
+			path, ok := call.Fun.(*dst.Ident)
+			if !ok {
+				continue
+			}
+
+			if path.Path == codegen.NewRelicAgentImportPath {
+				manager.agentVariableName = assign.Lhs[0].(*dst.Ident).Name
+				manager.setupFunc = decl
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // errNilCheck tests if an if statement contains a conditional check that an error is not nil

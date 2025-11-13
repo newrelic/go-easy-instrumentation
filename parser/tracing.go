@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
@@ -26,19 +27,66 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 		panic(fmt.Sprintf("TraceFunction only accepts *dst.FuncDecl or *dst.FuncLit, got %s", nodeType))
 	}
 
-	// add needed tracing object to function declaration parameters
-	// this must be the first thing done, since it double checks the type assignment for tracing and will change it
-	tracingImport, ok := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
-	if ok {
-		manager.addImport(tracingImport)
-		TopLevelFunctionChanged = true
+	var funcType *dst.FuncType
+	var funcBody *dst.BlockStmt
+
+	// Determine the function type and body based on node type
+	decl, isFuncDecl := node.(*dst.FuncDecl)
+	lit, isFuncLit := node.(*dst.FuncLit)
+
+	if isFuncDecl {
+		funcType = decl.Type
+		funcBody = decl.Body
+	} else if isFuncLit {
+		funcType = lit.Type
+		funcBody = lit.Body
+	} else {
+		// This should not happen due to the initial type check, but it's a safeguard
+		return node, false
 	}
 
-	// create segment if needed
-	segmentImport, ok := tracing.CreateSegment(node)
-	if ok {
-		manager.addImport(segmentImport)
-		TopLevelFunctionChanged = true
+	// Check if the function already has a transaction parameter
+	if !manager.hasTransactionParameter(funcType) {
+		tracingImport, ok := tracing.AddParameterToDeclaration(manager.getDecoratorPackage(), node)
+		if ok {
+			manager.addImport(tracingImport)
+			TopLevelFunctionChanged = true
+		}
+	}
+
+	// Check if a segment already exists within the transaction's lifespan
+	hasSegment := false
+	dstutil.Apply(funcBody, func(c *dstutil.Cursor) bool {
+		callExpr, ok := c.Node().(*dst.CallExpr)
+		if !ok {
+			return true
+		}
+
+		selExpr, ok := callExpr.Fun.(*dst.SelectorExpr)
+		if !ok || selExpr.Sel.Name != "StartSegment" {
+			return true
+		}
+
+		ident, ok := selExpr.X.(*dst.Ident)
+		if !ok {
+			return true
+		}
+
+		if manager.transactionCache.CheckTransactionExists(ident) {
+			hasSegment = true
+			return false // Stop further traversal
+		}
+
+		return true
+	}, nil)
+
+	// Create segment if needed
+	if !hasSegment {
+		segmentImport, ok := tracing.CreateSegment(node)
+		if ok {
+			manager.addImport(segmentImport)
+			TopLevelFunctionChanged = true
+		}
 	}
 
 	outputNode := dstutil.Apply(node, func(c *dstutil.Cursor) bool {
@@ -113,14 +161,21 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 			// inv info will be nil if the function is not declared in this application
 			for _, invInfo := range tracableInvocations {
+				// If the current function is the function that declares the NR App, we do not want to propagate tracing to it
+				// Additionally, if the function is already being traced by an existing transaction we can skip it
+				if manager.setupFunc == invInfo.decl || manager.transactionCache.IsFunctionInTransactionScope(invInfo.functionName) {
+					continue
+				}
+
 				if !transactionCreatedForStatement {
-					tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable) // if a trasaction needs to be created, it will be created here
+					// Check if the functionName is already present within transactions
+					tracing.WrapWithTransaction(c, invInfo.functionName, codegen.DefaultTransactionVariable)
 					transactionCreatedForStatement = true
 				}
 				childState, tracingImport := tracing.AddToCall(manager.getDecoratorPackage(), invInfo.call, false)
 				manager.addImport(tracingImport)
 				TopLevelFunctionChanged = true
-
+				// If not present, wrap the function with a transaction
 				if manager.shouldInstrumentFunction(invInfo) {
 					manager.setPackage(invInfo.packageName)
 					TraceFunction(manager, invInfo.decl, childState)
@@ -161,4 +216,20 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 	}
 
 	return outputNode, TopLevelFunctionChanged
+}
+
+// hasTransactionParameter checks if a function has a transaction parameter
+// by examining the function's parameter list for any parameter names that exist
+// in the transaction cache.
+func (m *InstrumentationManager) hasTransactionParameter(funcType *dst.FuncType) bool {
+	if funcType == nil || funcType.Params == nil {
+		return false
+	}
+
+	for _, param := range funcType.Params.List {
+		if slices.ContainsFunc(param.Names, m.transactionCache.CheckTransactionExists) {
+			return true
+		}
+	}
+	return false
 }

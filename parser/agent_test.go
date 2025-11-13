@@ -592,6 +592,79 @@ func main() {
 }
 `,
 		},
+		{
+			name: "semi-instrumented code",
+			code: `package main
+
+import (
+	"time"
+	"net/http"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+
+func myFunc() {
+	_, err := http.Get("http://example.com")
+	if err != nil {
+		panic(err)
+	}
+}
+
+
+func startNRApp() (*newrelic.Application, error) {
+	app, err := newrelic.NewApplication(
+		newrelic.ConfigAppName("Example App"),
+		newrelic.ConfigFromEnvironment(),
+	)
+	return app, err
+}
+
+func main() {
+	myapp, err := startNRApp()
+	if err != nil {
+		panic(err)
+	}
+	myapp.WaitForConnection(5 * time.Second)
+	myFunc()
+}
+`,
+			expect: `package main
+
+import (
+	"github.com/newrelic/go-agent/v3/newrelic"
+	"net/http"
+	"time"
+)
+
+func myFunc(nrTxn *newrelic.Transaction) {
+	defer nrTxn.StartSegment("myFunc").End()
+
+	_, err := http.Get("http://example.com")
+	if err != nil {
+		nrTxn.NoticeError(err)
+		panic(err)
+	}
+}
+func startNRApp() (*newrelic.Application, error) {
+	app, err := newrelic.NewApplication(
+		newrelic.ConfigAppName("Example App"),
+		newrelic.ConfigFromEnvironment(),
+	)
+	return app, err
+}
+
+func main() {
+	myapp, err := startNRApp()
+	if err != nil {
+		panic(err)
+	}
+	myapp.WaitForConnection(5 * time.Second)
+	nrTxn := myapp.StartTransaction("myFunc")
+	myFunc(nrTxn)
+	nrTxn.End()
+}
+`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

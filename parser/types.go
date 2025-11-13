@@ -62,6 +62,10 @@ type StatefulTracingFunction func(manager *InstrumentationManager, stmt dst.Stmt
 // These functions are invoked on every node in the DST tree.
 type StatelessTracingFunction func(manager *InstrumentationManager, c *dstutil.Cursor)
 
+// PreInstrumentationTracingFunction defines a function that is executed before any instrumentation is applied to a code block.
+// These functions are executed on every node in the DST tree of every function declared in an application.
+type PreInstrumentationTracingFunction func(manager *InstrumentationManager, c *dstutil.Cursor)
+
 // FactDiscoveryFunction identify a "Fact" about a code pattern, which can be referenced later to identify
 // patterns that are essential for instrumentation. This function is executed on all nodes in the syntax tree
 // of every function declared in an application. Facts are deterministic labels assigned to specific patterns.
