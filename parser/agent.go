@@ -150,6 +150,9 @@ func checkFuncDeclForApplication(manager *InstrumentationManager, node dst.Node)
 }
 
 func handleAssignStmtForAgentVariable(manager *InstrumentationManager, node dst.Node) bool {
+	if manager.setupFunc == nil {
+		return false
+	}
 	assign, ok := node.(*dst.AssignStmt)
 	if !ok {
 		return false
