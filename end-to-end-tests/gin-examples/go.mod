@@ -1,6 +1,6 @@
 module github.com/gin-gonic/examples
 
-go 1.22
+go 1.23.0
 
 toolchain go1.24.0
 
@@ -11,7 +11,7 @@ require (
 	github.com/go-playground/validator/v10 v10.20.0
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/ratelimit v0.3.0
-	golang.org/x/sync v0.7.0
+	golang.org/x/sync v0.12.0
 )
 
 require (
@@ -40,10 +40,10 @@ require (
 	github.com/twitchyliquid64/golang-asm v0.15.1 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	golang.org/x/arch v0.8.0 // indirect
-	golang.org/x/crypto v0.23.0 // indirect
-	golang.org/x/net v0.25.0 // indirect
-	golang.org/x/sys v0.20.0 // indirect
-	golang.org/x/text v0.15.0 // indirect
+	golang.org/x/crypto v0.36.0 // indirect
+	golang.org/x/net v0.38.0 // indirect
+	golang.org/x/sys v0.31.0 // indirect
+	golang.org/x/text v0.23.0 // indirect
 	google.golang.org/protobuf v1.34.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
