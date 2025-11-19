@@ -44,3 +44,12 @@ func (ec *ErrorCache) Clear() {
 	ec.errorexpr = nil
 	ec.errorstmt = nil
 }
+
+// Testing Functions
+func (ec *ErrorCache) ExtractExistingErrors() []string {
+	var errors []string
+	for _, errIdent := range ec.ExistingErrors {
+		errors = append(errors, errIdent.Name)
+	}
+	return errors
+}
