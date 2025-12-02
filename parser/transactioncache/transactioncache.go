@@ -140,8 +140,8 @@ func (tc *TransactionCache) AddCall(transaction *dst.Ident, expr dst.Expr) bool 
 // AddFuncDecl adds all expressions from a function declaration to a transaction.
 // The transaction is marked as closed with the last element in the function body
 // This handles cases where transaction start/end are obfuscated behind middleware.
-func (tc *TransactionCache) AddFuncDecl(transaction *dst.Ident, funcDecl *dst.FuncDecl) bool {
-	if tc == nil || tc.Transactions == nil || transaction == nil || funcDecl == nil {
+func (tc *TransactionCache) AddFuncDecl(funcDecl *dst.FuncDecl) bool {
+	if tc == nil || tc.Transactions == nil || funcDecl == nil {
 		return false // Enforce initialization of TransactionCache
 	}
 

@@ -29,61 +29,10 @@ const (
 	httpDefaultClientVariable = "DefaultClient"
 )
 
-func DetectWrappedRoutes(manager *InstrumentationManager, c *dstutil.Cursor) {
-	mainFunctionNode := c.Node()
-	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
-		// Check if we're in the main function
-		if decl.Name.Name != "main" {
-			return
-		}
-
-		// Traverse the body of the main function
-		dstutil.Apply(decl.Body, func(c *dstutil.Cursor) bool {
-			node := c.Node()
-			switch stmt := node.(type) {
-			case *dst.ExprStmt:
-				if callExpr, ok := stmt.X.(*dst.CallExpr); ok {
-					if callIdent, ok := callExpr.Fun.(*dst.Ident); ok {
-						if callIdent.Name != "HandleFunc" {
-							break
-						}
-						for _, arg := range callExpr.Args {
-							argExpr, ok := arg.(*dst.CallExpr)
-							if !ok {
-								continue
-							}
-							ident, ok := argExpr.Fun.(*dst.Ident)
-							if !ok {
-								continue
-							}
-							fmt.Println(ident)
-							if ident.Name == "WrapHandleFunc" && ident.Path == "github.com/newrelic/go-agent/v3/newrelic" {
-								appName, ok := argExpr.Args[0].(*dst.Ident)
-								if !ok {
-									continue
-								}
-								funcName, ok := argExpr.Args[len(argExpr.Args)-1].(*dst.Ident)
-								if !ok {
-									continue
-								}
-								fun := manager.transactionCache.Functions[funcName.Name]
-								if fun != nil {
-									manager.transactionCache.AddFuncDecl(appName, fun)
-								}
-							}
-
-						}
-					}
-				}
-			}
-			return true
-		}, nil)
-	}
-}
-
-// CheckNetHTTPRouters detects already existing net/http routers and marks them within the scope of the given transaction.
+// RouterHasMiddleware detects already existing net/http routers and marks them within the scope of the given transaction.
 // It returns true if the function name matches within a wrapped HandleFunc, false otherwise.
-func CheckNetHTTPRouters(manager *InstrumentationManager, fn *dst.FuncDecl) bool {
+// TO:DO -- Can this be extended to ALL routing libraries?
+func HandlerIsInstrumented(manager *InstrumentationManager, fn *dst.FuncDecl) bool {
 	txns := manager.transactionCache.Transactions
 	for ident := range txns {
 		if ident == fn.Name {
@@ -337,7 +286,7 @@ func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
 func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
 	fn, isFn := n.(*dst.FuncDecl) // TODO: 'isFn' should be renamed to 'ok' to match the paradigm in the rest of the codebase.
-	if isFn && isHTTPHandler(fn) && !CheckNetHTTPRouters(manager, fn) {
+	if isFn && isHTTPHandler(fn) && !HandlerIsInstrumented(manager, fn) {
 
 		txnName := codegen.DefaultTransactionVariable
 		newFn, ok := TraceFunction(manager, fn, tracestate.FunctionBody(txnName))
@@ -527,4 +476,56 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 		return true
 	})
 	return wasModified
+}
+
+////////////////////////////
+// Pre-Instrumentation Tracing Functions
+////////////////////////////
+
+func DetectWrappedRoutes(manager *InstrumentationManager, c *dstutil.Cursor) {
+	mainFunctionNode := c.Node()
+	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
+		// Check if we're in the main function
+		if decl.Name.Name != "main" {
+			return
+		}
+
+		// Traverse the body of the main function
+		dstutil.Apply(decl.Body, func(c *dstutil.Cursor) bool {
+			node := c.Node()
+			switch stmt := node.(type) {
+			case *dst.ExprStmt:
+				if callExpr, ok := stmt.X.(*dst.CallExpr); ok {
+					if callIdent, ok := callExpr.Fun.(*dst.Ident); ok {
+						if callIdent.Name != "HandleFunc" {
+							break
+						}
+						for _, arg := range callExpr.Args {
+							argExpr, ok := arg.(*dst.CallExpr)
+							if !ok {
+								continue
+							}
+							ident, ok := argExpr.Fun.(*dst.Ident)
+							if !ok {
+								continue
+							}
+							fmt.Println(ident)
+							if ident.Name == "WrapHandleFunc" && ident.Path == "github.com/newrelic/go-agent/v3/newrelic" {
+								funcName, ok := argExpr.Args[len(argExpr.Args)-1].(*dst.Ident)
+								if !ok {
+									continue
+								}
+								fun := manager.transactionCache.Functions[funcName.Name]
+								if fun != nil {
+									manager.transactionCache.AddFuncDecl(fun)
+								}
+							}
+
+						}
+					}
+				}
+			}
+			return true
+		}, nil)
+	}
 }
