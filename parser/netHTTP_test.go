@@ -1027,7 +1027,7 @@ func main() {
 		client *http.Client
 	}
 	info := clientInfo{}
-	info.client := &http.Client{}
+	info.client = &http.Client{}
 }
 `,
 			expect: `package main
@@ -1043,7 +1043,7 @@ func main() {
 		client *http.Client
 	}
 	info := clientInfo{}
-	info.client := &http.Client{}
+	info.client = &http.Client{}
 	info.client.Transport = newrelic.NewRoundTripper(info.client.Transport)
 }
 `,
