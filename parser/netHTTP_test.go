@@ -1,11 +1,14 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
 
 	"github.com/dave/dst"
+	"github.com/dave/dst/decorator"
+	"github.com/dave/dst/decorator/resolver/guess"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/stretchr/testify/assert"
 )
@@ -1779,6 +1782,357 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 			if !ok || got != tt.expect {
 				t.Errorf("got %v, want %v", got, tt.expect)
 			}
+		})
+	}
+}
+
+func TestHandlerIsInstrumented(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect bool
+	}{
+		{
+			name: "handler not instrumented",
+			code: `
+package main
+
+import "net/http"
+
+func index(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello World"))
+}
+
+func main() {
+	http.HandleFunc("/", index)
+}
+`,
+			expect: false,
+		},
+		{
+			name: "handler wrapped with WrapHandleFunc",
+			code: `
+package main
+
+import (
+	"net/http"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func index(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello World"))
+}
+
+func main() {
+	app, _ := newrelic.NewApplication(
+		newrelic.ConfigAppName("Test App"),
+	)
+	http.HandleFunc(newrelic.WrapHandleFunc(app, "/", index))
+}
+`,
+			expect: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			id, err := pseudo_uuid()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			testDir := fmt.Sprintf("tmp_%s", id)
+			defer cleanTestApp(t, testDir)
+
+			manager := testInstrumentationManager(t, tt.code, testDir)
+			pkg := manager.getDecoratorPackage()
+			if pkg == nil {
+				t.Fatalf("Package was nil: %+v", manager.packages)
+			}
+
+			// First populate the function cache
+			for _, decl := range pkg.Syntax[0].Decls {
+				if fn, ok := decl.(*dst.FuncDecl); ok {
+					manager.transactionCache.Functions[fn.Name.Name] = fn
+				}
+			}
+
+			// Load pre-instrumentation tracing to populate transaction cache
+			manager.loadPreInstrumentationTracingFunctions(DetectWrappedRoutes)
+			err = manager.ScanApplication()
+			if err != nil {
+				t.Fatalf("Failed to scan application: %v", err)
+			}
+
+			// Get the handler function declaration (index is at position 1)
+			decl, ok := pkg.Syntax[0].Decls[1].(*dst.FuncDecl)
+			if !ok {
+				t.Fatal("code must contain a function declaration at position 1")
+			}
+
+			got := HandlerIsInstrumented(manager, decl)
+			if got != tt.expect {
+				t.Errorf("HandlerIsInstrumented() = %v, want %v", got, tt.expect)
+			}
+		})
+	}
+}
+
+func TestDetectWrappedRoutes(t *testing.T) {
+	tests := []struct {
+		name          string
+		code          string
+		expectInCache bool
+		handlerName   string
+	}{
+		{
+			name: "detect wrapped HandleFunc in main",
+			code: `
+package main
+
+import (
+	"net/http"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func index(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello World"))
+}
+
+func main() {
+	app, _ := newrelic.NewApplication(
+		newrelic.ConfigAppName("Test App"),
+	)
+	http.HandleFunc(newrelic.WrapHandleFunc(app, "/", index))
+}
+`,
+			expectInCache: true,
+			handlerName:   "index",
+		},
+		{
+			name: "no wrapped routes",
+			code: `
+package main
+
+import "net/http"
+
+func index(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Hello World"))
+}
+
+func main() {
+	http.HandleFunc("/", index)
+}
+`,
+			expectInCache: false,
+			handlerName:   "index",
+		},
+		{
+			name: "wrapped route with literal handler",
+			code: `
+package main
+
+import (
+	"net/http"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	app, _ := newrelic.NewApplication(
+		newrelic.ConfigAppName("Test App"),
+	)
+	http.HandleFunc(newrelic.WrapHandleFunc(app, "/", func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("Hello"))
+	}))
+}
+`,
+			expectInCache: false, // literal handlers won't be in the cache by name
+			handlerName:   "",
+		},
+		{
+			name: "multiple wrapped routes",
+			code: `
+package main
+
+import (
+	"net/http"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func index(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("Index"))
+}
+
+func about(w http.ResponseWriter, r *http.Request) {
+	w.Write([]byte("About"))
+}
+
+func main() {
+	app, _ := newrelic.NewApplication(
+		newrelic.ConfigAppName("Test App"),
+	)
+	http.HandleFunc(newrelic.WrapHandleFunc(app, "/", index))
+	http.HandleFunc(newrelic.WrapHandleFunc(app, "/about", about))
+}
+`,
+			expectInCache: true,
+			handlerName:   "index", // Check for the first handler
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			id, err := pseudo_uuid()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			testDir := fmt.Sprintf("tmp_%s", id)
+			defer cleanTestApp(t, testDir)
+
+			manager := testInstrumentationManager(t, tt.code, testDir)
+			pkg := manager.getDecoratorPackage()
+			if pkg == nil {
+				t.Fatalf("Package was nil: %+v", manager.packages)
+			}
+
+			// First populate the function cache by scanning all declarations
+			for _, decl := range pkg.Syntax[0].Decls {
+				if fn, ok := decl.(*dst.FuncDecl); ok {
+					manager.transactionCache.Functions[fn.Name.Name] = fn
+				}
+			}
+
+			// Run DetectWrappedRoutes
+			manager.loadPreInstrumentationTracingFunctions(DetectWrappedRoutes)
+			err = manager.ScanApplication()
+			if err != nil {
+				t.Fatalf("Failed to scan application: %v", err)
+			}
+
+			// Check if the handler is in the transaction cache
+			if tt.handlerName != "" {
+				found := false
+				for ident := range manager.transactionCache.Transactions {
+					if ident.Name == tt.handlerName {
+						found = true
+						break
+					}
+				}
+
+				if found != tt.expectInCache {
+					t.Errorf("Handler %s in cache = %v, want %v", tt.handlerName, found, tt.expectInCache)
+				}
+			}
+		})
+	}
+}
+
+func TestInstrumentHandleFunction_SkipsInstrumented(t *testing.T) {
+	tests := []struct {
+		name   string
+		code   string
+		expect string
+	}{
+		{
+			name: "skip already instrumented handler",
+			code: `
+package main
+
+import (
+	"net/http"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func index(w http.ResponseWriter, r *http.Request) {
+	txn := newrelic.FromContext(r.Context())
+	defer txn.End()
+	w.Write([]byte("Hello World"))
+}
+
+func main() {
+	app, _ := newrelic.NewApplication(
+		newrelic.ConfigAppName("Test App"),
+	)
+	http.HandleFunc(newrelic.WrapHandleFunc(app, "/", index))
+}
+`,
+			expect: `package main
+
+import (
+	"github.com/newrelic/go-agent/v3/newrelic"
+	"net/http"
+)
+
+func index(w http.ResponseWriter, r *http.Request) {
+	txn := newrelic.FromContext(r.Context())
+	defer txn.End()
+	w.Write([]byte("Hello World"))
+}
+
+func main() {
+	app, _ := newrelic.NewApplication(
+		newrelic.ConfigAppName("Test App"),
+	)
+	http.HandleFunc(newrelic.WrapHandleFunc(app, "/", index))
+}
+`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer panicRecovery(t)
+			id, err := pseudo_uuid()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			testDir := fmt.Sprintf("tmp_%s", id)
+			defer cleanTestApp(t, testDir)
+
+			manager := testInstrumentationManager(t, tt.code, testDir)
+			pkg := manager.getDecoratorPackage()
+			if pkg == nil {
+				t.Fatalf("Package was nil: %+v", manager.packages)
+			}
+
+			// First populate the function cache
+			for _, decl := range pkg.Syntax[0].Decls {
+				if fn, ok := decl.(*dst.FuncDecl); ok {
+					manager.transactionCache.Functions[fn.Name.Name] = fn
+				}
+			}
+
+			// First detect wrapped routes to populate the cache
+			manager.loadPreInstrumentationTracingFunctions(DetectWrappedRoutes)
+			err = manager.ScanApplication()
+			if err != nil {
+				t.Fatalf("Failed to scan application: %v", err)
+			}
+
+			// Now instrument handlers
+			manager.tracingFunctions.stateless = append(manager.tracingFunctions.stateless, InstrumentHandleFunction)
+			err = manager.TracePackageCalls()
+			if err != nil {
+				t.Fatalf("Failed to trace package calls: %v", err)
+			}
+			err = manager.InstrumentApplication()
+			if err != nil {
+				t.Fatalf("Failed to instrument packages: %v", err)
+			}
+
+			restorer := decorator.NewRestorerWithImports(testDir, guess.New())
+			buf := bytes.NewBuffer([]byte{})
+			err = restorer.Fprint(buf, pkg.Syntax[0])
+			if err != nil {
+				t.Fatalf("Failed to restore the file: %v", err)
+			}
+
+			got := buf.String()
+			assert.Equal(t, tt.expect, got)
 		})
 	}
 }
