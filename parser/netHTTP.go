@@ -333,7 +333,7 @@ func clientTransportAlreadyInstrumented(c *dstutil.Cursor, clientVarName string)
 
 // more unit test friendly helper function
 func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
-	if len(stmt.Rhs) == 1 && len(stmt.Lhs) == 1 && (stmt.Tok == token.DEFINE || stmt.Tok == token.ASSIGN) {
+	if len(stmt.Rhs) == 1 && len(stmt.Lhs) == 1 && (stmt.Tok == token.DEFINE) {
 		unary, ok := stmt.Rhs[0].(*dst.UnaryExpr)
 		if ok && unary.Op == token.AND {
 			lit, ok := unary.X.(*dst.CompositeLit)
