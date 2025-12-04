@@ -260,6 +260,77 @@ func isHTTPHandlerLit(fn *dst.FuncLit) bool {
 	return true
 }
 
+func isTransportInstrumented(stmt dst.Stmt, clientVarName string) bool {
+	assignStmt, ok := stmt.(*dst.AssignStmt)
+	if !ok {
+		return false
+	}
+
+	// Check if LHS is client.Transport
+	if len(assignStmt.Lhs) != 1 {
+		return false
+	}
+
+	selExpr, ok := assignStmt.Lhs[0].(*dst.SelectorExpr)
+	if !ok || selExpr.Sel.Name != "Transport" {
+		return false
+	}
+
+	// Check if selector is the client variable
+	if ident, ok := selExpr.X.(*dst.Ident); !ok || ident.Name != clientVarName {
+		return false
+	}
+
+	// Check if RHS is newrelic.NewRoundTripper
+	if len(assignStmt.Rhs) != 1 {
+		return false
+	}
+
+	callExpr, ok := assignStmt.Rhs[0].(*dst.CallExpr)
+	if !ok {
+		return false
+	}
+	funIdent, ok := callExpr.Fun.(*dst.Ident)
+	if !ok {
+		return false
+	}
+
+	return funIdent.Name == "NewRoundTripper" && funIdent.Path == codegen.NewRelicAgentImportPath
+}
+
+// clientTransportAlreadyInstrumented checks if the client's Transport is already set to newrelic.NewRoundTripper
+// In the statements within the block
+func clientTransportAlreadyInstrumented(c *dstutil.Cursor, clientVarName string) bool {
+	parent := c.Parent()
+
+	var blockStmt *dst.BlockStmt
+	for parent != nil {
+		if block, ok := parent.(*dst.BlockStmt); ok {
+			blockStmt = block
+			break
+		}
+		parent = c.Parent()
+	}
+
+	if blockStmt == nil {
+		return false
+	}
+	// Get current statements index
+	currIndx := c.Index()
+	if currIndx < 0 {
+		return false
+	}
+
+	// Check the statements for existing Transport Instrumentation
+	for i := 1; currIndx+i < len(blockStmt.List); i++ {
+		stmt := blockStmt.List[currIndx+i]
+		if isTransportInstrumented(stmt, clientVarName) {
+			return true
+		}
+	}
+	return false
+}
+
 // more unit test friendly helper function
 func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
 	if len(stmt.Rhs) == 1 && len(stmt.Lhs) == 1 && stmt.Tok == token.DEFINE {
@@ -299,10 +370,21 @@ func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor
 
 // InstrumentHttpClient automatically injects a newrelic roundtripper into any newly created http client
 // looks for the following pattern: client := &http.Client{}
+// Additionally, it also checks if the transport is already instrumented to avoid duplicate injection
 func InstrumentHttpClient(manager *InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
 	stmt, ok := n.(*dst.AssignStmt)
 	if ok && isNetHttpClientDefinition(stmt) && c.Index() >= 0 && n.Decorations() != nil {
+		clientIdent, ok := stmt.Lhs[0].(*dst.Ident)
+		if !ok {
+			return
+		}
+
+		// Check if transport is already instrumented within the block
+		if clientTransportAlreadyInstrumented(c, clientIdent.Name) {
+			return
+		}
+
 		c.InsertAfter(codegen.RoundTripper(stmt.Lhs[0], n.Decorations().After)) // add roundtripper to transports
 		stmt.Decs.After = dst.None
 		manager.addImport(codegen.NewRelicAgentImportPath)
