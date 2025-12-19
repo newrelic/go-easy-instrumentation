@@ -375,7 +375,9 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 				errStmt = parentStmt
 			}
 		}
-		manager.errorCache.Load(errExpr, errStmt)
+		if !manager.errorCache.IsExistingError(errExpr) {
+			manager.errorCache.Load(errExpr, errStmt)
+		}
 	}
 	return false
 }
