@@ -1,0 +1,32 @@
+--- a/main.go
++++ b/main.go
+@@ -298,7 +298,7 @@
+ 
+ 	//loc := newrelic.ThisCodeLocation()
+ 	backgroundCache := newrelic.NewCachedCodeLocation()
+-	http.HandleFunc("/background", func(w http.ResponseWriter, req *http.Request) {
++	http.HandleFunc(newrelic.WrapHandleFunc(myapp, "/background", func(w http.ResponseWriter, req *http.Request) {
+ 		// Transactions started without an http.Request are classified as
+ 		// background transactions.
+ 		txn := myapp.StartTransaction("background", backgroundCache.WithThisCodeLocation())
+@@ -306,9 +306,9 @@
+ 
+ 		io.WriteString(w, "background transaction")
+ 		time.Sleep(150 * time.Millisecond)
+-	})
++	}))
+ 
+-	http.HandleFunc("/background_log", func(w http.ResponseWriter, req *http.Request) {
++	http.HandleFunc(newrelic.WrapHandleFunc(myapp, "/background_log", func(w http.ResponseWriter, req *http.Request) {
+ 		// Logs that occur outside of a transaction are classified as
+ 		// background logs.
+ 
+@@ -318,7 +317,7 @@
+ 		})
+ 
+ 		io.WriteString(w, "A background log message was recorded")
+-	})
++	}))
+ 
+ 	http.ListenAndServe(":8000", nil)
+ }
