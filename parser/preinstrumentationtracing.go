@@ -120,3 +120,26 @@ func trackFunctionCalls(manager *InstrumentationManager, funcDecl *dst.FuncDecl,
 		return true
 	}, nil)
 }
+
+func DetectErrors(manager *InstrumentationManager, c *dstutil.Cursor) {
+	txns := manager.transactionCache.Transactions
+	for _, txnData := range txns {
+		// Check existing transactions to see if any have NoticeError calls
+		for _, call := range txnData.Expressions {
+			call, ok := call.(*dst.CallExpr)
+			if !ok {
+				return
+			}
+			funcCall, ok := call.Fun.(*dst.SelectorExpr)
+			if ok && funcCall.Sel.Name == "NoticeError" {
+				if len(call.Args) > 0 {
+					if errVar, ok := call.Args[0].(*dst.Ident); ok {
+						manager.errorCache.LoadExistingErrors(errVar)
+					}
+				}
+
+			}
+
+		}
+	}
+}
