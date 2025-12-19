@@ -1,10 +1,12 @@
 module github.com/newrelic/go-easy-instrumentation
 
-go 1.23.2
+go 1.24
+
+toolchain go1.24.0
 
 require (
 	github.com/dave/dst v0.27.3
-	github.com/newrelic/go-agent/v3 v3.40.1
+	github.com/newrelic/go-agent/v3 v3.42.0
 	github.com/sourcegraph/go-diff-patch v0.0.0-20240223163233-798fd1e94a8e
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.10.0
