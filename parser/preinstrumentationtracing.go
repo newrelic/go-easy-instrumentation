@@ -25,6 +25,18 @@ func DetectTransactions(manager *InstrumentationManager, c *dstutil.Cursor) {
 					}
 					selExpr, ok := callExpr.Fun.(*dst.SelectorExpr)
 					if !ok {
+						// Check if the callExpr is ident and if so, we should check to see if it's from context
+						if ident, ok := callExpr.Fun.(*dst.Ident); ok {
+							if ident.Name == "FromContext" {
+								// Capture the transaction variable name
+								if len(stmt.Lhs) > 0 {
+									txnVar, ok := stmt.Lhs[0].(*dst.Ident)
+									if ok && txnVar != nil {
+										currentTransaction = txnVar
+									}
+								}
+							}
+						}
 						continue
 					}
 					_, ok = selExpr.X.(*dst.Ident)
@@ -107,4 +119,27 @@ func trackFunctionCalls(manager *InstrumentationManager, funcDecl *dst.FuncDecl,
 		}
 		return true
 	}, nil)
+}
+
+func DetectErrors(manager *InstrumentationManager, c *dstutil.Cursor) {
+	txns := manager.transactionCache.Transactions
+	for _, txnData := range txns {
+		// Check existing transactions to see if any have NoticeError calls
+		for _, call := range txnData.Expressions {
+			call, ok := call.(*dst.CallExpr)
+			if !ok {
+				return
+			}
+			funcCall, ok := call.Fun.(*dst.SelectorExpr)
+			if ok && funcCall.Sel.Name == "NoticeError" {
+				if len(call.Args) > 0 {
+					if errVar, ok := call.Args[0].(*dst.Ident); ok {
+						manager.errorCache.LoadExistingErrors(errVar)
+					}
+				}
+
+			}
+
+		}
+	}
 }
