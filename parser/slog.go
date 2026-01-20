@@ -74,7 +74,8 @@ func InstrumentSlogHandler(manager *InstrumentationManager, c *dstutil.Cursor) {
 						}
 					}
 				case *dst.ExprStmt:
-					// TODO
+					// TODO - in the future, be more aggressive about hunting more cases where these
+					// identifiers appear
 				}
 			}
 		}
