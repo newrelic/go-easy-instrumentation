@@ -137,6 +137,32 @@ func (tc *TransactionCache) AddCall(transaction *dst.Ident, expr dst.Expr) bool 
 	return tc.AddTxnToCache(transaction, txnData)
 }
 
+// AddFuncDecl adds all expressions from a function declaration to a transaction.
+// The transaction is marked as closed with the last element in the function body
+// This handles cases where transaction start/end are obfuscated behind middleware.
+func (tc *TransactionCache) AddFuncDecl(funcDecl *dst.FuncDecl) bool {
+	if tc == nil || tc.Transactions == nil || funcDecl == nil {
+		return false // Enforce initialization of TransactionCache
+	}
+
+	// Initialize a new transaction data object for fresh transactions
+	txnData := NewTxnData()
+
+	// Traverse all statements in the function body
+	for _, stmt := range funcDecl.Body.List {
+		// Consider only expression statements
+		if exprStmt, ok := stmt.(*dst.ExprStmt); ok {
+			expr := exprStmt.X
+			// Add the expression to the transaction
+			txnData.AddExpr(expr)
+		}
+	}
+	txnData.SetClosed(true)
+	// Add transaction data to cache
+	return tc.AddTxnToCache(funcDecl.Name, txnData)
+
+}
+
 // IsFunctionInTransactionScope checks if a given function name is present within any transaction.
 // It iterates over all transactions and their expressions, returning true if the function name is found.
 func (tc *TransactionCache) IsFunctionInTransactionScope(functionName string) bool {
