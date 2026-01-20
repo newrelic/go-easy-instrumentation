@@ -18,7 +18,7 @@ func main() {
 	// docker run -it -p 3306:3306 --net "bridge" -e MYSQL_ALLOW_EMPTY_PASSWORD=true mysql
 
 	db, err := sql.Open("nrmysql", "root@/information_schema")
-	if nil != err {
+	if err != nil {
 		panic(err)
 	}
 
@@ -27,7 +27,7 @@ func main() {
 		newrelic.ConfigLicense(os.Getenv("NEW_RELIC_LICENSE_KEY")),
 		newrelic.ConfigDebugLogger(os.Stdout),
 	)
-	if nil != err {
+	if err != nil {
 		panic(err)
 	}
 	app.WaitForConnection(5 * time.Second)
