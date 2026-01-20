@@ -2,6 +2,8 @@ module github.com/newrelic/go-easy-instrumentation
 
 go 1.24
 
+toolchain go1.24.0
+
 require (
 	github.com/dave/dst v0.27.3
 	github.com/newrelic/go-agent/v3 v3.42.0
