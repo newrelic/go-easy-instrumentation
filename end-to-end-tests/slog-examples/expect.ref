@@ -1,0 +1,32 @@
+--- a/main.go
++++ b/main.go
+@@ -3,16 +3,27 @@
+ import (
+ 	"log/slog"
+ 	"os"
++	"time"
++
++	"github.com/newrelic/go-agent/v3/integrations/logcontext-v2/nrslog"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
+ 
+ 	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{})
++	NRhandler := nrslog.WrapHandler(NewRelicAgent, handler)
+ 	handler2 := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{})
+-	log := slog.New(handler)
+-	log2 := slog.New(handler2)
++	NRhandler2 := nrslog.WrapHandler(NewRelicAgent, handler2)
++	log := slog.New(NRhandler)
++	log2 := slog.New(NRhandler2)
+ 
+ 	log.Info("I am a log message")
+ 	log2.Warn("Another message")
+ 
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

@@ -1,7 +1,7 @@
 package parser
 
 import (
-	"fmt"
+	"slices"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
@@ -44,19 +44,39 @@ func InstrumentSlogHandler(manager *InstrumentationManager, c *dstutil.Cursor) {
 		}
 
 		// loop through all statements within the body of the main method to see if any slog TextHandler calls are made
-		for i, stmt := range decl.Body.List {
-			slogHandler := slogMiddlewareCall(stmt)
-			// No handler detected, continue onto next statement
-			if slogHandler == "" {
-				continue
-			}
-			fmt.Println("Bingo!", slogHandler)
-			// bingo! Handler detected, lets inject our new relic integration here
-			middleware, goGet := codegen.SlogHandlerWrapper(slogHandler)
-			decl.Body.List = append(decl.Body.List[:i+1], append([]dst.Stmt{middleware}, decl.Body.List[i+1:]...)...)
-			manager.addImport(goGet)
-			return
+		var handlerNames []string
+		for i := 0; i < len(decl.Body.List); i++ {
+			stmt := decl.Body.List[i]
 
+			slogHandler := slogMiddlewareCall(stmt)
+			if slogHandler != "" {
+				// We detected an slog handler
+				nrHandler := "NR" + slogHandler
+				handlerNames = append(handlerNames, slogHandler)
+				middleware, goGet := codegen.SlogHandlerWrapper(slogHandler, nrHandler)
+				decl.Body.List = append(decl.Body.List[:i+1], append([]dst.Stmt{middleware}, decl.Body.List[i+1:]...)...)
+				manager.addImport(goGet)
+				i++
+			} else if len(handlerNames) > 0 {
+				// Translate any handlers we've seen so far to our wrapped ones
+				//dst.Print(stmt)
+				switch s := stmt.(type) {
+				case *dst.AssignStmt:
+					if len(s.Rhs) == 1 {
+						if cs, isCall := s.Rhs[0].(*dst.CallExpr); isCall {
+							for ai, arg := range cs.Args {
+								if aident, isIdentifier := arg.(*dst.Ident); isIdentifier {
+									if slices.Contains(handlerNames, aident.Name) {
+										s.Rhs[0].(*dst.CallExpr).Args[ai].(*dst.Ident).Name = "NR" + aident.Name
+									}
+								}
+							}
+						}
+					}
+				case *dst.ExprStmt:
+					// TODO
+				}
+			}
 		}
 
 	}

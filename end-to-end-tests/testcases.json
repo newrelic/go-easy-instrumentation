@@ -35,6 +35,10 @@
     {
       "name": "gochi app",
       "dir": "end-to-end-tests/gochi"
+    },
+    {
+       "name": "slog app",
+       "dir": "end-to-end-tests/slog-examples"
     }
   ]
 }
