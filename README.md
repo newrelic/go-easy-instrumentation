@@ -35,9 +35,9 @@ git apply /path/to/your/app/new-relic-instrumentation.diff
 | `--output` | `-o` | Custom diff output file path (must be `.diff`) |
 
 ```sh
-go-easy instrument --debug /path/to/your/app
-go-easy instrument --exclude "vendor,testdata" /path/to/your/app
-go-easy instrument --output /tmp/changes.diff /path/to/your/app
+go-easy-instrumentation instrument --debug /path/to/your/app
+go-easy-instrumentation instrument --exclude "vendor,testdata" /path/to/your/app
+go-easy-instrumentation instrument --output /tmp/changes.diff /path/to/your/app
 ```
 
 > **Note:** In non-TTY environments (CI/CD, Docker, piped output), the tool automatically uses text-mode output.
@@ -46,8 +46,8 @@ go-easy instrument --output /tmp/changes.diff /path/to/your/app
 
 Run without a subcommand to scan the current directory and choose which files to instrument:
 ```sh
-go-easy
-go-easy --exclude "vendor,end-to-end-tests"
+go-easy-instrumentation
+go-easy-instrumentation --exclude "vendor,end-to-end-tests"
 ```
 
 ## Development
