@@ -5,15 +5,58 @@ Go is a compiled language with an opaque runtime, making it unable to support au
 
 In an effort to make instrumentation easier, the Go agent team created an instrumentation tool that is currently in preview. This tool does most of the work for you by suggesting changes to your source code that instrument your application with the New Relic Go agent.
 
-To get started, check out this four-minute video, or skip down to [How it works](#how-it-works).
-
-[![asciicast](https://asciinema.org/a/r0Il7o2eMiZaLKHIlew3IL2nx.svg)](https://asciinema.org/a/r0Il7o2eMiZaLKHIlew3IL2nx)
-
 ## Preview Notice
 
 This feature is currently provided as part of a preview and is subject to our New Relic Experimental policies. Recommended code changes are suggestions only and should be subject to human review for accuracy, applicability, and appropriateness for your environment. This feature should only be used in non-critical, non-production environments that do not contain sensitive data.
 
 This project, its code, and the UX are under heavy development, and should be expected to change. Please take this into consideration when participating in this preview. If you encounter any issues, please report them using Github issues and fill out as much of the issue template as you can so we can improve this tool.
+
+## Quick Start
+
+```sh
+git clone https://github.com/newrelic/go-easy-instrumentation.git
+cd go-easy-instrumentation
+go build -o go-easy .
+sudo mv go-easy /usr/local/bin/   # or anywhere on your PATH
+```
+
+Now run it from any directory:
+```sh
+go-easy instrument /path/to/your/app
+git apply /path/to/your/app/new-relic-instrumentation.diff
+```
+
+### CLI Flags
+
+| Flag | Short | Description |
+| ---- | ----- | ----------- |
+| `--debug` | `-d` | Enable debug logging with text-mode output (no TUI) |
+| `--exclude` | `-e` | Comma-separated list of folders to exclude |
+| `--output` | `-o` | Custom diff output file path (must be `.diff`) |
+
+```sh
+go-easy instrument --debug /path/to/your/app
+go-easy instrument --exclude "vendor,testdata" /path/to/your/app
+go-easy instrument --output /tmp/changes.diff /path/to/your/app
+```
+
+> **Note:** In non-TTY environments (CI/CD, Docker, piped output), the tool automatically uses text-mode output.
+
+### Interactive Mode
+
+Run without a subcommand to scan the current directory and choose which files to instrument:
+```sh
+go-easy
+go-easy --exclude "vendor,end-to-end-tests"
+```
+
+## Development
+
+### Running from source
+```sh
+go run . instrument /path/to/your/app
+```
+
 
 ## How it works
 
@@ -47,32 +90,6 @@ The following libraries are supported for automatic instrumentation. Listed belo
 | mysql        | v1.0.0 |
 | slog         | v1.0.0 |
 
-
-
-## Installation
-
-Before you start the installation steps below, make sure you have a version of Go installed that is within the support window for the current [Go programming language lifecycle](https://endoflife.date/go).
-
-Installation Steps have been moved to: https://docs.newrelic.com/docs/apm/agents/go-agent/installation/install-automation-new-relic-go/#go-easy-install
-
-### Building from source for development
-
-1. Clone this repository to a directory on your system. For example:
-    ```sh
-    git clone https://github.com/newrelic/go-easy-instrumentation.git
-    ```
-2. Go into that directory:
-    ```sh
-    cd go-easy-instrumentation
-    ```
-3. Resolve any third-party dependencies:
-    ```sh
-    go mod tidy
-    ```
-4. Build and run from the root of the repo:
-    ```
-    go run . instrument $MY_APP
-    ```
 
 
 ### Updating an existing version of Go Easy Instrumentation
