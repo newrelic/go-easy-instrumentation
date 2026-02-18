@@ -1,6 +1,6 @@
 <a href="https://opensource.newrelic.com/oss-category/#new-relic-experimental"><picture><source media="(prefers-color-scheme: dark)" srcset="https://github.com/newrelic/opensource-website/raw/main/src/images/categories/dark/Experimental.png"><source media="(prefers-color-scheme: light)" srcset="https://github.com/newrelic/opensource-website/raw/main/src/images/categories/Experimental.png"><img alt="New Relic Open Source experimental project banner." src="https://github.com/newrelic/opensource-website/raw/main/src/images/categories/Experimental.png"></picture></a>
 
-# Go easy instrumentation [![codecov](https://codecov.io/gh/newrelic/go-easy-instrumentation/graph/badge.svg?token=0qFy6WGpL8)](https://codecov.io/gh/newrelic/go-easy-instrumentation)
+# Go Easy Instrumentation [![codecov](https://codecov.io/gh/newrelic/go-easy-instrumentation/graph/badge.svg?token=0qFy6WGpL8)](https://codecov.io/gh/newrelic/go-easy-instrumentation)
 Go is a compiled language with an opaque runtime, making it unable to support automatic instrumentation like other languages. For this reason, the New Relic Go agent is designed as an SDK. Since the Go agent is an SDK, it requires more manual work to set up than agents for languages that support automatic instrumentation.
 
 In an effort to make instrumentation easier, the Go agent team created an instrumentation tool that is currently in preview. This tool does most of the work for you by suggesting changes to your source code that instrument your application with the New Relic Go agent.
@@ -20,11 +20,11 @@ This project, its code, and the UX are under heavy development, and should be ex
 This tool doesn't interfere with your application's operation, and it doesn't make any changes to your code directly. Here's what happens when you run the tool:
 
 * It analyzes your code and suggests changes that allow the Go agent to capture telemetry data. 
+* It captures any existing transactions in your application and doesn't add additional transactions.
 * You review the changes in the .diff file and decide which changes to add to your source code.
 
 As part of the analysis, this tool may invoke `go get` or other Go language toolchain commands which may modify your `go.mod` file, but not your actual source code.
 
-**IMPORTANT:** This tool can't detect if you already have New Relic instrumentation. Please only use this on applications without any instrumentation.
 
 ## What is instrumented?
 
@@ -40,9 +40,14 @@ The following libraries are supported for automatic instrumentation. Listed belo
 
 | Library Name | Minimum Version |
 | ------------ | --------- |
-| net/http     | 0.1.0 |
-| gRPC         | 0.2.0 |
-| Gin          | 0.4.0 |
+| net/http     | v1.0.0 |
+| gRPC         | v1.0.0 |
+| Gin          | v1.0.0 |
+| Go-chi       | v1.0.0 |
+| mysql        | v1.0.0 |
+| slog         | v1.0.0 |
+
+
 
 ## Installation
 
