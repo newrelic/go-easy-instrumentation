@@ -9,9 +9,14 @@ import (
 	"github.com/dave/dst/decorator"
 )
 
+type consoleEntry struct {
+	header  string
+	message string
+}
+
 type ConsolePrinter struct {
-	appRoot  string
-	comments []string
+	appRoot string
+	entries []consoleEntry
 }
 
 // initialize this if you want to use it at the start of the program
@@ -27,8 +32,7 @@ func WriteAll() {
 	printer.flush()
 }
 
-// Add appends a new comment to the consolePrints slice.
-// This function is used to add comments that will be printed to console.
+// Add appends a new entry to the console printer.
 // The message is the main comment, and additionalInfo is a list of optional
 // comments that will be printed on new lines below the main comment.
 func (p *ConsolePrinter) add(pkg *decorator.Package, node dst.Node, header, message string, additionalInfo ...string) {
@@ -53,17 +57,19 @@ func (p *ConsolePrinter) add(pkg *decorator.Package, node dst.Node, header, mess
 		b.WriteString(info)
 	}
 
-	p.comments = append(p.comments, b.String())
+	p.entries = append(p.entries, consoleEntry{header: header, message: b.String()})
 }
 
-// Flush logs all the comments in the consolePrints slice.
+// Flush logs only Debug-level entries to the console.
 func (p *ConsolePrinter) flush() {
 	if p == nil {
 		return
 	}
 
-	for _, c := range p.comments {
-		log.Println(c)
+	for _, e := range p.entries {
+		if e.header == DebugConsoleHeader {
+			log.Println(e.message)
+		}
 	}
-	p.comments = []string{}
+	p.entries = []consoleEntry{}
 }

@@ -21,7 +21,6 @@ import (
 // This function can accept a FuncDecl or FuncLit object for the node only.
 func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *tracestate.State) (dst.Node, bool) {
 	TopLevelFunctionChanged := false
-
 	nodeType := reflect.TypeOf(node)
 	if nodeType != reflect.TypeOf(&dst.FuncDecl{}) && nodeType != reflect.TypeOf(&dst.FuncLit{}) {
 		panic(fmt.Sprintf("TraceFunction only accepts *dst.FuncDecl or *dst.FuncLit, got %s", nodeType))
@@ -35,6 +34,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 	lit, isFuncLit := node.(*dst.FuncLit)
 
 	if isFuncDecl {
+		comment.Debug(manager.getDecoratorPackage(), node, fmt.Sprintf("TraceFunction called for function decl: %s", decl.Name.Name))
 		funcType = decl.Type
 		funcBody = decl.Body
 	} else if isFuncLit {
@@ -73,6 +73,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 		}
 
 		if manager.transactionCache.CheckTransactionExists(ident) {
+			comment.Debug(manager.getDecoratorPackage(), node, fmt.Sprintf("Found existing instrumentation for function: %s", ident.Name))
 			hasSegment = true
 			return false // Stop further traversal
 		}
@@ -130,6 +131,7 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 
 					if manager.shouldInstrumentFunction(invInfo) {
 						manager.setPackage(invInfo.packageName)
+						comment.Debug(manager.getDecoratorPackage(), node, fmt.Sprintf("Tracing function: %s", invInfo.decl.Name.Name))
 						TraceFunction(manager, invInfo.decl, childState)
 						manager.setPackage(rootPkg)
 					}

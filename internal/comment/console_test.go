@@ -30,16 +30,16 @@ func TestAddComment(t *testing.T) {
 	}
 
 	testPrinter := &ConsolePrinter{
-		comments: []string{},
+		entries: []consoleEntry{},
 	}
 
 	testPrinter.add(pkg, dstNode1, InfoConsoleHeader, "message", "additionalInfo")
-	if len(testPrinter.comments) != 1 {
-		t.Errorf("Expected 1 comment, got %d", len(testPrinter.comments))
+	if len(testPrinter.entries) != 1 {
+		t.Errorf("Expected 1 entry, got %d", len(testPrinter.entries))
 	} else {
 		expected := "Info: message\nadditionalInfo"
-		if testPrinter.comments[0] != expected {
-			t.Errorf("Expected %s, got %s", expected, testPrinter.comments[0])
+		if testPrinter.entries[0].message != expected {
+			t.Errorf("Expected %s, got %s", expected, testPrinter.entries[0].message)
 		}
 	}
 }

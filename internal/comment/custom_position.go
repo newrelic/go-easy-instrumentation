@@ -41,10 +41,10 @@ func getPosition(pkg *decorator.Package, node dst.Node, appRoot string) string {
 
 	if pos.Line != 0 {
 		path.WriteByte(' ')
-		path.WriteString(strconv.Itoa(pos.Column))
+		path.WriteString(strconv.Itoa(pos.Line))
 		if pos.Column != 0 {
 			path.WriteByte(':')
-			path.WriteString(strconv.Itoa(pos.Line))
+			path.WriteString(strconv.Itoa(pos.Column))
 		}
 	}
 

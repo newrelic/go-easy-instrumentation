@@ -354,7 +354,10 @@ func (m *InstrumentationManager) getSortedPackages() []string {
 }
 
 // WriteDiff writes out the changes made to a file to the diff file for this package.
-func (m *InstrumentationManager) WriteDiff() error {
+// onProgress is a callback function that is invoked before writing each file diff.
+// This allows the caller (e.g., the CLI UI) to receive granular progress updates
+// containing the name of the file currently being processed.
+func (m *InstrumentationManager) WriteDiff(onProgress func(string)) error {
 	pkgs := m.getSortedPackages()
 	for _, pkg := range pkgs {
 		state := m.packages[pkg]
@@ -382,6 +385,10 @@ func (m *InstrumentationManager) WriteDiff() error {
 				return err
 			}
 
+			if onProgress != nil {
+				onProgress(fmt.Sprintf("Writing diff for %s", diffFileName))
+			}
+
 			modifiedFile := bytes.NewBuffer([]byte{})
 			if err := r.Fprint(modifiedFile, file); err != nil {
 				return err
@@ -401,7 +408,6 @@ func (m *InstrumentationManager) WriteDiff() error {
 			}
 		}
 	}
-	log.Printf("changes written to %s", m.diffFile)
 	return nil
 }
 

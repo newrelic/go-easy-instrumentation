@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"go/token"
 	"strconv"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
@@ -116,6 +118,7 @@ func InstrumentChiMiddleware(manager *InstrumentationManager, stmt dst.Stmt, c *
 
 	// Append at the current stmt location
 	middleware, goGet := codegen.NrChiMiddleware(routerName, tracing.AgentVariable())
+	comment.Debug(manager.getDecoratorPackage(), stmt, fmt.Sprintf("Injecting nrgochi middleware for router: %s", routerName))
 	c.InsertAfter(middleware)
 	manager.addImport(goGet)
 	return true
@@ -148,6 +151,7 @@ func InstrumentChiRouterLiteral(manager *InstrumentationManager, stmt dst.Stmt, 
 
 	segmentName := methodName + ":" + routeName
 
+	comment.Debug(manager.getDecoratorPackage(), stmt, fmt.Sprintf("Injecting segment for Chi route: %s", segmentName))
 	codegen.PrependStatementToFunctionLit(fnLit, codegen.DeferSegment(segmentName, tracing.TransactionVariable()))
 	codegen.PrependStatementToFunctionLit(fnLit, txn)
 

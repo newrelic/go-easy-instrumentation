@@ -95,8 +95,10 @@ func InstrumentMain(manager *InstrumentationManager, c *dstutil.Cursor) {
 		checkForExistingApplicationInFunctions(manager, c)
 		if decl.Name.Name == "main" {
 			if !checkForExistingApplicationInMain(manager, decl) {
+				comment.Debug(manager.getDecoratorPackage(), decl, "Injecting New Relic agent initialization into main()")
 				agentDecl := codegen.InitializeAgent(manager.appName, manager.agentVariableName)
 				decl.Body.List = append(agentDecl, decl.Body.List...)
+				comment.Debug(manager.getDecoratorPackage(), decl, "Injecting agent shutdown into main()")
 				decl.Body.List = append(decl.Body.List, codegen.ShutdownAgent(manager.agentVariableName))
 				// add go-agent/v3/newrelic to imports
 				manager.addImport(codegen.NewRelicAgentImportPath)
@@ -299,6 +301,8 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 					return false
 				}
 
+				comment.Debug(pkg, stmt, "Capturing error return value for NoticeError")
+
 				// add an empty line beore the return statement for readability
 				nodeVal.Decorations().Before = dst.EmptyLine
 
@@ -317,6 +321,7 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 			cachedExpr := manager.errorCache.GetExpression()
 			if cachedExpr != nil && util.AssertExpressionEqual(result, cachedExpr) {
 				manager.errorCache.Clear()
+				comment.Debug(pkg, stmt, "Injecting error nil check with NoticeError before return")
 				capture := codegen.IfErrorNotNilNoticeError(cachedExpr, tracing.TransactionVariable())
 				capture.Decs.Before = dst.EmptyLine
 				c.InsertBefore(capture)
@@ -334,6 +339,7 @@ func NoticeError(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil.Curs
 				if nodeVal.Body != nil && len(nodeVal.Body.List) > 0 {
 					stmtBlock = nodeVal.Body.List[0]
 				}
+				comment.Debug(pkg, stmt, "Injecting NoticeError into error handling block")
 				nodeVal.Body.List = append([]dst.Stmt{codegen.NoticeError(errExpr, tracing.TransactionVariable(), stmtBlock)}, nodeVal.Body.List...)
 				manager.errorCache.Clear()
 				return true

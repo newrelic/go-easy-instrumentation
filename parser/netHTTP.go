@@ -9,6 +9,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
@@ -359,6 +360,7 @@ func InstrumentHandleFunction(manager *InstrumentationManager, c *dstutil.Cursor
 	fn, isFn := n.(*dst.FuncDecl) // TODO: 'isFn' should be renamed to 'ok' to match the paradigm in the rest of the codebase.
 	if isFn && isHTTPHandler(fn) && !HandlerIsInstrumented(manager, fn) {
 
+		comment.Debug(manager.getDecoratorPackage(), fn, fmt.Sprintf("Instrumenting HTTP handler: %s", fn.Name.Name))
 		txnName := codegen.DefaultTransactionVariable
 		newFn, ok := TraceFunction(manager, fn, tracestate.FunctionBody(txnName))
 		if ok {
@@ -375,14 +377,6 @@ func InstrumentHttpClient(manager *InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
 	stmt, ok := n.(*dst.AssignStmt)
 	if ok && isNetHttpClientDefinition(stmt) && c.Index() >= 0 && n.Decorations() != nil {
-		clientExpr := stmt.Lhs[0]
-		if ident, ok := clientExpr.(*dst.Ident); ok {
-			// Check if transport is already instrumented within the block
-			if clientTransportAlreadyInstrumented(c, ident.Name) {
-				return
-			}
-		}
-
 		c.InsertAfter(codegen.RoundTripper(stmt.Lhs[0], n.Decorations().After)) // add roundtripper to transports
 		stmt.Decs.After = dst.None
 		manager.addImport(codegen.NewRelicAgentImportPath)
@@ -502,6 +496,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 		requestObject := call.Args[0]
 		if clientVar == httpDefaultClientVariable {
 			// create external segment to wrap calls made with default client
+			comment.Debug(manager.getDecoratorPackage(), stmt, "Wrapping default HTTP client call with external segment")
 			segmentName := "externalSegment"
 			c.InsertBefore(codegen.StartExternalSegment(requestObject, tracing.TransactionVariable(), segmentName, stmt.Decorations()))
 			c.InsertAfter(codegen.EndExternalSegment(segmentName, stmt.Decorations()))
@@ -512,6 +507,7 @@ func ExternalHttpCall(manager *InstrumentationManager, stmt dst.Stmt, c *dstutil
 			}
 			return true
 		} else {
+			comment.Debug(manager.getDecoratorPackage(), stmt, "Injecting transaction context into HTTP request")
 			c.InsertBefore(codegen.WrapRequestContext(requestObject, tracing.TransactionVariable(), stmt.Decorations()))
 			manager.addImport(codegen.NewRelicAgentImportPath)
 			return true
@@ -536,6 +532,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 			case httpHandleFunc:
 				if len(callExpr.Args) == 2 {
 					// Instrument handle funcs
+					comment.Debug(manager.getDecoratorPackage(), stmt, "Wrapping http.HandleFunc with newrelic.WrapHandleFunc")
 					codegen.WrapHttpHandleFunc(tracing.AgentVariable(), callExpr)
 
 					wasModified = true
@@ -545,6 +542,7 @@ func WrapNestedHandleFunction(manager *InstrumentationManager, stmt dst.Stmt, c 
 			case httpMuxHandle:
 				if len(callExpr.Args) == 2 {
 					// Instrument handle funcs
+					comment.Debug(manager.getDecoratorPackage(), stmt, "Wrapping http.Handle with newrelic.WrapHandle")
 					codegen.WrapHttpHandle(tracing.AgentVariable(), callExpr)
 
 					wasModified = true

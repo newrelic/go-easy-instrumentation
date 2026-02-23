@@ -1,6 +1,8 @@
 package parser
 
 import (
+	"fmt"
+
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
@@ -82,6 +84,7 @@ func InstrumentGinMiddleware(manager *InstrumentationManager, stmt dst.Stmt, c *
 	}
 	// Append at the current stmt location
 	middleware, goGet := codegen.NrGinMiddleware(routerName, tracing.AgentVariable())
+	comment.Debug(manager.getDecoratorPackage(), stmt, fmt.Sprintf("Injecting nrgin middleware for router: %s", routerName))
 	c.InsertAfter(middleware)
 	manager.addImport(goGet)
 	return true
@@ -102,6 +105,7 @@ func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 			return
 		}
 
+		comment.Debug(manager.getDecoratorPackage(), v, fmt.Sprintf("Instrumenting gin handler: %s", v.Name.Name))
 		funcDecl := currentNode.(*dst.FuncDecl)
 		txnName := codegen.DefaultTransactionVariable
 		_, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(txnName))
@@ -115,6 +119,7 @@ func InstrumentGinFunction(manager *InstrumentationManager, c *dstutil.Cursor) {
 			return
 		}
 
+		comment.Debug(manager.getDecoratorPackage(), v, "Instrumenting gin handler function literal")
 		funcLit := currentNode.(*dst.FuncLit)
 		txnName := codegen.DefaultTransactionVariable
 		tc := tracestate.FunctionBody(codegen.DefaultTransactionVariable).FuncLiteralDeclaration(manager.getDecoratorPackage(), funcLit)

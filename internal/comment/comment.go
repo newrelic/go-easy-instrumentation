@@ -17,6 +17,8 @@ const (
 
 	WarnHeader        string = "NR WARN"
 	WarnConsoleHeader string = "Warn"
+
+	DebugConsoleHeader string = "Debug"
 )
 
 func writeComment(node dst.Node, comments []string) {
@@ -61,4 +63,14 @@ func Warn(pkg *decorator.Package, commentNode dst.Node, positionNode dst.Node, m
 
 	writeComment(commentNode, comments)
 	printer.add(pkg, positionNode, WarnConsoleHeader, message, additionalInfo...)
+}
+
+// Debug logs a message to the console only when debug mode is enabled.
+// Unlike Info and Warn, this does NOT write any comments to the diff file.
+//
+// The message is the main log line, and additionalInfo is a list of optional
+// new lines that will be printed below the main message. The positionNode
+// is used to display the source location of the relevant code.
+func Debug(pkg *decorator.Package, positionNode dst.Node, message string, additionalInfo ...string) {
+	printer.add(pkg, positionNode, DebugConsoleHeader, message, additionalInfo...)
 }

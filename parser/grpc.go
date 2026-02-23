@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"go/token"
 	"strings"
 
@@ -8,6 +9,7 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
 	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
@@ -160,6 +162,7 @@ func InstrumentGrpcServerMethod(manager *InstrumentationManager, c *dstutil.Curs
 	node, ok := TraceFunction(manager, funcDecl, tracestate.FunctionBody(codegen.DefaultTransactionVariable, txnData.traceObject))
 	decl := node.(*dst.FuncDecl)
 	if ok && txnData.assignment != nil {
+		comment.Debug(manager.getDecoratorPackage(), funcDecl, fmt.Sprintf("Instrumenting gRPC server method: %s", funcDecl.Name.Name))
 		decl.Body.List = append([]dst.Stmt{txnData.assignment}, decl.Body.List...)
 	}
 }
@@ -169,6 +172,7 @@ func InstrumentGrpcServerMethod(manager *InstrumentationManager, c *dstutil.Curs
 func InstrumentGrpcDial(manager *InstrumentationManager, c *dstutil.Cursor) {
 	currentNode := c.Node()
 	if callExpr, ok := grpcDialCall(currentNode); ok {
+		comment.Debug(manager.getDecoratorPackage(), currentNode, "Injecting gRPC client interceptors into grpc.Dial")
 		callExpr.Args = append(callExpr.Args, codegen.NrGrpcUnaryClientInterceptor(callExpr))
 		callExpr.Args = append(callExpr.Args, codegen.NrGrpcStreamClientInterceptor(callExpr))
 		manager.addImport(codegen.NrgrpcImportPath)
@@ -187,6 +191,7 @@ func InstrumentGrpcServer(manager *InstrumentationManager, stmt dst.Stmt, c *dst
 	}
 
 	// inject middleware
+	comment.Debug(manager.getDecoratorPackage(), stmt, "Injecting gRPC server interceptors into grpc.NewServer")
 	callExpr.Args = append(callExpr.Args, codegen.NrGrpcUnaryServerInterceptor(tracing.AgentVariable(), callExpr))
 	callExpr.Args = append(callExpr.Args, codegen.NrGrpcStreamServerInterceptor(tracing.AgentVariable(), callExpr))
 	manager.addImport(codegen.NrgrpcImportPath)
