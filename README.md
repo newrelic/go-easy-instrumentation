@@ -16,13 +16,13 @@ This project, its code, and the UX are under heavy development, and should be ex
 ```sh
 git clone https://github.com/newrelic/go-easy-instrumentation.git
 cd go-easy-instrumentation
-go build -o go-easy .
-sudo mv go-easy /usr/local/bin/   # or anywhere on your PATH
+go build -o go-easy-instrumentation .
+sudo mv go-easy-instrumentation /usr/local/bin/   # or anywhere on your PATH
 ```
 
 Now run it from any directory:
 ```sh
-go-easy instrument /path/to/your/app
+go-easy-instrumentation instrument /path/to/your/app
 git apply /path/to/your/app/new-relic-instrumentation.diff
 ```
 
