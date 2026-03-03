@@ -5,12 +5,6 @@ Go is a compiled language with an opaque runtime, making it unable to support au
 
 In an effort to make instrumentation easier, the Go agent team created an instrumentation tool that is currently in preview. This tool does most of the work for you by suggesting changes to your source code that instrument your application with the New Relic Go agent.
 
-## Preview Notice
-
-This feature is currently provided as part of a preview and is subject to our New Relic Experimental policies. Recommended code changes are suggestions only and should be subject to human review for accuracy, applicability, and appropriateness for your environment. This feature should only be used in non-critical, non-production environments that do not contain sensitive data.
-
-This project, its code, and the UX are under heavy development, and should be expected to change. Please take this into consideration when participating in this preview. If you encounter any issues, please report them using Github issues and fill out as much of the issue template as you can so we can improve this tool.
-
 ## Quick Start
 
 ### Install
@@ -145,7 +139,17 @@ To modify which tests get run, modify the `end-to-end-tests/testcases.json` file
 For detailed instructions on how to generate instrumentation suggestions, see our documentation at [docs.newrelic.com](https://docs.newrelic.com/docs/apm/agents/go-agent/installation/install-automation-new-relic-go/#generate-suggestions).
 
 ## Support
-This is an experimental product, and New Relic is not offering official support at the moment. Please create issues in Github if you are encountering a problem that you're unable to resolve. When creating issues, its vital that you include as much of the requested information as possible. This enables us to get to the root cause of the issue much more quickly. Please also make sure to search existing issues before creating a new one.
+Should you need assistance with New Relic products, you are in good hands with several support channels.  
+
+If the issue has been confirmed as a bug or is a Feature request, please file a Github issue.
+
+
+* [New Relic Documentation](https://docs.newrelic.com/docs/agents/go-agent): Comprehensive guidance for using our platform
+* [Troubleshooting framework](https://discuss.newrelic.com/t/troubleshooting-frameworks/108787): Steps you through common troubleshooting questions
+* [New Relic Community](https://discuss.newrelic.com/tags/goagent): The best place to engage in troubleshooting questions
+* [New Relic Developer](https://developer.newrelic.com/): Resources for building a custom observability applications
+* [New Relic University](https://learn.newrelic.com/): A range of online training for New Relic users of every level
+
 
 ## Contributing
 We encourage your contributions! Keep in mind when you submit your pull request, you'll need to sign the CLA via the click-through using CLA-Assistant. You only have to sign the CLA one time per project.
