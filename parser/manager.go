@@ -128,7 +128,8 @@ func (m *InstrumentationManager) setPackage(pkgName string) {
 	m.currentPackage = pkgName
 }
 
-func (m *InstrumentationManager) addImport(path string) {
+// AddImport adds an import path to the current package (exported for integrations)
+func (m *InstrumentationManager) AddImport(path string) {
 	if path == "" {
 		return
 	}
@@ -136,6 +137,11 @@ func (m *InstrumentationManager) addImport(path string) {
 	if ok {
 		state.importsAdded[path] = true
 	}
+}
+
+// addImport is the internal version that calls AddImport
+func (m *InstrumentationManager) addImport(path string) {
+	m.AddImport(path)
 }
 
 func (m *InstrumentationManager) getImports() []string {
