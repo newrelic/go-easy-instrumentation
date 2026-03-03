@@ -283,3 +283,149 @@ func Test_generateNoticeError(t *testing.T) {
 		})
 	}
 }
+
+func TestGetApplication(t *testing.T) {
+	tests := []struct {
+		name                         string
+		transactionVariableExpression dst.Expr
+		wantTxnVarName               string
+	}{
+		{
+			name:                         "generates Application() call",
+			transactionVariableExpression: dst.NewIdent("txn"),
+			wantTxnVarName:               "txn",
+		},
+		{
+			name:                         "generates Application() call with custom name",
+			transactionVariableExpression: dst.NewIdent("myTransaction"),
+			wantTxnVarName:               "myTransaction",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetApplication(tt.transactionVariableExpression)
+
+			// Check it's a call expression
+			call, ok := got.(*dst.CallExpr)
+			assert.True(t, ok, "expected result to be *dst.CallExpr")
+
+			// Check it's a selector expression
+			selExpr, ok := call.Fun.(*dst.SelectorExpr)
+			assert.True(t, ok, "expected Fun to be *dst.SelectorExpr")
+
+			// Check X is the transaction variable
+			xIdent, ok := selExpr.X.(*dst.Ident)
+			assert.True(t, ok, "expected X to be *dst.Ident")
+			assert.Equal(t, tt.wantTxnVarName, xIdent.Name)
+
+			// Check selector is "Application"
+			assert.Equal(t, "Application", selExpr.Sel.Name)
+
+			// Check no arguments
+			assert.Len(t, call.Args, 0)
+		})
+	}
+}
+
+func TestTxnFromContext(t *testing.T) {
+	tests := []struct {
+		name          string
+		txnVariable   string
+		contextObject dst.Expr
+		wantTxnVar    string
+		wantCtxVar    string
+	}{
+		{
+			name:          "generates txn from context assignment",
+			txnVariable:   "txn",
+			contextObject: dst.NewIdent("ctx"),
+			wantTxnVar:    "txn",
+			wantCtxVar:    "ctx",
+		},
+		{
+			name:          "generates txn from context with custom names",
+			txnVariable:   "nrTxn",
+			contextObject: dst.NewIdent("requestContext"),
+			wantTxnVar:    "nrTxn",
+			wantCtxVar:    "requestContext",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TxnFromContext(tt.txnVariable, tt.contextObject)
+
+			// Check it's an assignment statement with DEFINE token
+			assert.NotNil(t, got)
+			assert.Equal(t, token.DEFINE, got.Tok)
+
+			// Check decorations include empty line after
+			assert.Equal(t, dst.EmptyLine, got.Decs.After)
+
+			// Check LHS is the transaction variable
+			assert.Len(t, got.Lhs, 1)
+			lhsIdent, ok := got.Lhs[0].(*dst.Ident)
+			assert.True(t, ok, "expected Lhs[0] to be *dst.Ident")
+			assert.Equal(t, tt.wantTxnVar, lhsIdent.Name)
+
+			// Check RHS is a call to newrelic.FromContext
+			assert.Len(t, got.Rhs, 1)
+			rhsCall, ok := got.Rhs[0].(*dst.CallExpr)
+			assert.True(t, ok, "expected Rhs[0] to be *dst.CallExpr")
+
+			// Check the function is FromContext from newrelic package
+			funIdent, ok := rhsCall.Fun.(*dst.Ident)
+			assert.True(t, ok, "expected Fun to be *dst.Ident")
+			assert.Equal(t, "FromContext", funIdent.Name)
+			assert.Equal(t, NewRelicAgentImportPath, funIdent.Path)
+
+			// Check the argument is the context object
+			assert.Len(t, rhsCall.Args, 1)
+			argIdent, ok := rhsCall.Args[0].(*dst.Ident)
+			assert.True(t, ok, "expected Args[0] to be *dst.Ident")
+			assert.Equal(t, tt.wantCtxVar, argIdent.Name)
+		})
+	}
+}
+
+func TestTxnFromContextExpression(t *testing.T) {
+	tests := []struct {
+		name          string
+		contextObject dst.Expr
+		wantCtxVar    string
+	}{
+		{
+			name:          "generates FromContext expression",
+			contextObject: dst.NewIdent("ctx"),
+			wantCtxVar:    "ctx",
+		},
+		{
+			name:          "generates FromContext expression with custom name",
+			contextObject: dst.NewIdent("requestContext"),
+			wantCtxVar:    "requestContext",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := TxnFromContextExpression(tt.contextObject)
+
+			// Check it's a call expression
+			call, ok := got.(*dst.CallExpr)
+			assert.True(t, ok, "expected result to be *dst.CallExpr")
+
+			// Check the function is FromContext from newrelic package
+			funIdent, ok := call.Fun.(*dst.Ident)
+			assert.True(t, ok, "expected Fun to be *dst.Ident")
+			assert.Equal(t, "FromContext", funIdent.Name)
+			assert.Equal(t, NewRelicAgentImportPath, funIdent.Path)
+
+			// Check the argument is the context object
+			assert.Len(t, call.Args, 1)
+			argIdent, ok := call.Args[0].(*dst.Ident)
+			assert.True(t, ok, "expected Args[0] to be *dst.Ident")
+			assert.Equal(t, tt.wantCtxVar, argIdent.Name)
+		})
+	}
+}
