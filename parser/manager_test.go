@@ -5,9 +5,13 @@ import (
 	"testing"
 
 	"github.com/dave/dst"
+	"github.com/dave/dst/decorator"
+	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/parser/facts"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/tools/go/packages"
 )
 
 func Test_AddImport(t *testing.T) {
@@ -567,6 +571,640 @@ func Test_GetInvocationInfoFromCall(t *testing.T) {
 			defer panicRecovery(t)
 			got := m.getInvocationInfoFromCall(tt.args.call, tt.args.forTest)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_NewInstrumentationManager(t *testing.T) {
+	type args struct {
+		pkgs              []*decorator.Package
+		appName           string
+		agentVariableName string
+		diffFile          string
+		userAppPath       string
+	}
+	tests := []struct {
+		name string
+		args args
+	}{
+		{
+			name: "creates_manager_with_single_package",
+			args: args{
+				pkgs: []*decorator.Package{
+					{Package: &packages.Package{ID: "test/pkg"}},
+				},
+				appName:           "TestApp",
+				agentVariableName: "agent",
+				diffFile:          "test.diff",
+				userAppPath:       "/test/path",
+			},
+		},
+		{
+			name: "creates_manager_with_multiple_packages",
+			args: args{
+				pkgs: []*decorator.Package{
+					{Package: &packages.Package{ID: "test/pkg1"}},
+					{Package: &packages.Package{ID: "test/pkg2"}},
+					{Package: &packages.Package{ID: "test/pkg3"}},
+				},
+				appName:           "TestApp",
+				agentVariableName: "agent",
+				diffFile:          "test.diff",
+				userAppPath:       "/test/path",
+			},
+		},
+		{
+			name: "creates_manager_with_no_packages",
+			args: args{
+				pkgs:              []*decorator.Package{},
+				appName:           "TestApp",
+				agentVariableName: "agent",
+				diffFile:          "test.diff",
+				userAppPath:       "/test/path",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NewInstrumentationManager(tt.args.pkgs, tt.args.appName, tt.args.agentVariableName, tt.args.diffFile, tt.args.userAppPath)
+			assert.NotNil(t, got)
+			assert.Equal(t, tt.args.appName, got.appName)
+			assert.Equal(t, tt.args.agentVariableName, got.agentVariableName)
+			assert.Equal(t, tt.args.diffFile, got.diffFile)
+			assert.Equal(t, tt.args.userAppPath, got.userAppPath)
+			assert.Equal(t, len(tt.args.pkgs), len(got.packages))
+			assert.NotNil(t, got.facts)
+			assert.NotNil(t, got.errorCache)
+			assert.NotNil(t, got.transactionCache)
+			for _, pkg := range tt.args.pkgs {
+				state, ok := got.packages[pkg.ID]
+				assert.True(t, ok)
+				assert.NotNil(t, state.tracedFuncs)
+				assert.NotNil(t, state.importsAdded)
+			}
+		})
+	}
+}
+
+func Test_SetPackage(t *testing.T) {
+	type fields struct {
+		currentPackage string
+	}
+	type args struct {
+		pkgName string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		{
+			name:   "set_package_name",
+			fields: fields{currentPackage: ""},
+			args:   args{pkgName: "foo"},
+		},
+		{
+			name:   "change_package_name",
+			fields: fields{currentPackage: "bar"},
+			args:   args{pkgName: "foo"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &InstrumentationManager{
+				currentPackage: tt.fields.currentPackage,
+			}
+			m.setPackage(tt.args.pkgName)
+			assert.Equal(t, tt.args.pkgName, m.currentPackage)
+		})
+	}
+}
+
+func Test_GetPackageName(t *testing.T) {
+	type fields struct {
+		currentPackage string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   string
+	}{
+		{
+			name:   "returns_current_package",
+			fields: fields{currentPackage: "foo"},
+			want:   "foo",
+		},
+		{
+			name:   "returns_empty_string",
+			fields: fields{currentPackage: ""},
+			want:   "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &InstrumentationManager{
+				currentPackage: tt.fields.currentPackage,
+			}
+			got := m.getPackageName()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_GetDecoratorPackage(t *testing.T) {
+	testPkg := &decorator.Package{Package: &packages.Package{ID: "test"}}
+	type fields struct {
+		currentPackage string
+		packages       map[string]*packageState
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   *decorator.Package
+	}{
+		{
+			name: "returns_decorator_package",
+			fields: fields{
+				currentPackage: "foo",
+				packages:       map[string]*packageState{"foo": {pkg: testPkg}},
+			},
+			want: testPkg,
+		},
+		{
+			name: "returns_nil_when_package_not_found",
+			fields: fields{
+				currentPackage: "foo",
+				packages:       map[string]*packageState{},
+			},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &InstrumentationManager{
+				currentPackage: tt.fields.currentPackage,
+				packages:       tt.fields.packages,
+			}
+			got := m.getDecoratorPackage()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_IsDefinedInPackage(t *testing.T) {
+	type fields struct {
+		packages map[string]*packageState
+	}
+	type args struct {
+		functionName string
+		packageName  string
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+		want   bool
+	}{
+		{
+			name: "function_exists_in_package",
+			fields: fields{
+				packages: map[string]*packageState{
+					"foo": {tracedFuncs: map[string]*tracedFunctionDecl{"bar": {}}},
+				},
+			},
+			args: args{functionName: "bar", packageName: "foo"},
+			want: true,
+		},
+		{
+			name: "function_does_not_exist_in_package",
+			fields: fields{
+				packages: map[string]*packageState{
+					"foo": {tracedFuncs: map[string]*tracedFunctionDecl{}},
+				},
+			},
+			args: args{functionName: "bar", packageName: "foo"},
+			want: false,
+		},
+		{
+			name: "package_does_not_exist",
+			fields: fields{
+				packages: map[string]*packageState{},
+			},
+			args: args{functionName: "bar", packageName: "foo"},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &InstrumentationManager{
+				packages: tt.fields.packages,
+			}
+			got := m.isDefinedInPackage(tt.args.functionName, tt.args.packageName)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_ResolvePath(t *testing.T) {
+	type args struct {
+		identPath      string
+		currentPackage string
+		forTest        string
+	}
+	tests := []struct {
+		name string
+		args args
+		want string
+	}{
+		{
+			name: "returns_identPath_when_set",
+			args: args{
+				identPath:      "test/path",
+				currentPackage: "current",
+				forTest:        "for/test",
+			},
+			want: "test/path",
+		},
+		{
+			name: "returns_forTest_when_identPath_empty",
+			args: args{
+				identPath:      "",
+				currentPackage: "current",
+				forTest:        "for/test",
+			},
+			want: "for/test",
+		},
+		{
+			name: "returns_currentPackage_when_both_empty",
+			args: args{
+				identPath:      "",
+				currentPackage: "current",
+				forTest:        "",
+			},
+			want: "current",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolvePath(tt.args.identPath, tt.args.currentPackage, tt.args.forTest)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_GetSortedPackages(t *testing.T) {
+	type fields struct {
+		packages map[string]*packageState
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		want   []string
+	}{
+		{
+			name: "sorts_packages_alphabetically",
+			fields: fields{
+				packages: map[string]*packageState{
+					"zebra": {},
+					"alpha": {},
+					"beta":  {},
+				},
+			},
+			want: []string{"alpha", "beta", "zebra"},
+		},
+		{
+			name: "handles_single_package",
+			fields: fields{
+				packages: map[string]*packageState{
+					"foo": {},
+				},
+			},
+			want: []string{"foo"},
+		},
+		{
+			name: "handles_empty_packages",
+			fields: fields{
+				packages: map[string]*packageState{},
+			},
+			want: []string{},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &InstrumentationManager{
+				packages: tt.fields.packages,
+			}
+			got := m.getSortedPackages()
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func Test_LoadTracingFunctions(t *testing.T) {
+	mockStateless := func(m *InstrumentationManager, c *dstutil.Cursor) {}
+	mockStateful := func(m *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
+		return false
+	}
+	mockDependency := func(pkg *decorator.Package, n dst.Node) (facts.Entry, bool) {
+		return facts.Entry{}, false
+	}
+	mockPreInstrumentation := func(m *InstrumentationManager, c *dstutil.Cursor) {}
+
+	tests := []struct {
+		name     string
+		testFunc func(*InstrumentationManager)
+		verify   func(*testing.T, *InstrumentationManager)
+	}{
+		{
+			name: "loadStatelessTracingFunctions_adds_functions",
+			testFunc: func(m *InstrumentationManager) {
+				m.loadStatelessTracingFunctions(mockStateless, mockStateless)
+			},
+			verify: func(t *testing.T, m *InstrumentationManager) {
+				assert.Equal(t, 2, len(m.tracingFunctions.stateless))
+			},
+		},
+		{
+			name: "loadStatefulTracingFunctions_adds_functions",
+			testFunc: func(m *InstrumentationManager) {
+				m.loadStatefulTracingFunctions(mockStateful, mockStateful, mockStateful)
+			},
+			verify: func(t *testing.T, m *InstrumentationManager) {
+				assert.Equal(t, 3, len(m.tracingFunctions.stateful))
+			},
+		},
+		{
+			name: "loadDependencyScans_adds_scans",
+			testFunc: func(m *InstrumentationManager) {
+				m.loadDependencyScans(mockDependency)
+			},
+			verify: func(t *testing.T, m *InstrumentationManager) {
+				assert.Equal(t, 1, len(m.tracingFunctions.dependency))
+			},
+		},
+		{
+			name: "loadPreInstrumentationTracingFunctions_adds_functions",
+			testFunc: func(m *InstrumentationManager) {
+				m.loadPreInstrumentationTracingFunctions(mockPreInstrumentation, mockPreInstrumentation)
+			},
+			verify: func(t *testing.T, m *InstrumentationManager) {
+				assert.Equal(t, 2, len(m.tracingFunctions.preinstrumentation))
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewInstrumentationManager([]*decorator.Package{}, "app", "agent", "diff.txt", "/path")
+			tt.testFunc(m)
+			tt.verify(t, m)
+		})
+	}
+}
+
+func Test_ErrorNoMain(t *testing.T) {
+	type args struct {
+		path string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			name:    "returns_error_with_path",
+			args:    args{path: "/test/path"},
+			wantErr: true,
+		},
+		{
+			name:    "returns_error_with_empty_path",
+			args:    args{path: ""},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := errorNoMain(tt.args.path)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("errorNoMain() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			assert.Contains(t, err.Error(), "cannot find a main method")
+		})
+	}
+}
+
+func Test_AddImport_EmptyPath(t *testing.T) {
+	m := &InstrumentationManager{
+		packages:       map[string]*packageState{"foo": {importsAdded: map[string]bool{}}},
+		currentPackage: "foo",
+	}
+	m.addImport("")
+	assert.Equal(t, 0, len(m.packages["foo"].importsAdded))
+}
+
+func Test_DetectDependencyIntegrations(t *testing.T) {
+	tests := []struct {
+		name string
+	}{
+		{
+			name: "loads_all_tracing_functions",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := NewInstrumentationManager([]*decorator.Package{}, "app", "agent", "diff.txt", "/path")
+			err := m.DetectDependencyIntegrations()
+			assert.NoError(t, err)
+			assert.Greater(t, len(m.tracingFunctions.stateless), 0)
+			assert.Greater(t, len(m.tracingFunctions.stateful), 0)
+			assert.Greater(t, len(m.tracingFunctions.dependency), 0)
+			assert.Greater(t, len(m.tracingFunctions.preinstrumentation), 0)
+		})
+	}
+}
+
+func Test_InstrumentPackages(t *testing.T) {
+	type args struct {
+		instrumentationFunctions []StatelessTracingFunction
+	}
+	tests := []struct {
+		name    string
+		manager *InstrumentationManager
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "nil_instrumentation_functions",
+			manager: &InstrumentationManager{
+				packages: map[string]*packageState{},
+			},
+			args:    args{instrumentationFunctions: nil},
+			wantErr: true,
+		},
+		{
+			name: "empty_instrumentation_functions",
+			manager: &InstrumentationManager{
+				packages: map[string]*packageState{
+					"test": {
+						pkg: &decorator.Package{
+							Package: &packages.Package{ID: "test"},
+							Syntax: []*dst.File{
+								{
+									Decls: []dst.Decl{
+										&dst.FuncDecl{
+											Name: &dst.Ident{Name: "test"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				currentPackage: "test",
+			},
+			args:    args{instrumentationFunctions: []StatelessTracingFunction{}},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := instrumentPackages(tt.manager, tt.args.instrumentationFunctions...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("instrumentPackages() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_ScanPackages(t *testing.T) {
+	type args struct {
+		instrumentationFunctions []PreInstrumentationTracingFunction
+	}
+	tests := []struct {
+		name    string
+		manager *InstrumentationManager
+		args    args
+		wantErr bool
+	}{
+		{
+			name: "nil_instrumentation_functions",
+			manager: &InstrumentationManager{
+				packages: map[string]*packageState{},
+			},
+			args:    args{instrumentationFunctions: nil},
+			wantErr: true,
+		},
+		{
+			name: "empty_instrumentation_functions",
+			manager: &InstrumentationManager{
+				packages: map[string]*packageState{
+					"test": {
+						pkg: &decorator.Package{
+							Package: &packages.Package{ID: "test"},
+							Syntax: []*dst.File{
+								{
+									Decls: []dst.Decl{
+										&dst.FuncDecl{
+											Name: &dst.Ident{Name: "test"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				currentPackage: "test",
+			},
+			args:    args{instrumentationFunctions: []PreInstrumentationTracingFunction{}},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := scanPackages(tt.manager, tt.args.instrumentationFunctions...)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("scanPackages() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_TracePackageCalls(t *testing.T) {
+	tests := []struct {
+		name    string
+		manager *InstrumentationManager
+		wantErr bool
+	}{
+		{
+			name: "errors_without_main_method",
+			manager: &InstrumentationManager{
+				packages:       map[string]*packageState{},
+				tracingFunctions: tracingFunctions{
+					dependency: []FactDiscoveryFunction{},
+				},
+			},
+			wantErr: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manager.TracePackageCalls()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("TracePackageCalls() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_ScanApplication(t *testing.T) {
+	tests := []struct {
+		name    string
+		manager *InstrumentationManager
+		wantErr bool
+	}{
+		{
+			name: "succeeds_with_empty_preinstrumentation_functions",
+			manager: &InstrumentationManager{
+				packages: map[string]*packageState{},
+				tracingFunctions: tracingFunctions{
+					preinstrumentation: []PreInstrumentationTracingFunction{},
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manager.ScanApplication()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ScanApplication() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func Test_InstrumentApplication(t *testing.T) {
+	tests := []struct {
+		name    string
+		manager *InstrumentationManager
+		wantErr bool
+	}{
+		{
+			name: "succeeds_with_empty_stateless_functions",
+			manager: &InstrumentationManager{
+				packages: map[string]*packageState{},
+				tracingFunctions: tracingFunctions{
+					stateless: []StatelessTracingFunction{},
+				},
+			},
+			wantErr: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.manager.InstrumentApplication()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("InstrumentApplication() error = %v, wantErr %v", err, tt.wantErr)
+			}
 		})
 	}
 }
