@@ -18,11 +18,11 @@
     },
     {
       "name": "gin - basic",
-      "dir": "end-to-end-tests/gin-examples/basic"
+      "dir": "integrations/nrgin/example/basic"
     },
     {
       "name": "gin - multiple services",
-      "dir": "end-to-end-tests/gin-examples/multiple-service"
+      "dir": "integrations/nrgin/example/multiple-service"
     },
     {
 		"name": "semi-instrumented - existing transactions",
