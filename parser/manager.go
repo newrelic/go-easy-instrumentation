@@ -154,6 +154,11 @@ func (m *InstrumentationManager) GetDecoratorPackage() *decorator.Package {
 	return m.getDecoratorPackage()
 }
 
+// Facts returns the facts keeper (exported for integrations)
+func (m *InstrumentationManager) Facts() *facts.Keeper {
+	return &m.facts
+}
+
 func (m *InstrumentationManager) getImports() []string {
 	i := 0
 	state, ok := m.packages[m.currentPackage]

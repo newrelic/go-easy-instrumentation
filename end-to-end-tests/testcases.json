@@ -10,10 +10,10 @@
     },
     {
       "name": "grpc app",
-      "dir": "end-to-end-tests/grpc",
+      "dir": "integrations/nrgrpc/example/grpc",
       "builds": [
-        "end-to-end-tests/grpc/server",
-        "end-to-end-tests/grpc/client"
+        "integrations/nrgrpc/example/grpc/server",
+        "integrations/nrgrpc/example/grpc/client"
       ]
     },
     {
