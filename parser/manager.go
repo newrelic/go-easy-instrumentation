@@ -149,6 +149,11 @@ func (m *InstrumentationManager) AgentVariableName() string {
 	return m.agentVariableName
 }
 
+// GetDecoratorPackage returns the decorator package for the current package (exported for integrations)
+func (m *InstrumentationManager) GetDecoratorPackage() *decorator.Package {
+	return m.getDecoratorPackage()
+}
+
 func (m *InstrumentationManager) getImports() []string {
 	i := 0
 	state, ok := m.packages[m.currentPackage]

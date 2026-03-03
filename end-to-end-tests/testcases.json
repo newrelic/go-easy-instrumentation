@@ -34,7 +34,7 @@
     },
     {
       "name": "gochi app",
-      "dir": "end-to-end-tests/gochi"
+      "dir": "integrations/nrgochi/example/gochi"
     },
     {
        "name": "slog app",
