@@ -149,6 +149,11 @@ func (m *InstrumentationManager) AgentVariableName() string {
 	return m.agentVariableName
 }
 
+// SetAgentVariableName sets the New Relic agent variable name (exported for integrations)
+func (m *InstrumentationManager) SetAgentVariableName(name string) {
+	m.agentVariableName = name
+}
+
 // GetDecoratorPackage returns the decorator package for the current package (exported for integrations)
 func (m *InstrumentationManager) GetDecoratorPackage() *decorator.Package {
 	return m.getDecoratorPackage()
@@ -157,6 +162,26 @@ func (m *InstrumentationManager) GetDecoratorPackage() *decorator.Package {
 // Facts returns the facts keeper (exported for integrations)
 func (m *InstrumentationManager) Facts() *facts.Keeper {
 	return &m.facts
+}
+
+// AppName returns the application name (exported for integrations)
+func (m *InstrumentationManager) AppName() string {
+	return m.appName
+}
+
+// SetupFunc returns the setup function declaration (exported for integrations)
+func (m *InstrumentationManager) SetupFunc() *dst.FuncDecl {
+	return m.setupFunc
+}
+
+// SetSetupFunc sets the setup function declaration (exported for integrations)
+func (m *InstrumentationManager) SetSetupFunc(fn *dst.FuncDecl) {
+	m.setupFunc = fn
+}
+
+// ErrorCache returns the error cache (exported for integrations)
+func (m *InstrumentationManager) ErrorCache() *errorcache.ErrorCache {
+	return &m.errorCache
 }
 
 func (m *InstrumentationManager) getImports() []string {
