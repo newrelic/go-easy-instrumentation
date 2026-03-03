@@ -1,6 +1,7 @@
 package nrmysql_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
 	"go/token"
 	"testing"
 
@@ -8,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCreateSQLTransaction(t *testing.T) {
+func Testnrmysql.CreateSQLTransaction(t *testing.T) {
 	tests := []struct {
 		name           string
 		agentVarName   string
@@ -45,7 +46,7 @@ func TestCreateSQLTransaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CreateSQLTransaction(tt.agentVarName, tt.txnVarName, tt.sqlMethodName)
+			got := nrmysql.CreateSQLTransaction(tt.agentVarName, tt.txnVarName, tt.sqlMethodName)
 
 			// Check it's an assignment statement with DEFINE token
 			assert.NotNil(t, got)
@@ -81,7 +82,7 @@ func TestCreateSQLTransaction(t *testing.T) {
 	}
 }
 
-func TestCreateContextWithTransaction(t *testing.T) {
+func Testnrmysql.CreateContextWithTransaction(t *testing.T) {
 	tests := []struct {
 		name       string
 		ctxName    string
@@ -107,7 +108,7 @@ func TestCreateContextWithTransaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CreateContextWithTransaction(tt.ctxName, tt.txnName)
+			got := nrmysql.CreateContextWithTransaction(tt.ctxName, tt.txnName)
 
 			// Check it's an assignment statement with DEFINE token
 			assert.NotNil(t, got)
@@ -156,7 +157,7 @@ func TestCreateContextWithTransaction(t *testing.T) {
 	}
 }
 
-func TestCreateTransactionEnd(t *testing.T) {
+func Testnrmysql.CreateTransactionEnd(t *testing.T) {
 	tests := []struct {
 		name       string
 		txnName    string
@@ -176,7 +177,7 @@ func TestCreateTransactionEnd(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CreateTransactionEnd(tt.txnName)
+			got := nrmysql.CreateTransactionEnd(tt.txnName)
 
 			// Check it's an expression statement
 			assert.NotNil(t, got)

@@ -1,6 +1,9 @@
 package nrgin_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -33,6 +36,9 @@ func TestInstrumentGinRouter(t *testing.T) {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -59,6 +65,9 @@ func main() {
 			code: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/gin-gonic/gin"
 )
 
@@ -74,6 +83,9 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -106,8 +118,8 @@ func main() {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, InstrumentMain, InstrumentGinMiddleware)
+			defer parser.PanicRecovery(t)
+			got := parser.RunStatelessTracingFunction(t, tt.code, nragent.InstrumentMain, nrgin.InstrumentGinMiddleware)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
@@ -132,7 +144,7 @@ func TestGinMiddlewareCall(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "Default",
-							Path: ginImportPath,
+							Path: nrgin.GinImportPath,
 						},
 					},
 				},
@@ -152,7 +164,7 @@ func TestGinMiddlewareCall(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "New",
-							Path: ginImportPath,
+							Path: nrgin.GinImportPath,
 						},
 					},
 				},
@@ -192,13 +204,13 @@ func TestGinMiddlewareCall(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "New",
-							Path: ginImportPath,
+							Path: nrgin.GinImportPath,
 						},
 					},
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "Default",
-							Path: ginImportPath,
+							Path: nrgin.GinImportPath,
 						},
 					},
 				},
@@ -208,8 +220,8 @@ func TestGinMiddlewareCall(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			got := ginMiddlewareCall(tt.stmt)
+			defer parser.PanicRecovery(t)
+			got := nrgin.GinMiddlewareCall(tt.stmt)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -227,7 +239,7 @@ func TestGetGinHandlerContext(t *testing.T) {
 					},
 					Type: &dst.Ident{
 						Name: "Context",
-						Path: ginImportPath,
+						Path: nrgin.GinImportPath,
 					},
 				},
 			},
@@ -297,7 +309,7 @@ func TestGetGinHandlerContext(t *testing.T) {
 							},
 							Type: &dst.Ident{
 								Name: "Context",
-								Path: ginImportPath,
+								Path: nrgin.GinImportPath,
 							},
 						},
 						{
@@ -306,7 +318,7 @@ func TestGetGinHandlerContext(t *testing.T) {
 							},
 							Type: &dst.Ident{
 								Name: "Context",
-								Path: ginImportPath,
+								Path: nrgin.GinImportPath,
 							},
 						},
 					},
@@ -324,7 +336,7 @@ func TestGetGinHandlerContext(t *testing.T) {
 							Names: []*dst.Ident{},
 							Type: &dst.Ident{
 								Name: "Context",
-								Path: ginImportPath,
+								Path: nrgin.GinImportPath,
 							},
 						},
 					},
@@ -337,7 +349,7 @@ func TestGetGinHandlerContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ok := getGinContextFromHandler(tt.node, tt.pkg)
+			ok := nrgin.GetGinContextFromHandler(tt.node, tt.pkg)
 			if ok != tt.want {
 				t.Errorf("expected %v, got %v", tt.want, ok)
 			}
@@ -406,7 +418,7 @@ func TestDefineTxnFromGinCtx(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defineTxnFromGinCtx(tt.body, tt.txnVariable, tt.ctxName)
+			nrgin.DefineTxnFromGinCtx(tt.body, tt.txnVariable, tt.ctxName)
 			assert.Equal(t, tt.want, tt.body)
 		})
 	}

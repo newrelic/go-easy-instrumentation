@@ -1,6 +1,9 @@
 package nrgochi_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"go/token"
 	"testing"
 
@@ -18,6 +21,9 @@ func TestInstrumentChiRouter(t *testing.T) {
 			name: "detect and trace chi router in main function",
 			code: `package main
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	chi "github.com/go-chi/chi/v5"
@@ -31,6 +37,9 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -57,6 +66,9 @@ func main() {
 			name: "detect and trace chi router in setup function",
 			code: `package main
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	chi "github.com/go-chi/chi/v5"
@@ -75,6 +87,9 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -108,8 +123,8 @@ func main() {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, InstrumentMain, InstrumentChiMiddleware)
+			defer parser.PanicRecovery(t)
+			got := parser.RunStatelessTracingFunction(t, tt.code, nragent.InstrumentMain, nrgochi.InstrumentChiMiddleware)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
@@ -184,14 +199,14 @@ func TestChiMiddlewareCall(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
+			defer parser.PanicRecovery(t)
 			got := getChiRouterName(tt.stmt)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func TestInstrumentChiRouterLiteral(t *testing.T) {
+func Testnrgochi.InstrumentChiRouterLiteral(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -201,6 +216,9 @@ func TestInstrumentChiRouterLiteral(t *testing.T) {
 			name: "Instrument Chi Literal in http method handler",
 			code: `package main
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	chi "github.com/go-chi/chi/v5"
@@ -216,6 +234,9 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -247,6 +268,9 @@ func main() {
 			code: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	chi "github.com/go-chi/chi/v5"
@@ -274,6 +298,9 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -321,8 +348,8 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, InstrumentMain, InstrumentChiRouterLiteral)
+			defer parser.PanicRecovery(t)
+			got := parser.RunStatelessTracingFunction(t, tt.code, nragent.InstrumentMain, nrgochi.InstrumentChiRouterLiteral)
 			assert.Equal(t, tt.expect, got)
 		})
 	}

@@ -19,7 +19,7 @@ const (
 )
 
 // ginMiddlewareCall returns the variable name of the gin router so that new relic middleware can be appended
-func ginMiddlewareCall(stmt dst.Stmt) string {
+func GinMiddlewareCall(stmt dst.Stmt) string {
 	v, ok := stmt.(*dst.AssignStmt)
 	if !ok || len(v.Rhs) != 1 {
 		return ""
@@ -39,7 +39,7 @@ func ginMiddlewareCall(stmt dst.Stmt) string {
 
 // getGinContextFromHandler checks the type of a function or function literal declaration to determine if
 // this is a Gin handler. returns the context variable of the gin handler
-func getGinContextFromHandler(nodeType *dst.FuncType, pkg *decorator.Package) string {
+func GetGinContextFromHandler(nodeType *dst.FuncType, pkg *decorator.Package) string {
 	// gin functions should only have 1 parameter
 	if len(nodeType.Params.List) != 1 {
 		return ""
@@ -63,7 +63,7 @@ func getGinContextFromHandler(nodeType *dst.FuncType, pkg *decorator.Package) st
 }
 
 // defineTxnFromGinCtx injects a line of code that extracts a transaction from the gin context into the function body
-func defineTxnFromGinCtx(body *dst.BlockStmt, txnVariable string, ctxName string) {
+func DefineTxnFromGinCtx(body *dst.BlockStmt, txnVariable string, ctxName string) {
 	stmts := make([]dst.Stmt, len(body.List)+1)
 	stmts[0] = TxnFromGinContext(txnVariable, ctxName)
 	for i, stmt := range body.List {
@@ -79,7 +79,7 @@ func defineTxnFromGinCtx(body *dst.BlockStmt, txnVariable string, ctxName string
 // that are being traced by a transaction.
 func InstrumentGinMiddleware(manager *parser.InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	// Check if any return true for ginMiddlewareCall
-	routerName := ginMiddlewareCall(stmt)
+	routerName := GinMiddlewareCall(stmt)
 	if routerName == "" {
 		return false
 	}
@@ -101,7 +101,7 @@ func InstrumentGinFunction(manager *parser.InstrumentationManager, c *dstutil.Cu
 	currentNode := c.Node()
 	switch v := currentNode.(type) {
 	case *dst.FuncDecl:
-		ctxName := getGinContextFromHandler(v.Type, manager.GetDecoratorPackage())
+		ctxName := GetGinContextFromHandler(v.Type, manager.GetDecoratorPackage())
 		if ctxName == "" {
 			return
 		}
@@ -111,11 +111,11 @@ func InstrumentGinFunction(manager *parser.InstrumentationManager, c *dstutil.Cu
 		txnName := codegen.DefaultTransactionVariable
 		_, ok := parser.TraceFunction(manager, funcDecl, tracestate.FunctionBody(txnName))
 		if ok {
-			defineTxnFromGinCtx(funcDecl.Body, txnName, ctxName)
+			DefineTxnFromGinCtx(funcDecl.Body, txnName, ctxName)
 		}
 
 	case *dst.FuncLit:
-		ctxName := getGinContextFromHandler(v.Type, manager.GetDecoratorPackage())
+		ctxName := GetGinContextFromHandler(v.Type, manager.GetDecoratorPackage())
 		if ctxName == "" {
 			return
 		}
@@ -125,7 +125,7 @@ func InstrumentGinFunction(manager *parser.InstrumentationManager, c *dstutil.Cu
 		txnName := codegen.DefaultTransactionVariable
 		tc := tracestate.FunctionBody(codegen.DefaultTransactionVariable).FuncLiteralDeclaration(manager.GetDecoratorPackage(), funcLit)
 		tc.CreateSegment(funcLit)
-		defineTxnFromGinCtx(funcLit.Body, txnName, ctxName)
+		DefineTxnFromGinCtx(funcLit.Body, txnName, ctxName)
 		comment.Warn(manager.GetDecoratorPackage(), c.Parent(), c.Node(), "function literal segments will be named \"function literal\" by default", "declare a function instead to improve segment name generation")
 	}
 }

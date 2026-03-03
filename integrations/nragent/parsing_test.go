@@ -1,6 +1,8 @@
 package nragent_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"testing"
 
 	"github.com/dave/dst"
@@ -93,6 +95,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -141,6 +145,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -189,6 +195,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -220,6 +228,8 @@ func main() {
 			code: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"log"
 	"net/http"
 )
@@ -238,6 +248,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"log"
 	"net/http"
 	"time"
@@ -291,6 +303,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -316,14 +330,14 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, InstrumentMain)
+			defer parser.PanicRecovery(t)
+			got := parser.RunStatelessTracingFunction(t, tt.code, nragent.InstrumentMain)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
 }
 
-func TestInstrumentMain(t *testing.T) {
+func Testnragent.InstrumentMain(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -349,6 +363,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -400,6 +416,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -438,6 +456,8 @@ func main() {
 			code: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"context"
 	"net/http"
 	"time"
@@ -458,6 +478,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"context"
 	"net/http"
 	"time"
@@ -512,6 +534,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -565,6 +589,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -597,6 +623,8 @@ func main() {
 			code: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"time"
 	"net/http"
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -631,6 +659,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-agent/v3/newrelic"
 	"net/http"
 	"time"
@@ -668,8 +698,8 @@ func main() {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, InstrumentMain)
+			defer parser.PanicRecovery(t)
+			got := parser.RunStatelessTracingFunction(t, tt.code, nragent.InstrumentMain)
 			assert.Equal(t, tt.expect, got)
 		})
 	}

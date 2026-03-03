@@ -1,6 +1,7 @@
 package nrgin_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
 	"go/token"
 	"reflect"
 	"testing"
@@ -26,7 +27,7 @@ func Test_NrGinMiddleware(t *testing.T) {
 					Fun: &dst.SelectorExpr{
 						X: &dst.Ident{
 							Name: "Default",
-							Path: GinImportPath,
+							Path: nrgin.GinImportPath,
 						},
 					},
 				},
@@ -47,7 +48,7 @@ func Test_NrGinMiddleware(t *testing.T) {
 						&dst.CallExpr{
 							Fun: &dst.Ident{
 								Name: "Middleware",
-								Path: NrginImportPath,
+								Path: nrgin.NrginImportPath,
 							},
 							Args: []dst.Expr{
 								&dst.Ident{Name: "NewRelicApplication"},
@@ -60,12 +61,12 @@ func Test_NrGinMiddleware(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, imp := NrGinMiddleware(tt.args.routerName, tt.args.agentVariableName)
+			got, imp := nrgin.NrGinMiddleware(tt.args.routerName, tt.args.agentVariableName)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NrGinMiddleware() = %v, want %v", got, tt.want)
+				t.Errorf("nrgin.NrGinMiddleware() = %v, want %v", got, tt.want)
 			}
-			if imp != NrginImportPath {
-				t.Errorf("NrGinMiddleware() = %v, want %v", imp, NrginImportPath)
+			if imp != nrgin.NrginImportPath {
+				t.Errorf("nrgin.NrGinMiddleware() = %v, want %v", imp, nrgin.NrginImportPath)
 			}
 		})
 	}
@@ -98,7 +99,7 @@ func Test_TxnFromGinContext(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "Transaction",
-							Path: NrginImportPath,
+							Path: nrgin.NrginImportPath,
 						},
 						Args: []dst.Expr{
 							&dst.Ident{
@@ -117,8 +118,8 @@ func Test_TxnFromGinContext(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := TxnFromGinContext(tt.args.txnVariable, tt.args.ctxName); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("TxnFromGinContext() = %v, want %v", got, tt.want)
+			if got := nrgin.TxnFromGinContext(tt.args.txnVariable, tt.args.ctxName); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("nrgin.TxnFromGinContext() = %v, want %v", got, tt.want)
 			}
 		})
 	}

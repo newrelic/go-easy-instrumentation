@@ -1,6 +1,8 @@
 package nrmysql_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"go/token"
 	"testing"
 
@@ -19,6 +21,8 @@ func TestInstrumentSQLHandler(t *testing.T) {
 			code: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -36,6 +40,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -60,6 +66,8 @@ func main() {
 			code: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -90,6 +98,8 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -126,8 +136,8 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, InstrumentSQLHandler)
+			defer parser.PanicRecovery(t)
+			got := parser.RunStatelessTracingFunction(t, tt.code, InstrumentSQLHandler)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
@@ -212,7 +222,7 @@ func TestDetectSQLOpenCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
+			defer parser.PanicRecovery(t)
 			got := detectSQLOpenCall(tt.stmt)
 			assert.Equal(t, tt.want, got)
 		})
@@ -330,7 +340,7 @@ func TestDetectSQLExecutionCall(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
+			defer parser.PanicRecovery(t)
 			got := detectSQLExecutionCall(tt.stmt, tt.dbName)
 			assert.Equal(t, tt.want, got)
 		})
@@ -414,7 +424,7 @@ func TestReplaceSQLMethodWithContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
+			defer parser.PanicRecovery(t)
 			replaceSQLMethodWithContext(tt.stmt, tt.ctxName)
 
 			assignStmt := tt.stmt.(*dst.AssignStmt)
@@ -551,7 +561,7 @@ func TestFindLastUsageOfVariable(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
+			defer parser.PanicRecovery(t)
 			got := findLastUsageOfExecutionResult(tt.stmts, tt.varName, tt.startIndex)
 			assert.Equal(t, tt.want, got)
 		})

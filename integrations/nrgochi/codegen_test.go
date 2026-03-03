@@ -1,6 +1,7 @@
 package nrgochi_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
 	"reflect"
 	"testing"
 
@@ -53,7 +54,7 @@ func Test_NrChiMiddleware(t *testing.T) {
 						&dst.CallExpr{
 							Fun: &dst.Ident{
 								Name: "Middleware",
-								Path: NrChiImportPath,
+								Path: nrgochi.NrChiImportPath,
 							},
 							Args: []dst.Expr{
 								&dst.Ident{Name: "NewRelicApplication"},
@@ -67,12 +68,12 @@ func Test_NrChiMiddleware(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, imp := NrChiMiddleware(tt.args.routerName, tt.args.agentVariableName)
+			got, imp := nrgochi.NrChiMiddleware(tt.args.routerName, tt.args.agentVariableName)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NrChiMiddleware() = %v, want %v", got, tt.want)
+				t.Errorf("nrgochi.NrChiMiddleware() = %v, want %v", got, tt.want)
 			}
-			if imp != NrChiImportPath {
-				t.Errorf("NrChiMiddleware() = %v, want %v", imp, NrChiImportPath)
+			if imp != nrgochi.NrChiImportPath {
+				t.Errorf("nrgochi.NrChiMiddleware() = %v, want %v", imp, nrgochi.NrChiImportPath)
 			}
 		})
 	}

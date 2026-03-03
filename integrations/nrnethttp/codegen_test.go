@@ -1,6 +1,7 @@
 package nrnethttp_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
 	"go/token"
 	"reflect"
 	"testing"
@@ -8,7 +9,7 @@ import (
 	"github.com/dave/dst"
 )
 
-func Test_injectRoundTripper(t *testing.T) {
+func Test_RoundTripper(t *testing.T) {
 	type args struct {
 		clientVariable dst.Expr
 		spacingAfter   dst.SpaceType
@@ -56,8 +57,8 @@ func Test_injectRoundTripper(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := RoundTripper(tt.args.clientVariable, tt.args.spacingAfter); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("injectRoundTripper() = %v, want %v", got, tt.want)
+			if got := nrnethttp.RoundTripper(tt.args.clientVariable, tt.args.spacingAfter); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("injectnrnethttp.RoundTripper() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -79,7 +80,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 			args: args{
 				request: &dst.Ident{
 					Name: "r",
-					Path: HttpImportPath,
+					Path: nrnethttp.HttpImportPath,
 				},
 				txnVar: dst.NewIdent("txn"),
 				nodeDecs: &dst.NodeDecs{
@@ -91,7 +92,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 				Tok: token.ASSIGN,
 				Lhs: []dst.Expr{dst.Clone(&dst.Ident{
 					Name: "r",
-					Path: HttpImportPath,
+					Path: nrnethttp.HttpImportPath,
 				}).(dst.Expr)},
 				Rhs: []dst.Expr{
 					&dst.CallExpr{
@@ -102,7 +103,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 						Args: []dst.Expr{
 							dst.Clone(&dst.Ident{
 								Name: "r",
-								Path: HttpImportPath,
+								Path: nrnethttp.HttpImportPath,
 							}).(dst.Expr),
 							dst.NewIdent("txn"),
 						},
@@ -119,7 +120,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := WrapRequestContext(tt.args.request, tt.args.txnVar, tt.args.nodeDecs); !reflect.DeepEqual(got, tt.want) {
+			if got := nrnethttp.WrapRequestContext(tt.args.request, tt.args.txnVar, tt.args.nodeDecs); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("addTxnToRequestContext() = %v, want %v", got, tt.want)
 			}
 			if len(tt.args.nodeDecs.Start) != 0 {

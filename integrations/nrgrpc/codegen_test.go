@@ -1,6 +1,7 @@
 package nrgrpc_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"go/token"
 	"reflect"
 	"testing"
@@ -8,7 +9,7 @@ import (
 	"github.com/dave/dst"
 )
 
-func Test_getCallExpressionArgumentSpacing(t *testing.T) {
+func Test_GetCallExpressionArgumentSpacing(t *testing.T) {
 	type args struct {
 		call *dst.CallExpr
 	}
@@ -23,7 +24,7 @@ func Test_getCallExpressionArgumentSpacing(t *testing.T) {
 				call: &dst.CallExpr{
 					Fun: &dst.Ident{
 						Name: "NewServer",
-						Path: GrpcImportPath,
+						Path: nrgrpc.GrpcImportPath,
 					},
 					Args: []dst.Expr{},
 				},
@@ -39,7 +40,7 @@ func Test_getCallExpressionArgumentSpacing(t *testing.T) {
 				call: &dst.CallExpr{
 					Fun: &dst.Ident{
 						Name: "NewServer",
-						Path: GrpcImportPath,
+						Path: nrgrpc.GrpcImportPath,
 					},
 					Args: []dst.Expr{
 						&dst.BasicLit{
@@ -60,7 +61,7 @@ func Test_getCallExpressionArgumentSpacing(t *testing.T) {
 				call: &dst.CallExpr{
 					Fun: &dst.Ident{
 						Name: "NewServer",
-						Path: GrpcImportPath,
+						Path: nrgrpc.GrpcImportPath,
 					},
 					Args: []dst.Expr{
 						&dst.BasicLit{
@@ -88,7 +89,7 @@ func Test_getCallExpressionArgumentSpacing(t *testing.T) {
 				call: &dst.CallExpr{
 					Fun: &dst.Ident{
 						Name: "NewServer",
-						Path: GrpcImportPath,
+						Path: nrgrpc.GrpcImportPath,
 					},
 					Args: []dst.Expr{
 						&dst.BasicLit{
@@ -119,8 +120,8 @@ func Test_getCallExpressionArgumentSpacing(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := getCallExpressionArgumentSpacing(tt.args.call); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getCallExpressionArgumentSpacing() = %v, want %v", got, tt.want)
+			if got := nrgrpc.GetCallExpressionArgumentSpacing(tt.args.call); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("nrgrpc.GetCallExpressionArgumentSpacing() = %v, want %v", got, tt.want)
 			}
 			if len(tt.args.call.Args) == 1 {
 				if tt.args.call.Args[0].Decorations().After != dst.NewLine {
@@ -134,7 +135,7 @@ func Test_getCallExpressionArgumentSpacing(t *testing.T) {
 	}
 }
 
-func TestNrGrpcUnaryClientInterceptor(t *testing.T) {
+func Testnrgrpc.NrGrpcUnaryClientInterceptor(t *testing.T) {
 	tests := []struct {
 		name     string
 		call     *dst.CallExpr
@@ -146,11 +147,11 @@ func TestNrGrpcUnaryClientInterceptor(t *testing.T) {
 			call: &dst.CallExpr{
 				Fun: &dst.Ident{
 					Name: "Dial",
-					Path: GrpcImportPath,
+					Path: nrgrpc.GrpcImportPath,
 				},
 				Args: []dst.Expr{},
 			},
-			wantPath: GrpcImportPath,
+			wantPath: nrgrpc.GrpcImportPath,
 			wantName: "WithUnaryInterceptor",
 		},
 		{
@@ -158,7 +159,7 @@ func TestNrGrpcUnaryClientInterceptor(t *testing.T) {
 			call: &dst.CallExpr{
 				Fun: &dst.Ident{
 					Name: "Dial",
-					Path: GrpcImportPath,
+					Path: nrgrpc.GrpcImportPath,
 				},
 				Args: []dst.Expr{
 					&dst.BasicLit{
@@ -167,17 +168,17 @@ func TestNrGrpcUnaryClientInterceptor(t *testing.T) {
 					},
 				},
 			},
-			wantPath: GrpcImportPath,
+			wantPath: nrgrpc.GrpcImportPath,
 			wantName: "WithUnaryInterceptor",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NrGrpcUnaryClientInterceptor(tt.call)
+			got := nrgrpc.NrGrpcUnaryClientInterceptor(tt.call)
 
 			if got == nil {
-				t.Fatal("NrGrpcUnaryClientInterceptor() returned nil")
+				t.Fatal("nrgrpc.NrGrpcUnaryClientInterceptor() returned nil")
 			}
 
 			// Check the function identifier
@@ -210,7 +211,7 @@ func TestNrGrpcUnaryClientInterceptor(t *testing.T) {
 	}
 }
 
-func TestNrGrpcStreamClientInterceptor(t *testing.T) {
+func Testnrgrpc.NrGrpcStreamClientInterceptor(t *testing.T) {
 	tests := []struct {
 		name     string
 		call     *dst.CallExpr
@@ -222,21 +223,21 @@ func TestNrGrpcStreamClientInterceptor(t *testing.T) {
 			call: &dst.CallExpr{
 				Fun: &dst.Ident{
 					Name: "Dial",
-					Path: GrpcImportPath,
+					Path: nrgrpc.GrpcImportPath,
 				},
 				Args: []dst.Expr{},
 			},
-			wantPath: GrpcImportPath,
+			wantPath: nrgrpc.GrpcImportPath,
 			wantName: "WithStreamInterceptor",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NrGrpcStreamClientInterceptor(tt.call)
+			got := nrgrpc.NrGrpcStreamClientInterceptor(tt.call)
 
 			if got == nil {
-				t.Fatal("NrGrpcStreamClientInterceptor() returned nil")
+				t.Fatal("nrgrpc.NrGrpcStreamClientInterceptor() returned nil")
 			}
 
 			// Check the function identifier
@@ -269,7 +270,7 @@ func TestNrGrpcStreamClientInterceptor(t *testing.T) {
 	}
 }
 
-func TestNrGrpcUnaryServerInterceptor(t *testing.T) {
+func Testnrgrpc.NrGrpcUnaryServerInterceptor(t *testing.T) {
 	tests := []struct {
 		name          string
 		agentVariable dst.Expr
@@ -283,21 +284,21 @@ func TestNrGrpcUnaryServerInterceptor(t *testing.T) {
 			call: &dst.CallExpr{
 				Fun: &dst.Ident{
 					Name: "NewServer",
-					Path: GrpcImportPath,
+					Path: nrgrpc.GrpcImportPath,
 				},
 				Args: []dst.Expr{},
 			},
-			wantPath: GrpcImportPath,
+			wantPath: nrgrpc.GrpcImportPath,
 			wantName: "UnaryInterceptor",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NrGrpcUnaryServerInterceptor(tt.agentVariable, tt.call)
+			got := nrgrpc.NrGrpcUnaryServerInterceptor(tt.agentVariable, tt.call)
 
 			if got == nil {
-				t.Fatal("NrGrpcUnaryServerInterceptor() returned nil")
+				t.Fatal("nrgrpc.NrGrpcUnaryServerInterceptor() returned nil")
 			}
 
 			// Check the function identifier
@@ -341,7 +342,7 @@ func TestNrGrpcUnaryServerInterceptor(t *testing.T) {
 	}
 }
 
-func TestNrGrpcStreamServerInterceptor(t *testing.T) {
+func Testnrgrpc.NrGrpcStreamServerInterceptor(t *testing.T) {
 	tests := []struct {
 		name          string
 		agentVariable dst.Expr
@@ -355,21 +356,21 @@ func TestNrGrpcStreamServerInterceptor(t *testing.T) {
 			call: &dst.CallExpr{
 				Fun: &dst.Ident{
 					Name: "NewServer",
-					Path: GrpcImportPath,
+					Path: nrgrpc.GrpcImportPath,
 				},
 				Args: []dst.Expr{},
 			},
-			wantPath: GrpcImportPath,
+			wantPath: nrgrpc.GrpcImportPath,
 			wantName: "StreamInterceptor",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NrGrpcStreamServerInterceptor(tt.agentVariable, tt.call)
+			got := nrgrpc.NrGrpcStreamServerInterceptor(tt.agentVariable, tt.call)
 
 			if got == nil {
-				t.Fatal("NrGrpcStreamServerInterceptor() returned nil")
+				t.Fatal("nrgrpc.NrGrpcStreamServerInterceptor() returned nil")
 			}
 
 			// Check the function identifier
@@ -413,7 +414,7 @@ func TestNrGrpcStreamServerInterceptor(t *testing.T) {
 	}
 }
 
-func TestGrpcStreamContext(t *testing.T) {
+func Testnrgrpc.GrpcStreamContext(t *testing.T) {
 	tests := []struct {
 		name              string
 		streamServerObject *dst.Ident
@@ -430,10 +431,10 @@ func TestGrpcStreamContext(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GrpcStreamContext(tt.streamServerObject)
+			got := nrgrpc.GrpcStreamContext(tt.streamServerObject)
 
 			if got == nil {
-				t.Fatal("GrpcStreamContext() returned nil")
+				t.Fatal("nrgrpc.GrpcStreamContext() returned nil")
 			}
 
 			// Check it's a selector expression

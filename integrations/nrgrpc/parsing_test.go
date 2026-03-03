@@ -1,6 +1,7 @@
 package nrgrpc_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"go/ast"
 	"go/token"
 	"go/types"
@@ -16,7 +17,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func TestInstrumentGrpcDial(t *testing.T) {
+func Testnrgrpc.InstrumentGrpcDial(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -42,6 +43,7 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"github.com/newrelic/go-agent/v3/integrations/nrgrpc"
 	"google.golang.org/grpc"
 )
@@ -63,14 +65,14 @@ func main() {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			got := testStatelessTracingFunction(t, tt.code, InstrumentGrpcDial)
+			defer parser.PanicRecovery(t)
+			got := parser.RunStatelessTracingFunction(t, tt.code, nrgrpc.InstrumentGrpcDial)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
 }
 
-func TestInstrumentGrpcServer(t *testing.T) {
+func Testnrgrpc.InstrumentGrpcServer(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -91,6 +93,7 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"github.com/newrelic/go-agent/v3/integrations/nrgrpc"
 	"google.golang.org/grpc"
 )
@@ -108,8 +111,8 @@ func main() {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			got := testStatefulTracingFunction(t, tt.code, InstrumentGrpcServer, false)
+			defer parser.PanicRecovery(t)
+			got := parser.RunStatefulTracingFunction(t, tt.code, nrgrpc.InstrumentGrpcServer, false)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
