@@ -110,23 +110,6 @@ func (m *InstrumentationManager) LoadDependencyScans(scans ...FactDiscoveryFunct
 	m.tracingFunctions.dependency = append(m.tracingFunctions.dependency, scans...)
 }
 
-// Internal unexported versions for backward compatibility
-func (m *InstrumentationManager) loadPreInstrumentationTracingFunctions(functions ...PreInstrumentationTracingFunction) {
-	m.LoadPreInstrumentationTracingFunctions(functions...)
-}
-
-func (m *InstrumentationManager) loadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
-	m.LoadStatefulTracingFunctions(functions...)
-}
-
-func (m *InstrumentationManager) loadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
-	m.LoadStatelessTracingFunctions(functions...)
-}
-
-func (m *InstrumentationManager) loadDependencyScans(scans ...FactDiscoveryFunction) {
-	m.LoadDependencyScans(scans...)
-}
-
 func (m *InstrumentationManager) CreateDiffFile() error {
 	f, err := os.Create(m.diffFile)
 	f.Close()

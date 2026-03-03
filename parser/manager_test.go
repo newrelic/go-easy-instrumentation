@@ -61,7 +61,7 @@ func Test_AddImport(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			m.addImport(tt.args.path)
 
 			if m.packages["foo"].importsAdded["bar"] != true && tt.expect {
@@ -186,7 +186,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			m.createFunctionDeclaration(tt.args.decl)
 
 			if tt.expect {
@@ -254,7 +254,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			m.updateFunctionDeclaration(tt.args.decl)
 
 			if tt.updates && reflect.DeepEqual(m.packages["foo"].tracedFuncs["bar"].body, tt.args.decl) == false {
@@ -426,7 +426,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			got := m.findInvocationInfo(tt.args.node, tracestate.FunctionBody(codegen.DefaultTransactionVariable))
 			assert.Equal(t, tt.want, got)
 		})
@@ -498,7 +498,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			got := m.shouldInstrumentFunction(tt.args.inv)
 			if got != tt.want {
 				t.Errorf("InstrumentationManager.ShouldInstrumentFunction() = %v, want %v", got, tt.want)
@@ -568,7 +568,7 @@ func Test_GetInvocationInfoFromCall(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			got := m.getInvocationInfoFromCall(tt.args.call, tt.args.forTest)
 			assert.Equal(t, tt.want, got)
 		})
@@ -918,7 +918,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 		{
 			name: "loadStatelessTracingFunctions_adds_functions",
 			testFunc: func(m *InstrumentationManager) {
-				m.loadStatelessTracingFunctions(mockStateless, mockStateless)
+				m.LoadStatelessTracingFunctions(mockStateless, mockStateless)
 			},
 			verify: func(t *testing.T, m *InstrumentationManager) {
 				assert.Equal(t, 2, len(m.tracingFunctions.stateless))
@@ -927,7 +927,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 		{
 			name: "loadStatefulTracingFunctions_adds_functions",
 			testFunc: func(m *InstrumentationManager) {
-				m.loadStatefulTracingFunctions(mockStateful, mockStateful, mockStateful)
+				m.LoadStatefulTracingFunctions(mockStateful, mockStateful, mockStateful)
 			},
 			verify: func(t *testing.T, m *InstrumentationManager) {
 				assert.Equal(t, 3, len(m.tracingFunctions.stateful))
@@ -936,7 +936,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 		{
 			name: "loadDependencyScans_adds_scans",
 			testFunc: func(m *InstrumentationManager) {
-				m.loadDependencyScans(mockDependency)
+				m.LoadDependencyScans(mockDependency)
 			},
 			verify: func(t *testing.T, m *InstrumentationManager) {
 				assert.Equal(t, 1, len(m.tracingFunctions.dependency))
@@ -945,7 +945,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 		{
 			name: "loadPreInstrumentationTracingFunctions_adds_functions",
 			testFunc: func(m *InstrumentationManager) {
-				m.loadPreInstrumentationTracingFunctions(mockPreInstrumentation, mockPreInstrumentation)
+				m.LoadPreInstrumentationTracingFunctions(mockPreInstrumentation, mockPreInstrumentation)
 			},
 			verify: func(t *testing.T, m *InstrumentationManager) {
 				assert.Equal(t, 2, len(m.tracingFunctions.preinstrumentation))
@@ -1001,25 +1001,11 @@ func Test_AddImport_EmptyPath(t *testing.T) {
 	assert.Equal(t, 0, len(m.packages["foo"].importsAdded))
 }
 
+// Test_DetectDependencyIntegrations is obsolete - integration registration moved to cmd/instrument.go
+// Integration registration is now done via cmd/instrument.go's registerIntegrations() function
+// which uses dependency injection to register all integration functions with the manager.
 func Test_DetectDependencyIntegrations(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{
-			name: "loads_all_tracing_functions",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := NewInstrumentationManager([]*decorator.Package{}, "app", "agent", "diff.txt", "/path")
-			err := m.DetectDependencyIntegrations()
-			assert.NoError(t, err)
-			assert.Greater(t, len(m.tracingFunctions.stateless), 0)
-			assert.Greater(t, len(m.tracingFunctions.stateful), 0)
-			assert.Greater(t, len(m.tracingFunctions.dependency), 0)
-			assert.Greater(t, len(m.tracingFunctions.preinstrumentation), 0)
-		})
-	}
+	t.Skip("Integration registration moved to cmd/instrument.go - test no longer applicable")
 }
 
 func Test_InstrumentPackages(t *testing.T) {

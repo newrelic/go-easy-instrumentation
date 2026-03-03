@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/dave/dst"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -30,7 +31,7 @@ func Test_InitializeAgent(t *testing.T) {
 						Name: "testAgent",
 					},
 					&dst.Ident{
-						Name: agentErrorVariableName,
+						Name: nragent.AgentErrorVariableName,
 					},
 				},
 				Tok: token.DEFINE,
@@ -38,19 +39,19 @@ func Test_InitializeAgent(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "NewApplication",
-							Path: NewRelicAgentImportPath,
+							Path: nragent.NewRelicAgentImportPath,
 						},
 						Args: []dst.Expr{
 							&dst.CallExpr{
 								Fun: &dst.Ident{
-									Path: NewRelicAgentImportPath,
+									Path: nragent.NewRelicAgentImportPath,
 									Name: "ConfigFromEnvironment",
 								},
 							},
 						},
 					},
 				},
-			}, panicOnError(agentErrorVariableName)},
+			}, nragent.PanicOnError(nragent.AgentErrorVariableName)},
 		},
 		{
 			name: "Test create agent AST with AppName",
@@ -64,7 +65,7 @@ func Test_InitializeAgent(t *testing.T) {
 						Name: "testAgent",
 					},
 					&dst.Ident{
-						Name: agentErrorVariableName,
+						Name: nragent.AgentErrorVariableName,
 					},
 				},
 				Tok: token.DEFINE,
@@ -72,12 +73,12 @@ func Test_InitializeAgent(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "NewApplication",
-							Path: NewRelicAgentImportPath,
+							Path: nragent.NewRelicAgentImportPath,
 						},
 						Args: []dst.Expr{
 							&dst.CallExpr{
 								Fun: &dst.Ident{
-									Path: NewRelicAgentImportPath,
+									Path: nragent.NewRelicAgentImportPath,
 									Name: "ConfigAppName",
 								},
 								Args: []dst.Expr{
@@ -89,19 +90,19 @@ func Test_InitializeAgent(t *testing.T) {
 							},
 							&dst.CallExpr{
 								Fun: &dst.Ident{
-									Path: NewRelicAgentImportPath,
+									Path: nragent.NewRelicAgentImportPath,
 									Name: "ConfigFromEnvironment",
 								},
 							},
 						},
 					},
 				},
-			}, panicOnError(agentErrorVariableName)},
+			}, nragent.PanicOnError(nragent.AgentErrorVariableName)},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, InitializeAgent(tt.args.AppName, tt.args.AgentVariableName))
+			assert.Equal(t, tt.want, nragent.InitializeAgent(tt.args.AppName, tt.args.AgentVariableName))
 		})
 	}
 }
@@ -154,13 +155,13 @@ func Test_shutdownAgent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := ShutdownAgent(tt.args.AgentVariableName)
+			got := nragent.ShutdownAgent(tt.args.AgentVariableName)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func Test_panicOnError(t *testing.T) {
+func Test_PanicOnError(t *testing.T) {
 	tests := []struct {
 		name string
 		want *dst.IfStmt
@@ -203,7 +204,7 @@ func Test_panicOnError(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := panicOnError("err"); !reflect.DeepEqual(got, tt.want) {
+			if got := nragent.PanicOnError("err"); !reflect.DeepEqual(got, tt.want) {
 				assert.Equal(t, tt.want, got)
 			}
 		})
