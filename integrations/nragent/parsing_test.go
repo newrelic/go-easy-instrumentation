@@ -1,16 +1,17 @@
 package nragent_test
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"testing"
 
 	"github.com/dave/dst"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_isNewRelicMethod(t *testing.T) {
+func Test_IsNewRelicMethod(t *testing.T) {
 	type args struct {
 		call *dst.CallExpr
 	}
@@ -53,7 +54,7 @@ func Test_isNewRelicMethod(t *testing.T) {
 				call: &dst.CallExpr{
 					Fun: &dst.Ident{
 						Name: "Get",
-						Path: codegen.HttpImportPath,
+						Path: nrnethttp.HttpImportPath,
 					},
 				},
 			},
@@ -62,8 +63,8 @@ func Test_isNewRelicMethod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := isNewRelicMethod(tt.args.call); got != tt.want {
-				t.Errorf("isNewRelicMethod() = %v, want %v", got, tt.want)
+			if got := nragent.IsNewRelicMethod(tt.args.call); got != tt.want {
+				t.Errorf("nragent.IsNewRelicMethod() = %v, want %v", got, tt.want)
 			}
 		})
 	}
@@ -95,8 +96,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -145,8 +144,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -195,8 +192,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -228,8 +223,6 @@ func main() {
 			code: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"log"
 	"net/http"
 )
@@ -248,8 +241,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"log"
 	"net/http"
 	"time"
@@ -303,8 +294,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -337,7 +326,7 @@ func main() {
 	}
 }
 
-func Testnragent.InstrumentMain(t *testing.T) {
+func Test_InstrumentMain(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -363,8 +352,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -416,8 +403,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -456,8 +441,6 @@ func main() {
 			code: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"context"
 	"net/http"
 	"time"
@@ -478,8 +461,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"context"
 	"net/http"
 	"time"
@@ -534,8 +515,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -589,8 +568,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -623,8 +600,6 @@ func main() {
 			code: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"time"
 	"net/http"
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -659,8 +634,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-agent/v3/newrelic"
 	"net/http"
 	"time"

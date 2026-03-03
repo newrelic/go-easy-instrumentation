@@ -62,5 +62,10 @@ func TxnFromGinContext(txnVariable string, ctxName string) *dst.AssignStmt {
 				},
 			},
 		},
+		Decs: dst.AssignStmtDecorations{
+			NodeDecs: dst.NodeDecs{
+				Before: dst.NewLine,
+			},
+		},
 	}
 }

@@ -75,10 +75,10 @@ func GrpcNewServerCall(node dst.Node) (*dst.CallExpr, bool) {
 // Stateless Tracing Functions
 // ////////////////////////////////////////////
 
-// traceObject must not be nil if GrpcServerTxnData is returned
+// TraceObject must not be nil if GrpcServerTxnData is returned
 type GrpcServerTxnData struct {
-	assignment  *dst.AssignStmt
-	traceObject traceobject.TraceObject
+	TxnAssignment *dst.AssignStmt
+	TraceObject   traceobject.TraceObject
 }
 
 // getTxnFromGrpcServer finds the transaction object from a gRPC server method
@@ -111,22 +111,22 @@ func GetTxnFromGrpcServer(manager *parser.InstrumentationManager, params []*dst.
 	if streamServerIdent != nil {
 		ok = true
 		txnData = &GrpcServerTxnData{
-			assignment:  codegen.TxnFromContext(txnVariableName, GrpcStreamContext(streamServerIdent)),
-			traceObject: traceobject.NewTransaction(),
+			TxnAssignment: codegen.TxnFromContext(txnVariableName, GrpcStreamContext(streamServerIdent)),
+			TraceObject:   traceobject.NewTransaction(),
 		}
 	} else if contextIdent != nil {
 		ok = true
 		txnData = &GrpcServerTxnData{
-			traceObject: traceobject.NewContext(contextIdent.Name),
+			TraceObject: traceobject.NewContext(contextIdent.Name),
 		}
 	}
 
 	return txnData, ok
 }
 
-// isGrpcServerMethod checks if a function declaration is a method of the user's gRPC server
+// IsGrpcServerMethod checks if a function declaration is a method of the user's gRPC server
 // based on facts generated from scanning their gRPC configuration code.
-func isGrpcServerMethod(manager *parser.InstrumentationManager, funcDecl *dst.FuncDecl) bool {
+func IsGrpcServerMethod(manager *parser.InstrumentationManager, funcDecl *dst.FuncDecl) bool {
 	if funcDecl.Recv == nil || len(funcDecl.Recv.List) != 1 || len(funcDecl.Recv.List[0].Names) != 1 {
 		return false
 	}
@@ -148,7 +148,7 @@ func isGrpcServerMethod(manager *parser.InstrumentationManager, funcDecl *dst.Fu
 func InstrumentGrpcServerMethod(manager *parser.InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
 	funcDecl, ok := n.(*dst.FuncDecl)
-	if !ok || !isGrpcServerMethod(manager, funcDecl) {
+	if !ok || !IsGrpcServerMethod(manager, funcDecl) {
 		return
 	}
 
@@ -160,11 +160,11 @@ func InstrumentGrpcServerMethod(manager *parser.InstrumentationManager, c *dstut
 
 	// ok is true if the body of this function has any tracing code added to it. If this is true, we know it needs a transaction to get
 	// pulled from the grpc server object
-	node, ok := parser.TraceFunction(manager, funcDecl, tracestate.FunctionBody(codegen.DefaultTransactionVariable, txnData.traceObject))
+	node, ok := parser.TraceFunction(manager, funcDecl, tracestate.FunctionBody(codegen.DefaultTransactionVariable, txnData.TraceObject))
 	decl := node.(*dst.FuncDecl)
-	if ok && txnData.assignment != nil {
+	if ok && txnData.TxnAssignment != nil {
 		comment.Debug(manager.GetDecoratorPackage(), funcDecl, fmt.Sprintf("Instrumenting gRPC server method: %s", funcDecl.Name.Name))
-		decl.Body.List = append([]dst.Stmt{txnData.assignment}, decl.Body.List...)
+		decl.Body.List = append([]dst.Stmt{txnData.TxnAssignment}, decl.Body.List...)
 	}
 }
 

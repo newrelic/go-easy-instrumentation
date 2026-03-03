@@ -60,7 +60,7 @@ func PanicRecovery(t *testing.T) {
 	}
 }
 
-func pseudo_uuid() (string, error) {
+func Pseudo_uuid() (string, error) {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -69,7 +69,7 @@ func pseudo_uuid() (string, error) {
 	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
 }
 
-func testInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
+func TestInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
 	defer PanicRecovery(t)
 	fileName := "app.go"
 	pkgs, err := CreateTestApp(t, testAppDir, fileName, code)
@@ -83,11 +83,11 @@ func testInstrumentationManager(t *testing.T, code, testAppDir string) *Instrume
 	diffFile := filepath.Join(testAppDir, "new-relic-instrumentation.diff")
 
 	manager := NewInstrumentationManager(pkgs, appName, varName, diffFile, testAppDir)
-	configureTestInstrumentationManager(manager)
+	ConfigureTestInstrumentationManager(manager)
 	return manager
 }
 
-func configureTestInstrumentationManager(manager *InstrumentationManager) error {
+func ConfigureTestInstrumentationManager(manager *InstrumentationManager) error {
 	pkgs := []string{}
 	for pkg := range manager.packages {
 		if pkg != "" {
@@ -104,7 +104,7 @@ func configureTestInstrumentationManager(manager *InstrumentationManager) error 
 
 // RunStatefulTracingFunction runs a stateful tracing function against test code.
 func RunStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction, downstream bool) string {
-	id, err := pseudo_uuid()
+	id, err := Pseudo_uuid()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func RunStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTrac
 	testDir := fmt.Sprintf("tmp_%s", id)
 	defer CleanTestApp(t, testDir)
 
-	manager := testInstrumentationManager(t, code, testDir)
+	manager := TestInstrumentationManager(t, code, testDir)
 	pkg := manager.getDecoratorPackage()
 	if pkg == nil {
 		t.Fatalf("Package was nil: %+v", manager.packages)
@@ -144,7 +144,7 @@ func RunStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTrac
 
 // RunStatelessTracingFunction runs a stateless tracing function against test code.
 func RunStatelessTracingFunction(t *testing.T, code string, tracingFunc StatelessTracingFunction, statefulTracingFuncs ...StatefulTracingFunction) string {
-	id, err := pseudo_uuid()
+	id, err := Pseudo_uuid()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func RunStatelessTracingFunction(t *testing.T, code string, tracingFunc Stateles
 	testDir := fmt.Sprintf("tmp_%s", id)
 	defer CleanTestApp(t, testDir)
 
-	manager := testInstrumentationManager(t, code, testDir)
+	manager := TestInstrumentationManager(t, code, testDir)
 	pkg := manager.getDecoratorPackage()
 	if pkg == nil {
 		t.Fatalf("Package was nil: %+v", manager.packages)
@@ -177,4 +177,22 @@ func RunStatelessTracingFunction(t *testing.T, code string, tracingFunc Stateles
 	}
 
 	return buf.String()
+}
+
+// UnitTest creates a temporary test package from the given code string.
+func UnitTest(t *testing.T, code string) []*decorator.Package {
+	id, err := Pseudo_uuid()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testAppDir := fmt.Sprintf("tmp_%s", id)
+	fileName := "app.go"
+	pkgs, err := CreateTestApp(t, testAppDir, fileName, code)
+	defer CleanTestApp(t, testAppDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return pkgs
 }

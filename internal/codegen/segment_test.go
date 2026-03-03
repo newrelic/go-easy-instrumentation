@@ -1,4 +1,4 @@
-package codegen
+package codegen_test
 
 import (
 	"go/token"
@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/dave/dst"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -47,7 +49,7 @@ func Test_endExternalSegment(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := EndExternalSegment(tt.args.segmentName, tt.args.nodeDecs); !reflect.DeepEqual(got, tt.want) {
+			if got := codegen.EndExternalSegment(tt.args.segmentName, tt.args.nodeDecs); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("endExternalSegment() = %v, want %v", got, tt.want)
 			}
 			if len(tt.args.nodeDecs.End) != 0 {
@@ -75,7 +77,7 @@ func Test_startExternalSegment(t *testing.T) {
 		{
 			name: "start_external_segment",
 			args: args{
-				request:    &dst.Ident{Name: "r", Path: HttpImportPath},
+				request:    &dst.Ident{Name: "r", Path: nrnethttp.HttpImportPath},
 				txnVar:     dst.NewIdent("txn"),
 				segmentVar: "example",
 				nodeDecs: &dst.NodeDecs{
@@ -92,11 +94,11 @@ func Test_startExternalSegment(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "StartExternalSegment",
-							Path: NewRelicAgentImportPath,
+							Path: codegen.NewRelicAgentImportPath,
 						},
 						Args: []dst.Expr{
 							dst.NewIdent("txn"),
-							dst.Clone(&dst.Ident{Name: "r", Path: HttpImportPath}).(dst.Expr),
+							dst.Clone(&dst.Ident{Name: "r", Path: nrnethttp.HttpImportPath}).(dst.Expr),
 						},
 					},
 				},
@@ -111,7 +113,7 @@ func Test_startExternalSegment(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := StartExternalSegment(tt.args.request, tt.args.txnVar, tt.args.segmentVar, tt.args.nodeDecs); !reflect.DeepEqual(got, tt.want) {
+			if got := codegen.StartExternalSegment(tt.args.request, tt.args.txnVar, tt.args.segmentVar, tt.args.nodeDecs); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("startExternalSegment() = %v, want %v", got, tt.want)
 			}
 			if len(tt.args.nodeDecs.Start) != 0 {
@@ -140,7 +142,7 @@ func Test_captureHttpResponse(t *testing.T) {
 				segmentVariable: "example",
 				responseVariable: &dst.Ident{
 					Name: "resp",
-					Path: HttpImportPath,
+					Path: nrnethttp.HttpImportPath,
 				},
 			},
 			want: &dst.AssignStmt{
@@ -153,7 +155,7 @@ func Test_captureHttpResponse(t *testing.T) {
 				Rhs: []dst.Expr{
 					dst.Clone(&dst.Ident{
 						Name: "resp",
-						Path: HttpImportPath,
+						Path: nrnethttp.HttpImportPath,
 					}).(dst.Expr),
 				},
 				Tok: token.ASSIGN,
@@ -162,7 +164,7 @@ func Test_captureHttpResponse(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := CaptureHttpResponse(tt.args.segmentVariable, tt.args.responseVariable); !reflect.DeepEqual(got, tt.want) {
+			if got := codegen.CaptureHttpResponse(tt.args.segmentVariable, tt.args.responseVariable); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("captureHttpResponse() = %v, want %v", got, tt.want)
 			}
 		})
@@ -217,7 +219,7 @@ func Test_deferSegment(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := DeferSegment(tt.args.segmentName, dst.NewIdent(tt.args.txnVarName))
+			got := codegen.DeferSegment(tt.args.segmentName, dst.NewIdent(tt.args.txnVarName))
 			assert.Equal(t, tt.want, got)
 		})
 	}

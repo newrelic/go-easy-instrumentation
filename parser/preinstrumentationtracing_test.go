@@ -134,7 +134,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer PanicRecovery(t)
-			id, err := pseudo_uuid()
+			id, err := Pseudo_uuid()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -142,7 +142,7 @@ func main() {
 			testDir := fmt.Sprintf("tmp_%s", id)
 			defer CleanTestApp(t, testDir)
 
-			manager := testInstrumentationManager(t, tt.code, testDir)
+			manager := TestInstrumentationManager(t, tt.code, testDir)
 			pkg := manager.getDecoratorPackage()
 			if pkg == nil {
 				t.Fatalf("Package was nil: %+v", manager.packages)
@@ -223,7 +223,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer PanicRecovery(t)
-			id, err := pseudo_uuid()
+			id, err := Pseudo_uuid()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -231,7 +231,7 @@ func main() {
 			testDir := fmt.Sprintf("tmp_%s", id)
 			defer CleanTestApp(t, testDir)
 
-			manager := testInstrumentationManager(t, tt.code, testDir)
+			manager := TestInstrumentationManager(t, tt.code, testDir)
 			pkg := manager.getDecoratorPackage()
 			if pkg == nil {
 				t.Fatalf("Package was nil: %+v", manager.packages)

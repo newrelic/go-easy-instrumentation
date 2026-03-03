@@ -1,13 +1,14 @@
 package nrnethttp_test
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"bytes"
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -74,7 +75,7 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pkgs := unitTest(t, tt.code)
+			pkgs := parser.UnitTest(t, tt.code)
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
 				t.Fatal("code must contain only one function declaration")
@@ -85,7 +86,7 @@ func main() {
 				t.Fatal("lineNum must point to an assignment statement")
 			}
 
-			if got := isNetHttpClientDefinition(stmt); got != tt.want {
+			if got := nrnethttp.IsNetHttpClientDefinition(stmt); got != tt.want {
 				t.Errorf("isNetHttpClient() = %v, want %v", got, tt.want)
 			}
 		})
@@ -198,13 +199,13 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pkgs := unitTest(t, tt.code)
+			pkgs := parser.UnitTest(t, tt.code)
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
 				t.Fatal("code must contain only one function declaration")
 			}
 
-			gotFuncName, gotBool := isNetHttpMethodCannotInstrument(decl.Body.List[tt.lineNum])
+			gotFuncName, gotBool := nrnethttp.IsNetHttpMethodCannotInstrument(decl.Body.List[tt.lineNum])
 			if gotBool != tt.wantBool {
 				t.Errorf("isNetHttpMethodCannotInstrument() = %v, want %v", gotBool, tt.wantBool)
 			}
@@ -255,14 +256,14 @@ func index(w http.ResponseWriter, r *http.Request, x string) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pkgs := unitTest(t, tt.code)
+			pkgs := parser.UnitTest(t, tt.code)
 
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
 				t.Fatal("code must contain only one function declaration")
 			}
 
-			gotBool := isHTTPHandler(decl)
+			gotBool := nrnethttp.IsHTTPHandler(decl)
 			if gotBool != tt.wantBool {
 				t.Errorf("isNetHttpMethodCannotInstrument() = %v, want %v", gotBool, tt.wantBool)
 			}
@@ -360,7 +361,7 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pkgs := unitTest(t, tt.code)
+			pkgs := parser.UnitTest(t, tt.code)
 
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
@@ -377,7 +378,7 @@ func main() {
 				t.Fatal("lineNum must point to an expression containing a call expression")
 			}
 
-			gotFuncName := getNetHttpMethod(call, pkgs[0])
+			gotFuncName := nrnethttp.GetNetHttpMethod(call, pkgs[0])
 
 			if gotFuncName != tt.wantFuncName {
 				t.Errorf("isNetHttpMethodCannotInstrument() = %v, want %v", gotFuncName, tt.wantFuncName)
@@ -454,7 +455,7 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			pkgs := unitTest(t, tt.code)
+			pkgs := parser.UnitTest(t, tt.code)
 
 			decl, ok := pkgs[0].Syntax[0].Decls[1].(*dst.FuncDecl)
 			if !ok {
@@ -471,7 +472,7 @@ func main() {
 				t.Fatal("lineNum must point to an expression containing a call expression")
 			}
 
-			gotFuncName := getNetHttpClientVariableName(call, pkgs[0])
+			gotFuncName := nrnethttp.GetNetHttpClientVariableName(call, pkgs[0])
 
 			if gotFuncName != tt.wantName {
 				t.Errorf("isNetHttpMethodCannotInstrument() = %v, want %v", gotFuncName, tt.wantName)
@@ -511,7 +512,7 @@ func Test_cannotTraceOutboundHttp(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := cannotTraceOutboundHttp(tt.args.method, tt.args.decs)
+			got := nrnethttp.CannotTraceOutboundHttp(tt.args.method, tt.args.decs)
 			if tt.wantBuffer && got[len(got)-1] != "//" {
 				t.Errorf("cannotTraceOutboundHttp() should add a comment ending in \"//\" but did NOT for method %s with decs %+v", tt.args.method, tt.args.decs)
 			}
@@ -546,7 +547,7 @@ func Test_TxnFromCtx(t *testing.T) {
 									},
 									Type: &dst.Ident{
 										Name: "ResponseWriter",
-										Path: codegen.HttpImportPath,
+										Path: nrnethttp.HttpImportPath,
 									},
 								},
 								1: {
@@ -558,7 +559,7 @@ func Test_TxnFromCtx(t *testing.T) {
 									Type: &dst.StarExpr{
 										X: &dst.Ident{
 											Name: "Request",
-											Path: codegen.HttpImportPath,
+											Path: nrnethttp.HttpImportPath,
 										},
 									},
 								},
@@ -587,7 +588,7 @@ func Test_TxnFromCtx(t *testing.T) {
 									},
 									Type: &dst.Ident{
 										Name: "ResponseWriter",
-										Path: codegen.HttpImportPath,
+										Path: nrnethttp.HttpImportPath,
 									},
 								},
 								1: {
@@ -599,7 +600,7 @@ func Test_TxnFromCtx(t *testing.T) {
 									Type: &dst.StarExpr{
 										X: &dst.Ident{
 											Name: "Request",
-											Path: codegen.HttpImportPath,
+											Path: nrnethttp.HttpImportPath,
 										},
 									},
 								},
@@ -619,7 +620,7 @@ func Test_TxnFromCtx(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			expectStmt := codegen.TxnFromContext(tt.args.txnVariable, codegen.HttpRequestContext("req"))
-			defineTxnFromCtx(tt.args.fn, tt.args.txnVariable)
+			nrnethttp.DefineTxnFromCtx(tt.args.fn, tt.args.txnVariable)
 			if !reflect.DeepEqual(tt.args.fn.Body.List[0], expectStmt) {
 				t.Errorf("expected the function body to contain the statement %v but got %v", expectStmt, tt.args.fn.Body.List[0])
 			}
@@ -690,18 +691,18 @@ func main() {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id, err := pseudo_uuid()
+			id, err := parser.Pseudo_uuid()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			testDir := fmt.Sprintf("tmp_%s", id)
-			defer cleanTestApp(t, testDir)
+			defer parser.CleanTestApp(t, testDir)
 
-			manager := testInstrumentationManager(t, tt.code, testDir)
-			pkg := manager.getDecoratorPackage()
+			manager := parser.TestInstrumentationManager(t, tt.code, testDir)
+			pkg := manager.GetDecoratorPackage()
 			stmt := pkg.Syntax[0].Decls[1].(*dst.FuncDecl).Body.List[tt.linenum]
-			gotExpr := getHttpResponseVariable(manager, stmt)
+			gotExpr := nrnethttp.GetHttpResponseVariable(manager, stmt)
 			switch expect := tt.wantExpr.(type) {
 			case *dst.Ident:
 				got, ok := gotExpr.(*dst.Ident)
@@ -738,7 +739,7 @@ func main() {
 	}
 }
 
-func Testnrnethttp.ExternalHttpCall(t *testing.T) {
+func Test_ExternalHttpCall(t *testing.T) {
 
 	tests := []struct {
 		name   string
@@ -780,9 +781,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -811,9 +809,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -844,9 +839,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -870,7 +862,7 @@ func main() {
 	}
 }
 
-func Testnrnethttp.WrapNestedHandleFunction(t *testing.T) {
+func Test_WrapNestedHandleFunction(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -882,9 +874,6 @@ func Testnrnethttp.WrapNestedHandleFunction(t *testing.T) {
 package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 )
 
@@ -894,9 +883,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -911,9 +897,6 @@ func main() { http.HandleFunc(newrelic.WrapHandleFunc(txn.Application(), "/", in
 package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 )
 
@@ -925,9 +908,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -949,7 +929,7 @@ func main() {
 	}
 }
 
-func Testnrnethttp.CannotInstrumentHttpMethod(t *testing.T) {
+func Test_CannotInstrumentHttpMethod(t *testing.T) {
 
 	tests := []struct {
 		name   string
@@ -1010,7 +990,7 @@ func main() {
 	}
 }
 
-func Testnrnethttp.InstrumentHttpClient(t *testing.T) {
+func Test_InstrumentHttpClient(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -1029,9 +1009,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -1060,9 +1037,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -1088,7 +1062,7 @@ func main() {
 	}
 }
 
-func Testnrnethttp.InstrumentHandleFunction(t *testing.T) {
+func Test_InstrumentHandleFunction(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -1144,9 +1118,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -1219,9 +1190,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -1312,9 +1280,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -1375,9 +1340,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	"github.com/newrelic/go-agent/v3/newrelic"
@@ -1412,9 +1374,6 @@ func main() {
 			code: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"sync"
 )
@@ -1446,9 +1405,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"sync"
 
@@ -1490,9 +1446,6 @@ func main() {
 			code: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"sync"
 )
@@ -1534,9 +1487,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"sync"
 
@@ -1615,7 +1565,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 							},
 							Type: &dst.Ident{
 								Name: "ResponseWriter",
-								Path: codegen.HttpImportPath,
+								Path: nrnethttp.HttpImportPath,
 							},
 						},
 						1: {
@@ -1627,7 +1577,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
 									Name: "Request",
-									Path: codegen.HttpImportPath,
+									Path: nrnethttp.HttpImportPath,
 								},
 							},
 						},
@@ -1650,7 +1600,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 							},
 							Type: &dst.Ident{
 								Name: "ResponseWriter",
-								Path: codegen.HttpImportPath,
+								Path: nrnethttp.HttpImportPath,
 							},
 						},
 						1: {
@@ -1662,7 +1612,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
 									Name: "Request",
-									Path: codegen.HttpImportPath,
+									Path: nrnethttp.HttpImportPath,
 								},
 							},
 						},
@@ -1685,7 +1635,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 							},
 							Type: &dst.Ident{
 								Name: "ResponseWriter",
-								Path: codegen.HttpImportPath,
+								Path: nrnethttp.HttpImportPath,
 							},
 						},
 						1: {
@@ -1697,7 +1647,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
 									Name: "Request",
-									Path: codegen.HttpImportPath,
+									Path: nrnethttp.HttpImportPath,
 								},
 							},
 						},
@@ -1710,7 +1660,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ok, got := getHTTPRequestArgName(tt.fn)
+			ok, got := nrnethttp.GetHTTPRequestArgName(tt.fn)
 			if !ok || got != tt.expect {
 				t.Errorf("got %v, want %v", got, tt.expect)
 			}
@@ -1737,7 +1687,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 							},
 							Type: &dst.Ident{
 								Name: "ResponseWriter",
-								Path: codegen.HttpImportPath,
+								Path: nrnethttp.HttpImportPath,
 							},
 						},
 						1: {
@@ -1749,7 +1699,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
 									Name: "Request",
-									Path: codegen.HttpImportPath,
+									Path: nrnethttp.HttpImportPath,
 								},
 							},
 						},
@@ -1772,7 +1722,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 							},
 							Type: &dst.Ident{
 								Name: "ResponseWriter",
-								Path: codegen.HttpImportPath,
+								Path: nrnethttp.HttpImportPath,
 							},
 						},
 						1: {
@@ -1784,7 +1734,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
 									Name: "Request",
-									Path: codegen.HttpImportPath,
+									Path: nrnethttp.HttpImportPath,
 								},
 							},
 						},
@@ -1807,7 +1757,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 							},
 							Type: &dst.Ident{
 								Name: "ResponseWriter",
-								Path: codegen.HttpImportPath,
+								Path: nrnethttp.HttpImportPath,
 							},
 						},
 						1: {
@@ -1819,7 +1769,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 							Type: &dst.StarExpr{
 								X: &dst.Ident{
 									Name: "Request",
-									Path: codegen.HttpImportPath,
+									Path: nrnethttp.HttpImportPath,
 								},
 							},
 						},
@@ -1832,7 +1782,7 @@ func Test_getHTTPRequestArgNameLit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ok, got := getHTTPRequestArgName(tt.fn)
+			ok, got := nrnethttp.GetHTTPRequestArgName(tt.fn)
 			if !ok || got != tt.expect {
 				t.Errorf("got %v, want %v", got, tt.expect)
 			}
@@ -1869,9 +1819,6 @@ func main() {
 package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
@@ -1894,29 +1841,29 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			id, err := pseudo_uuid()
+			id, err := parser.Pseudo_uuid()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			testDir := fmt.Sprintf("tmp_%s", id)
-			defer cleanTestApp(t, testDir)
+			defer parser.CleanTestApp(t, testDir)
 
-			manager := testInstrumentationManager(t, tt.code, testDir)
-			pkg := manager.getDecoratorPackage()
+			manager := parser.TestInstrumentationManager(t, tt.code, testDir)
+			pkg := manager.GetDecoratorPackage()
 			if pkg == nil {
-				t.Fatalf("Package was nil: %+v", manager.packages)
+				t.Fatalf("Package was nil")
 			}
 
 			// First populate the function cache
 			for _, decl := range pkg.Syntax[0].Decls {
 				if fn, ok := decl.(*dst.FuncDecl); ok {
-					manager.transactionCache.Functions[fn.Name.Name] = fn
+					manager.TransactionCache().Functions[fn.Name.Name] = fn
 				}
 			}
 
 			// Load pre-instrumentation tracing to populate transaction cache
-			manager.loadPreInstrumentationTracingFunctions(nrnethttp.DetectWrappedRoutes)
+			manager.LoadPreInstrumentationTracingFunctions(nrnethttp.DetectWrappedRoutes)
 			err = manager.ScanApplication()
 			if err != nil {
 				t.Fatalf("Failed to scan application: %v", err)
@@ -1928,7 +1875,7 @@ func main() {
 				t.Fatal("code must contain a function declaration at position 1")
 			}
 
-			got := HandlerIsInstrumented(manager, decl)
+			got := nrnethttp.HandlerIsInstrumented(manager, decl)
 			if got != tt.expect {
 				t.Errorf("HandlerIsInstrumented() = %v, want %v", got, tt.expect)
 			}
@@ -1936,7 +1883,7 @@ func main() {
 	}
 }
 
-func Testnrnethttp.DetectWrappedRoutes(t *testing.T) {
+func Test_DetectWrappedRoutes(t *testing.T) {
 	tests := []struct {
 		name          string
 		code          string
@@ -1949,9 +1896,6 @@ func Testnrnethttp.DetectWrappedRoutes(t *testing.T) {
 package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
@@ -1994,9 +1938,6 @@ func main() {
 package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
@@ -2019,9 +1960,6 @@ func main() {
 package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
@@ -2050,29 +1988,29 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			id, err := pseudo_uuid()
+			id, err := parser.Pseudo_uuid()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			testDir := fmt.Sprintf("tmp_%s", id)
-			defer cleanTestApp(t, testDir)
+			defer parser.CleanTestApp(t, testDir)
 
-			manager := testInstrumentationManager(t, tt.code, testDir)
-			pkg := manager.getDecoratorPackage()
+			manager := parser.TestInstrumentationManager(t, tt.code, testDir)
+			pkg := manager.GetDecoratorPackage()
 			if pkg == nil {
-				t.Fatalf("Package was nil: %+v", manager.packages)
+				t.Fatalf("Package was nil")
 			}
 
 			// First populate the function cache by scanning all declarations
 			for _, decl := range pkg.Syntax[0].Decls {
 				if fn, ok := decl.(*dst.FuncDecl); ok {
-					manager.transactionCache.Functions[fn.Name.Name] = fn
+					manager.TransactionCache().Functions[fn.Name.Name] = fn
 				}
 			}
 
 			// Run nrnethttp.DetectWrappedRoutes
-			manager.loadPreInstrumentationTracingFunctions(nrnethttp.DetectWrappedRoutes)
+			manager.LoadPreInstrumentationTracingFunctions(nrnethttp.DetectWrappedRoutes)
 			err = manager.ScanApplication()
 			if err != nil {
 				t.Fatalf("Failed to scan application: %v", err)
@@ -2081,7 +2019,7 @@ func main() {
 			// Check if the handler is in the transaction cache
 			if tt.handlerName != "" {
 				found := false
-				for ident := range manager.transactionCache.Transactions {
+				for ident := range manager.TransactionCache().Transactions {
 					if ident.Name == tt.handlerName {
 						found = true
 						break
@@ -2096,7 +2034,7 @@ func main() {
 	}
 }
 
-func Testnrnethttp.InstrumentHandleFunction_SkipsInstrumented(t *testing.T) {
+func Test_InstrumentHandleFunction_SkipsInstrumented(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -2108,9 +2046,6 @@ func Testnrnethttp.InstrumentHandleFunction_SkipsInstrumented(t *testing.T) {
 package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"github.com/newrelic/go-agent/v3/newrelic"
 )
@@ -2131,9 +2066,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-agent/v3/newrelic"
 	"net/http"
 )
@@ -2157,36 +2089,36 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			id, err := pseudo_uuid()
+			id, err := parser.Pseudo_uuid()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			testDir := fmt.Sprintf("tmp_%s", id)
-			defer cleanTestApp(t, testDir)
+			defer parser.CleanTestApp(t, testDir)
 
-			manager := testInstrumentationManager(t, tt.code, testDir)
-			pkg := manager.getDecoratorPackage()
+			manager := parser.TestInstrumentationManager(t, tt.code, testDir)
+			pkg := manager.GetDecoratorPackage()
 			if pkg == nil {
-				t.Fatalf("Package was nil: %+v", manager.packages)
+				t.Fatalf("Package was nil")
 			}
 
 			// First populate the function cache
 			for _, decl := range pkg.Syntax[0].Decls {
 				if fn, ok := decl.(*dst.FuncDecl); ok {
-					manager.transactionCache.Functions[fn.Name.Name] = fn
+					manager.TransactionCache().Functions[fn.Name.Name] = fn
 				}
 			}
 
 			// First detect wrapped routes to populate the cache
-			manager.loadPreInstrumentationTracingFunctions(nrnethttp.DetectWrappedRoutes)
+			manager.LoadPreInstrumentationTracingFunctions(nrnethttp.DetectWrappedRoutes)
 			err = manager.ScanApplication()
 			if err != nil {
 				t.Fatalf("Failed to scan application: %v", err)
 			}
 
 			// Now instrument handlers
-			manager.tracingFunctions.stateless = append(manager.tracingFunctions.stateless, nrnethttp.InstrumentHandleFunction)
+			manager.LoadStatelessTracingFunctions(nrnethttp.InstrumentHandleFunction)
 			err = manager.TracePackageCalls()
 			if err != nil {
 				t.Fatalf("Failed to trace package calls: %v", err)

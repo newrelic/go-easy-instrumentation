@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	sqlImportPath = "database/sql"
+	SqlImportPath = "database/sql"
 )
 
 // detectSQLExecutionCall checks if a statement contains a SQL query operation using the given DB variable.
@@ -18,7 +18,7 @@ const (
 // Example: row := db.QueryRow("SELECT count(*) from tables")
 //
 //	^^
-func detectSQLExecutionCall(stmt dst.Stmt, dbName string) string {
+func DetectSQLExecutionCall(stmt dst.Stmt, dbName string) string {
 	assignStmt, ok := stmt.(*dst.AssignStmt)
 	if !ok || len(assignStmt.Rhs) != 1 {
 		return ""
@@ -57,7 +57,7 @@ func detectSQLExecutionCall(stmt dst.Stmt, dbName string) string {
 //   - QueryRow -> QueryRowContext
 //   - Query    -> QueryContext
 //   - Exec     -> ExecContext
-func replaceSQLMethodWithContext(stmt dst.Stmt, ctxName string) {
+func ReplaceSQLMethodWithContext(stmt dst.Stmt, ctxName string) {
 	assignStmt, ok := stmt.(*dst.AssignStmt)
 	if !ok || len(assignStmt.Rhs) != 1 {
 		return
@@ -95,7 +95,7 @@ func replaceSQLMethodWithContext(stmt dst.Stmt, ctxName string) {
 // Example: db, err := sql.Open("nrmysql", "root@/information_schema")
 //
 //	^^
-func detectSQLOpenCall(stmt dst.Stmt) string {
+func DetectSQLOpenCall(stmt dst.Stmt) string {
 	assignStmt, ok := stmt.(*dst.AssignStmt)
 	if !ok || len(assignStmt.Rhs) != 1 || len(assignStmt.Lhs) == 0 {
 		return ""
@@ -107,7 +107,7 @@ func detectSQLOpenCall(stmt dst.Stmt) string {
 	}
 
 	ident, ok := call.Fun.(*dst.Ident)
-	if !ok || ident.Name != "Open" || ident.Path != sqlImportPath {
+	if !ok || ident.Name != "Open" || ident.Path != SqlImportPath {
 		return ""
 	}
 
@@ -122,7 +122,7 @@ func detectSQLOpenCall(stmt dst.Stmt) string {
 // findLastUsageOfExecutionResult scans statements starting from startIndex to find the last
 // usage of the given variable name. Returns the index of the last usage, or startIndex
 // if the variable is never used after that point.
-func findLastUsageOfExecutionResult(stmts []dst.Stmt, varName string, startIndex int) int {
+func FindLastUsageOfExecutionResult(stmts []dst.Stmt, varName string, startIndex int) int {
 	lastUsageIndex := startIndex
 
 	for i := startIndex + 1; i < len(stmts); i++ {
@@ -168,14 +168,14 @@ func InstrumentSQLHandler(manager *parser.InstrumentationManager, c *dstutil.Cur
 	// Scan function body to find SQL operations
 	for i, stmt := range funcDecl.Body.List {
 		// Detect sql.Open() to find the DB variable
-		if dbName := detectSQLOpenCall(stmt); dbName != "" {
+		if dbName := DetectSQLOpenCall(stmt); dbName != "" {
 			sqlDB = dbName
 			continue
 		}
 
 		// Once we have a DB variable, look for SQL execution calls
 		if sqlDB != "" {
-			if methodName := detectSQLExecutionCall(stmt, sqlDB); methodName != "" {
+			if methodName := DetectSQLExecutionCall(stmt, sqlDB); methodName != "" {
 				sqlExecutionIndex = i
 				sqlMethodName = methodName
 
@@ -198,7 +198,7 @@ func InstrumentSQLHandler(manager *parser.InstrumentationManager, c *dstutil.Cur
 	// Find where the SQL result variable is last used to determine where to end the transaction
 	lastUsageIndex := sqlExecutionIndex
 	if sqlResultVar != "" {
-		lastUsageIndex = findLastUsageOfExecutionResult(funcDecl.Body.List, sqlResultVar, sqlExecutionIndex)
+		lastUsageIndex = FindLastUsageOfExecutionResult(funcDecl.Body.List, sqlResultVar, sqlExecutionIndex)
 	}
 
 	// Generate instrumentation code
@@ -210,7 +210,7 @@ func InstrumentSQLHandler(manager *parser.InstrumentationManager, c *dstutil.Cur
 	txnEnd := CreateTransactionEnd(txnName)
 
 	// Transform the SQL method to use context (e.g., QueryRow -> QueryRowContext)
-	replaceSQLMethodWithContext(funcDecl.Body.List[sqlExecutionIndex], ctxName)
+	ReplaceSQLMethodWithContext(funcDecl.Body.List[sqlExecutionIndex], ctxName)
 
 	// Insert transaction end after the last usage of the result variable
 	funcDecl.Body.List = append(

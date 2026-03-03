@@ -10,9 +10,9 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
@@ -49,7 +49,7 @@ func errorReturnIndex(v *dst.CallExpr, pkg *decorator.Package) (int, bool) {
 	return 0, false
 }
 
-func isNewRelicMethod(call *dst.CallExpr) bool {
+func IsNewRelicMethod(call *dst.CallExpr) bool {
 	sel, ok := call.Fun.(*dst.SelectorExpr)
 	if ok {
 		if pkg, ok := sel.X.(*dst.Ident); ok {

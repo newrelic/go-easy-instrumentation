@@ -1,6 +1,7 @@
 package nrnethttp_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
 	"go/token"
 	"reflect"
@@ -37,7 +38,7 @@ func Test_RoundTripper(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "NewRoundTripper",
-							Path: NewRelicAgentImportPath,
+							Path: codegen.NewRelicAgentImportPath,
 						},
 						Args: []dst.Expr{
 							&dst.SelectorExpr{
@@ -98,7 +99,7 @@ func Test_addTxnToRequestContext(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "RequestWithTransactionContext",
-							Path: NewRelicAgentImportPath,
+							Path: codegen.NewRelicAgentImportPath,
 						},
 						Args: []dst.Expr{
 							dst.Clone(&dst.Ident{

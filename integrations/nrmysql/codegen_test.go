@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Testnrmysql.CreateSQLTransaction(t *testing.T) {
+func Test_CreateSQLTransaction(t *testing.T) {
 	tests := []struct {
 		name           string
 		agentVarName   string
@@ -82,7 +82,7 @@ func Testnrmysql.CreateSQLTransaction(t *testing.T) {
 	}
 }
 
-func Testnrmysql.CreateContextWithTransaction(t *testing.T) {
+func Test_CreateContextWithTransaction(t *testing.T) {
 	tests := []struct {
 		name       string
 		ctxName    string
@@ -157,7 +157,7 @@ func Testnrmysql.CreateContextWithTransaction(t *testing.T) {
 	}
 }
 
-func Testnrmysql.CreateTransactionEnd(t *testing.T) {
+func Test_CreateTransactionEnd(t *testing.T) {
 	tests := []struct {
 		name       string
 		txnName    string

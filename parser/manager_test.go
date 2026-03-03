@@ -1123,7 +1123,7 @@ func Test_TracePackageCalls(t *testing.T) {
 		{
 			name: "errors_without_main_method",
 			manager: &InstrumentationManager{
-				packages:       map[string]*packageState{},
+				packages: map[string]*packageState{},
 				tracingFunctions: tracingFunctions{
 					dependency: []FactDiscoveryFunction{},
 				},

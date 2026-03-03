@@ -692,3 +692,34 @@ func (m *InstrumentationManager) ResolveUnitTests() error {
 
 	return nil
 }
+
+// Test helper methods - only for use in tests to construct managers with specific state
+
+// SetCurrentPackage sets the current package (for tests only)
+func (m *InstrumentationManager) SetCurrentPackage(pkg string) {
+	m.currentPackage = pkg
+}
+
+// SetPackageState sets package state for a specific package ID (for tests only)
+func (m *InstrumentationManager) SetPackageState(pkgID string, state *PackageState) {
+	if m.packages == nil {
+		m.packages = make(map[string]*packageState)
+	}
+	m.packages[pkgID] = &packageState{
+		pkg:          state.Pkg,
+		tracedFuncs:  state.TracedFuncs,
+		importsAdded: state.ImportsAdded,
+	}
+}
+
+// SetFacts sets the facts keeper (for tests only)
+func (m *InstrumentationManager) SetFacts(f facts.Keeper) {
+	m.facts = f
+}
+
+// PackageState holds state for a single package (exported for test construction)
+type PackageState struct {
+	Pkg          *decorator.Package
+	TracedFuncs  map[string]*tracedFunctionDecl
+	ImportsAdded map[string]bool
+}

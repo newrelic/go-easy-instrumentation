@@ -40,8 +40,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -66,8 +64,6 @@ func main() {
 			code: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -98,8 +94,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -137,7 +131,7 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			got := parser.RunStatelessTracingFunction(t, tt.code, InstrumentSQLHandler)
+			got := parser.RunStatelessTracingFunction(t, tt.code, nrmysql.InstrumentSQLHandler)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
@@ -161,7 +155,7 @@ func TestDetectSQLOpenCall(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "Open",
-							Path: sqlImportPath,
+							Path: nrmysql.SqlImportPath,
 						},
 						Args: []dst.Expr{
 							&dst.BasicLit{Value: `"nrmysql"`},
@@ -202,7 +196,7 @@ func TestDetectSQLOpenCall(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "Connect",
-							Path: sqlImportPath,
+							Path: nrmysql.SqlImportPath,
 						},
 					},
 				},
@@ -223,7 +217,7 @@ func TestDetectSQLOpenCall(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			got := detectSQLOpenCall(tt.stmt)
+			got := nrmysql.DetectSQLOpenCall(tt.stmt)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -341,7 +335,7 @@ func TestDetectSQLExecutionCall(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			got := detectSQLExecutionCall(tt.stmt, tt.dbName)
+			got := nrmysql.DetectSQLExecutionCall(tt.stmt, tt.dbName)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -425,7 +419,7 @@ func TestReplaceSQLMethodWithContext(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			replaceSQLMethodWithContext(tt.stmt, tt.ctxName)
+			nrmysql.ReplaceSQLMethodWithContext(tt.stmt, tt.ctxName)
 
 			assignStmt := tt.stmt.(*dst.AssignStmt)
 			callExpr := assignStmt.Rhs[0].(*dst.CallExpr)
@@ -562,7 +556,7 @@ func TestFindLastUsageOfVariable(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			got := findLastUsageOfExecutionResult(tt.stmts, tt.varName, tt.startIndex)
+			got := nrmysql.FindLastUsageOfExecutionResult(tt.stmts, tt.varName, tt.startIndex)
 			assert.Equal(t, tt.want, got)
 		})
 	}

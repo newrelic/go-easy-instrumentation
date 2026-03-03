@@ -1,13 +1,14 @@
 package nrgin_test
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"go/ast"
 	"go/token"
 	"go/types"
 	"testing"
+
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
@@ -36,9 +37,6 @@ func TestInstrumentGinRouter(t *testing.T) {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -65,9 +63,6 @@ func main() {
 			code: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/gin-gonic/gin"
 )
 
@@ -83,9 +78,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"time"
 
 	"github.com/gin-gonic/gin"

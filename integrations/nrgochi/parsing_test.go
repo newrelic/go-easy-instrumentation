@@ -37,9 +37,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -66,9 +63,6 @@ func main() {
 			name: "detect and trace chi router in setup function",
 			code: `package main
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	chi "github.com/go-chi/chi/v5"
@@ -87,9 +81,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -216,9 +207,6 @@ func Test_InstrumentChiRouterLiteral(t *testing.T) {
 			name: "Instrument Chi Literal in http method handler",
 			code: `package main
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	chi "github.com/go-chi/chi/v5"
@@ -234,9 +222,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 
@@ -268,9 +253,6 @@ func main() {
 			code: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 
 	chi "github.com/go-chi/chi/v5"
@@ -298,9 +280,6 @@ func main() {
 			expect: `package main
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"net/http"
 	"time"
 

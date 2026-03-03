@@ -9,9 +9,9 @@ import (
 	"github.com/dave/dst/decorator"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
-	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/internal/util"
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
@@ -46,7 +46,7 @@ func HandlerIsInstrumented(manager *parser.InstrumentationManager, fn *dst.FuncD
 
 // GetNetHttpClientVariableName looks for an http client in the call expression n. If it finds one, the name
 // of the variable containing the client will be returned as a string.
-func getNetHttpClientVariableName(n *dst.CallExpr, pkg *decorator.Package) string {
+func GetNetHttpClientVariableName(n *dst.CallExpr, pkg *decorator.Package) string {
 	if n == nil {
 		return ""
 	}
@@ -72,8 +72,8 @@ func getNetHttpClientVariableName(n *dst.CallExpr, pkg *decorator.Package) strin
 // extract the request arg name from a declared route handler
 // func handler(w http.ResponseWriter, r *http.Request)
 // ____________________________________^
-func getHTTPRequestArgNameDecl(fn *dst.FuncDecl) (bool, string) {
-	if !isHTTPHandlerDecl(fn) {
+func GetHTTPRequestArgNameDecl(fn *dst.FuncDecl) (bool, string) {
+	if !IsHTTPHandlerDecl(fn) {
 		return false, ""
 	}
 
@@ -83,8 +83,8 @@ func getHTTPRequestArgNameDecl(fn *dst.FuncDecl) (bool, string) {
 // extract the request arg name from a literal route handler
 // func(w http.ResponseWriter, r *http.Request)
 // ____________________________^
-func getHTTPRequestArgNameLit(fn *dst.FuncLit) (bool, string) {
-	if !isHTTPHandlerLit(fn) {
+func GetHTTPRequestArgNameLit(fn *dst.FuncLit) (bool, string) {
+	if !IsHTTPHandlerLit(fn) {
 		return false, ""
 	}
 
@@ -94,7 +94,7 @@ func getHTTPRequestArgNameLit(fn *dst.FuncLit) (bool, string) {
 // wrapper for HTTP request arg extraction.
 // take in `any` and filter non FuncDecl and non FuncLit, then
 // dispatch to appropriate function.
-func getHTTPRequestArgName(fn any) (bool, string) {
+func GetHTTPRequestArgName(fn any) (bool, string) {
 	if fn == nil {
 		return false, ""
 	}
@@ -104,9 +104,9 @@ func getHTTPRequestArgName(fn any) (bool, string) {
 
 	switch f := fn.(type) {
 	case *dst.FuncDecl:
-		ok, name = getHTTPRequestArgNameDecl(f)
+		ok, name = GetHTTPRequestArgNameDecl(f)
 	case *dst.FuncLit:
-		ok, name = getHTTPRequestArgNameLit(f)
+		ok, name = GetHTTPRequestArgNameLit(f)
 	default:
 		return false, ""
 	}
@@ -114,7 +114,7 @@ func getHTTPRequestArgName(fn any) (bool, string) {
 }
 
 // GetNetHttpMethod gets an http method if one is invoked in the call expression n, and returns the name of it as a string
-func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
+func GetNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 	if n == nil {
 		return ""
 	}
@@ -136,9 +136,9 @@ func getNetHttpMethod(n *dst.CallExpr, pkg *decorator.Package) string {
 }
 
 // txnFromCtx injects a line of code that extracts a transaction from the context into the body of a function
-func defineTxnFromCtx(fn *dst.FuncDecl, txnVariable string) {
+func DefineTxnFromCtx(fn *dst.FuncDecl, txnVariable string) {
 	stmts := make([]dst.Stmt, len(fn.Body.List)+1)
-	ok, reqArgName := getHTTPRequestArgName(fn)
+	ok, reqArgName := GetHTTPRequestArgName(fn)
 	if !ok {
 		// TODO: consider injecting a comment or creating a log message describing the failure here.
 		return
@@ -150,12 +150,12 @@ func defineTxnFromCtx(fn *dst.FuncDecl, txnVariable string) {
 	fn.Body.List = stmts
 }
 
-func isHTTPHandler(fn any) bool {
+func IsHTTPHandler(fn any) bool {
 	switch f := fn.(type) {
 	case *dst.FuncLit:
-		return isHTTPHandlerLit(f)
+		return IsHTTPHandlerLit(f)
 	case *dst.FuncDecl:
-		return isHTTPHandlerDecl(f)
+		return IsHTTPHandlerDecl(f)
 	default:
 		return false
 	}
@@ -212,7 +212,7 @@ func isHTTPRequest(req *dst.Field) bool {
 // handler argument signatures
 // func myHandler(w http.ResponseWriter, r *http.Request)
 // _______________^______________________^
-func isHTTPHandlerDecl(fn *dst.FuncDecl) bool {
+func IsHTTPHandlerDecl(fn *dst.FuncDecl) bool {
 	if fn == nil || fn.Type == nil || fn.Type.Params == nil || fn.Type.Params.List == nil {
 		return false
 	}
@@ -239,7 +239,7 @@ func isHTTPHandlerDecl(fn *dst.FuncDecl) bool {
 // handler argument signatures
 // func(w http.ResponseWriter, r *http.Request)
 // _____^______________________^
-func isHTTPHandlerLit(fn *dst.FuncLit) bool {
+func IsHTTPHandlerLit(fn *dst.FuncLit) bool {
 	if fn == nil || fn.Type == nil || fn.Type.Params == nil || fn.Type.Params.List == nil {
 		return false
 	}
@@ -334,7 +334,7 @@ func clientTransportAlreadyInstrumented(c *dstutil.Cursor, clientVarName string)
 }
 
 // more unit test friendly helper function
-func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
+func IsNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
 	if len(stmt.Rhs) == 1 && len(stmt.Lhs) == 1 && (stmt.Tok == token.DEFINE) {
 		unary, ok := stmt.Rhs[0].(*dst.UnaryExpr)
 		if ok && unary.Op == token.AND {
@@ -359,13 +359,13 @@ func isNetHttpClientDefinition(stmt *dst.AssignStmt) bool {
 func InstrumentHandleFunction(manager *parser.InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
 	fn, isFn := n.(*dst.FuncDecl) // TODO: 'isFn' should be renamed to 'ok' to match the paradigm in the rest of the codebase.
-	if isFn && isHTTPHandler(fn) && !HandlerIsInstrumented(manager, fn) {
+	if isFn && IsHTTPHandler(fn) && !HandlerIsInstrumented(manager, fn) {
 
 		comment.Debug(manager.GetDecoratorPackage(), fn, fmt.Sprintf("Instrumenting HTTP handler: %s", fn.Name.Name))
 		txnName := codegen.DefaultTransactionVariable
 		newFn, ok := parser.TraceFunction(manager, fn, tracestate.FunctionBody(txnName))
 		if ok {
-			defineTxnFromCtx(newFn.(*dst.FuncDecl), txnName) // pass the transaction
+			DefineTxnFromCtx(newFn.(*dst.FuncDecl), txnName) // pass the transaction
 		}
 	}
 
@@ -377,14 +377,14 @@ func InstrumentHandleFunction(manager *parser.InstrumentationManager, c *dstutil
 func InstrumentHttpClient(manager *parser.InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
 	stmt, ok := n.(*dst.AssignStmt)
-	if ok && isNetHttpClientDefinition(stmt) && c.Index() >= 0 && n.Decorations() != nil {
+	if ok && IsNetHttpClientDefinition(stmt) && c.Index() >= 0 && n.Decorations() != nil {
 		c.InsertAfter(RoundTripper(stmt.Lhs[0], n.Decorations().After)) // add roundtripper to transports
 		stmt.Decs.After = dst.None
 		manager.AddImport(codegen.NewRelicAgentImportPath)
 	}
 }
 
-func cannotTraceOutboundHttp(method string, decs *dst.NodeDecs) []string {
+func CannotTraceOutboundHttp(method string, decs *dst.NodeDecs) []string {
 	comment := []string{
 		fmt.Sprintf("// the \"http.%s()\" net/http method can not be instrumented and its outbound traffic can not be traced", method),
 		"// please see these examples of code patterns for external http calls that can be instrumented:",
@@ -400,7 +400,7 @@ func cannotTraceOutboundHttp(method string, decs *dst.NodeDecs) []string {
 
 // isNetHttpMethodCannotInstrument is a function that discovers methods of net/http that can not be instrumented by new relic
 // and returns the name of the method and whether it can be instrumented or not.
-func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
+func IsNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 	var cannotInstrument bool
 	var returnFuncName string
 
@@ -434,10 +434,10 @@ func isNetHttpMethodCannotInstrument(node dst.Node) (string, bool) {
 // instrumentation, it leaves a comment header warning the customer. This function needs no tracing context to work.
 func CannotInstrumentHttpMethod(manager *parser.InstrumentationManager, c *dstutil.Cursor) {
 	n := c.Node()
-	funcName, ok := isNetHttpMethodCannotInstrument(n)
+	funcName, ok := IsNetHttpMethodCannotInstrument(n)
 	if ok {
 		if decl := n.Decorations(); decl != nil {
-			decl.Start.Prepend(cannotTraceOutboundHttp(funcName, n.Decorations())...)
+			decl.Start.Prepend(CannotTraceOutboundHttp(funcName, n.Decorations())...)
 		}
 	}
 }
@@ -446,7 +446,7 @@ func CannotInstrumentHttpMethod(manager *parser.InstrumentationManager, c *dstut
 //////////////////////////////////////////////
 
 // getHttpResponseVariable returns the expression that contains an object of `*net/http.Response` type
-func getHttpResponseVariable(manager *parser.InstrumentationManager, stmt dst.Stmt) dst.Expr {
+func GetHttpResponseVariable(manager *parser.InstrumentationManager, stmt dst.Stmt) dst.Expr {
 	var expression dst.Expr
 	pkg := manager.GetDecoratorPackage()
 	dst.Inspect(stmt, func(n dst.Node) bool {
@@ -485,7 +485,7 @@ func ExternalHttpCall(manager *parser.InstrumentationManager, stmt dst.Stmt, c *
 		case *dst.BlockStmt:
 			return false
 		case *dst.CallExpr:
-			if getNetHttpMethod(v, pkg) == httpDo {
+			if GetNetHttpMethod(v, pkg) == httpDo {
 				call = v
 				return false
 			}
@@ -493,7 +493,7 @@ func ExternalHttpCall(manager *parser.InstrumentationManager, stmt dst.Stmt, c *
 		return true
 	})
 	if call != nil && c.Index() >= 0 {
-		clientVar := getNetHttpClientVariableName(call, pkg)
+		clientVar := GetNetHttpClientVariableName(call, pkg)
 		requestObject := call.Args[0]
 		if clientVar == httpDefaultClientVariable {
 			// create external segment to wrap calls made with default client
@@ -501,7 +501,7 @@ func ExternalHttpCall(manager *parser.InstrumentationManager, stmt dst.Stmt, c *
 			segmentName := "externalSegment"
 			c.InsertBefore(codegen.StartExternalSegment(requestObject, tracing.TransactionVariable(), segmentName, stmt.Decorations()))
 			c.InsertAfter(codegen.EndExternalSegment(segmentName, stmt.Decorations()))
-			responseVar := getHttpResponseVariable(manager, stmt)
+			responseVar := GetHttpResponseVariable(manager, stmt)
 			manager.AddImport(codegen.NewRelicAgentImportPath)
 			if responseVar != nil {
 				c.InsertAfter(codegen.CaptureHttpResponse(segmentName, responseVar))
@@ -528,7 +528,7 @@ func WrapNestedHandleFunction(manager *parser.InstrumentationManager, stmt dst.S
 			return false
 		case *dst.CallExpr:
 			callExpr := v
-			funcName := getNetHttpMethod(callExpr, pkg)
+			funcName := GetNetHttpMethod(callExpr, pkg)
 			switch funcName {
 			case httpHandleFunc:
 				if len(callExpr.Args) == 2 {
