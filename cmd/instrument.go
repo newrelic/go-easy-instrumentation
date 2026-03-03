@@ -11,6 +11,12 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dave/dst/decorator"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrslog"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/spf13/cobra"
@@ -26,6 +32,44 @@ const (
 	defaultOutputFilePath    = ""
 	defaultDiffFileName      = "new-relic-instrumentation.diff"
 )
+
+// registerIntegrations registers all integration tracing functions with the manager
+// in the correct order (order matters for instrumentation!)
+func registerIntegrations(manager *parser.InstrumentationManager) {
+	// Pre-instrumentation scanning phase (ORDER PRESERVED)
+	manager.LoadPreInstrumentationTracingFunctions(
+		parser.DetectTransactions,
+		parser.DetectErrors,
+		nrnethttp.DetectWrappedRoutes,
+	)
+
+	// Stateless tracing functions (ORDER PRESERVED)
+	manager.LoadStatelessTracingFunctions(
+		nragent.InstrumentMain,
+		nrnethttp.InstrumentHandleFunction,
+		nrnethttp.InstrumentHttpClient,
+		nrnethttp.CannotInstrumentHttpMethod,
+		nrgrpc.InstrumentGrpcDial,
+		nrgin.InstrumentGinFunction,
+		nrgrpc.InstrumentGrpcServerMethod,
+		nrslog.InstrumentSlogHandler,
+	)
+
+	// Stateful tracing functions (ORDER PRESERVED)
+	manager.LoadStatefulTracingFunctions(
+		nrnethttp.ExternalHttpCall,
+		nrnethttp.WrapNestedHandleFunction,
+		nrgrpc.InstrumentGrpcServer,
+		nrgin.InstrumentGinMiddleware,
+		nrgochi.InstrumentChiMiddleware,
+		nrgochi.InstrumentChiRouterLiteral,
+	)
+
+	// Fact discovery functions
+	manager.LoadDependencyScans(
+		nrgrpc.FindGrpcServerObject,
+	)
+}
 
 var (
 	diffFile    string
@@ -177,12 +221,14 @@ func instrumentPackages(packagePath string, patterns []string, outputFile string
 
 	manager := parser.NewInstrumentationManager(pkgs, defaultAppName, defaultAgentVariableName, outputFile, packagePath)
 
+	// Register all integrations
+	registerIntegrations(manager)
+
 	steps := []struct {
 		desc string
 		fn   func() error
 	}{
 		{"Creating diff file", manager.CreateDiffFile},
-		{"Detecting dependencies", manager.DetectDependencyIntegrations},
 		{"Tracing package calls", manager.TracePackageCalls},
 		{"Scanning application", manager.ScanApplication},
 		{"Instrumenting application", manager.InstrumentApplication},
@@ -229,7 +275,7 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 			fn   func() error
 		}{
 			{"Creating diff file", manager.CreateDiffFile},
-			{"Detecting dependencies", manager.DetectDependencyIntegrations},
+			{"Detecting dependencies", func() error { registerIntegrations(manager); return nil }},
 			{"Tracing package calls", manager.TracePackageCalls},
 			{"Scanning application", manager.ScanApplication},
 			{"Instrumenting application", manager.InstrumentApplication},

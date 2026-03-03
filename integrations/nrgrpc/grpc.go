@@ -193,8 +193,8 @@ func InstrumentGrpcServer(manager *parser.InstrumentationManager, stmt dst.Stmt,
 
 	// inject middleware
 	comment.Debug(manager.GetDecoratorPackage(), stmt, "Injecting gRPC server interceptors into grpc.NewServer")
-	callExpr.Args = append(callExpr.Args, codegen.NrGrpcUnaryServerInterceptor(tracing.AgentVariable(), callExpr))
-	callExpr.Args = append(callExpr.Args, codegen.NrGrpcStreamServerInterceptor(tracing.AgentVariable(), callExpr))
+	callExpr.Args = append(callExpr.Args, NrGrpcUnaryServerInterceptor(tracing.AgentVariable(), callExpr))
+	callExpr.Args = append(callExpr.Args, NrGrpcStreamServerInterceptor(tracing.AgentVariable(), callExpr))
 	manager.AddImport(NrgrpcImportPath)
 	return true
 }

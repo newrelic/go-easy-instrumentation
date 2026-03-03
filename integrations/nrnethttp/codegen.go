@@ -11,19 +11,6 @@ const (
 	HttpImportPath = "net/http"
 )
 
-func HttpRequestContext(reqArgName string) dst.Expr {
-	return &dst.CallExpr{
-		Fun: &dst.SelectorExpr{
-			X: &dst.Ident{
-				Name: reqArgName,
-			},
-			Sel: &dst.Ident{
-				Name: "Context",
-			},
-		},
-	}
-}
-
 // WrapHttpHandleFunc does an in place edit of a call expression to http.HandleFunc
 // replacing it with a call to newrelic.WrapHandleFunc
 //

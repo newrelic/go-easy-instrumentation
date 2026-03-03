@@ -90,29 +90,41 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	return manager
 }
 
-// DetectDependencyIntegrations
-func (m *InstrumentationManager) DetectDependencyIntegrations() error {
-	m.loadPreInstrumentationTracingFunctions(DetectTransactions, DetectErrors, DetectWrappedRoutes)
-	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod, InstrumentGrpcDial, InstrumentGinFunction, InstrumentGrpcServerMethod, InstrumentSlogHandler)
-	m.loadStatefulTracingFunctions(ExternalHttpCall, WrapNestedHandleFunction, InstrumentGrpcServer, InstrumentGinMiddleware, InstrumentChiMiddleware, InstrumentChiRouterLiteral)
-	m.loadDependencyScans(FindGrpcServerObject)
-	return nil
-}
-
-func (m *InstrumentationManager) loadPreInstrumentationTracingFunctions(functions ...PreInstrumentationTracingFunction) {
+// LoadPreInstrumentationTracingFunctions registers pre-instrumentation tracing functions (exported for cmd)
+func (m *InstrumentationManager) LoadPreInstrumentationTracingFunctions(functions ...PreInstrumentationTracingFunction) {
 	m.tracingFunctions.preinstrumentation = append(m.tracingFunctions.preinstrumentation, functions...)
 }
 
-func (m *InstrumentationManager) loadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
+// LoadStatefulTracingFunctions registers stateful tracing functions (exported for cmd)
+func (m *InstrumentationManager) LoadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
 	m.tracingFunctions.stateful = append(m.tracingFunctions.stateful, functions...)
 }
 
-func (m *InstrumentationManager) loadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
+// LoadStatelessTracingFunctions registers stateless tracing functions (exported for cmd)
+func (m *InstrumentationManager) LoadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
 	m.tracingFunctions.stateless = append(m.tracingFunctions.stateless, functions...)
 }
 
-func (m *InstrumentationManager) loadDependencyScans(scans ...FactDiscoveryFunction) {
+// LoadDependencyScans registers fact discovery functions (exported for cmd)
+func (m *InstrumentationManager) LoadDependencyScans(scans ...FactDiscoveryFunction) {
 	m.tracingFunctions.dependency = append(m.tracingFunctions.dependency, scans...)
+}
+
+// Internal unexported versions for backward compatibility
+func (m *InstrumentationManager) loadPreInstrumentationTracingFunctions(functions ...PreInstrumentationTracingFunction) {
+	m.LoadPreInstrumentationTracingFunctions(functions...)
+}
+
+func (m *InstrumentationManager) loadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
+	m.LoadStatefulTracingFunctions(functions...)
+}
+
+func (m *InstrumentationManager) loadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
+	m.LoadStatelessTracingFunctions(functions...)
+}
+
+func (m *InstrumentationManager) loadDependencyScans(scans ...FactDiscoveryFunction) {
+	m.LoadDependencyScans(scans...)
 }
 
 func (m *InstrumentationManager) CreateDiffFile() error {

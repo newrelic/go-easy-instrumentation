@@ -143,7 +143,7 @@ func defineTxnFromCtx(fn *dst.FuncDecl, txnVariable string) {
 		// TODO: consider injecting a comment or creating a log message describing the failure here.
 		return
 	}
-	stmts[0] = codegen.TxnFromContext(txnVariable, HttpRequestContext(reqArgName))
+	stmts[0] = codegen.TxnFromContext(txnVariable, codegen.HttpRequestContext(reqArgName))
 	for i, stmt := range fn.Body.List {
 		stmts[i+1] = stmt
 	}
@@ -378,7 +378,7 @@ func InstrumentHttpClient(manager *parser.InstrumentationManager, c *dstutil.Cur
 	n := c.Node()
 	stmt, ok := n.(*dst.AssignStmt)
 	if ok && isNetHttpClientDefinition(stmt) && c.Index() >= 0 && n.Decorations() != nil {
-		c.InsertAfter(codegen.RoundTripper(stmt.Lhs[0], n.Decorations().After)) // add roundtripper to transports
+		c.InsertAfter(RoundTripper(stmt.Lhs[0], n.Decorations().After)) // add roundtripper to transports
 		stmt.Decs.After = dst.None
 		manager.AddImport(codegen.NewRelicAgentImportPath)
 	}
@@ -509,7 +509,7 @@ func ExternalHttpCall(manager *parser.InstrumentationManager, stmt dst.Stmt, c *
 			return true
 		} else {
 			comment.Debug(manager.GetDecoratorPackage(), stmt, "Injecting transaction context into HTTP request")
-			c.InsertBefore(codegen.WrapRequestContext(requestObject, tracing.TransactionVariable(), stmt.Decorations()))
+			c.InsertBefore(WrapRequestContext(requestObject, tracing.TransactionVariable(), stmt.Decorations()))
 			manager.AddImport(codegen.NewRelicAgentImportPath)
 			return true
 		}
@@ -534,7 +534,7 @@ func WrapNestedHandleFunction(manager *parser.InstrumentationManager, stmt dst.S
 				if len(callExpr.Args) == 2 {
 					// Instrument handle funcs
 					comment.Debug(manager.GetDecoratorPackage(), stmt, "Wrapping http.HandleFunc with newrelic.WrapHandleFunc")
-					codegen.WrapHttpHandleFunc(tracing.AgentVariable(), callExpr)
+					WrapHttpHandleFunc(tracing.AgentVariable(), callExpr)
 
 					wasModified = true
 					manager.AddImport(codegen.NewRelicAgentImportPath)
@@ -544,7 +544,7 @@ func WrapNestedHandleFunction(manager *parser.InstrumentationManager, stmt dst.S
 				if len(callExpr.Args) == 2 {
 					// Instrument handle funcs
 					comment.Debug(manager.GetDecoratorPackage(), stmt, "Wrapping http.Handle with newrelic.WrapHandle")
-					codegen.WrapHttpHandle(tracing.AgentVariable(), callExpr)
+					WrapHttpHandle(tracing.AgentVariable(), callExpr)
 
 					wasModified = true
 					manager.AddImport(codegen.NewRelicAgentImportPath)

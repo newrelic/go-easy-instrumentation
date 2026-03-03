@@ -52,3 +52,18 @@ func NewContextParameter(name string) *dst.Field {
 		},
 	}
 }
+
+// HttpRequestContext creates an expression for calling the Context() method on an HTTP request
+// Used to extract context from http.Request objects
+func HttpRequestContext(reqArgName string) dst.Expr {
+	return &dst.CallExpr{
+		Fun: &dst.SelectorExpr{
+			X: &dst.Ident{
+				Name: reqArgName,
+			},
+			Sel: &dst.Ident{
+				Name: "Context",
+			},
+		},
+	}
+}

@@ -14,3 +14,8 @@
 // may result in a panic, which is not an acceptable outcome. A test to verify that the output is what
 // we expect is a good safegard.
 package codegen
+
+const (
+	// NewRelicAgentImportPath is the import path for the New Relic Go agent
+	NewRelicAgentImportPath = "github.com/newrelic/go-agent/v3/newrelic"
+)
