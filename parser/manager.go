@@ -184,6 +184,11 @@ func (m *InstrumentationManager) ErrorCache() *errorcache.ErrorCache {
 	return &m.errorCache
 }
 
+// TransactionCache returns the transaction cache (exported for integrations)
+func (m *InstrumentationManager) TransactionCache() *transactioncache.TransactionCache {
+	return &m.transactionCache
+}
+
 func (m *InstrumentationManager) getImports() []string {
 	i := 0
 	state, ok := m.packages[m.currentPackage]

@@ -2,11 +2,11 @@
   "tests": [
     {
       "name": "http web app",
-      "dir": "end-to-end-tests/http-app"
+      "dir": "integrations/nrnethttp/example/http-app"
     },
     {
       "name": "http-mux web app",
-      "dir": "end-to-end-tests/http-mux-app"
+      "dir": "integrations/nrnethttp/example/http-mux-app"
     },
     {
       "name": "grpc app",
