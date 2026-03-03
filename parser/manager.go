@@ -144,6 +144,11 @@ func (m *InstrumentationManager) addImport(path string) {
 	m.AddImport(path)
 }
 
+// AgentVariableName returns the New Relic agent variable name (exported for integrations)
+func (m *InstrumentationManager) AgentVariableName() string {
+	return m.agentVariableName
+}
+
 func (m *InstrumentationManager) getImports() []string {
 	i := 0
 	state, ok := m.packages[m.currentPackage]

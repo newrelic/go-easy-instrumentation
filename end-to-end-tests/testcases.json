@@ -39,6 +39,10 @@
     {
        "name": "slog app",
        "dir": "integrations/nrslog/example/slog-examples"
+    },
+    {
+       "name": "mysql app",
+       "dir": "integrations/nrmysql/example/mysql"
     }
   ]
 }
