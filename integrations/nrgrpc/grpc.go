@@ -19,12 +19,12 @@ import (
 
 const (
 	grpcServerType       = "*google.golang.org/grpc.Server"
-	grpcServerStreamType = "google.golang.org/grpc.ServerStream"
+	GrpcServerStreamType = "google.golang.org/grpc.ServerStream"
 	grpcPath             = "google.golang.org/grpc"
 	contextType          = "context.Context"
 )
 
-func grpcDialCall(node dst.Node) (*dst.CallExpr, bool) {
+func GrpcDialCall(node dst.Node) (*dst.CallExpr, bool) {
 	switch v := node.(type) {
 	case *dst.AssignStmt:
 		if len(v.Rhs) == 1 {
@@ -48,7 +48,7 @@ func grpcDialCall(node dst.Node) (*dst.CallExpr, bool) {
 	return nil, false
 }
 
-func grpcNewServerCall(node dst.Node) (*dst.CallExpr, bool) {
+func GrpcNewServerCall(node dst.Node) (*dst.CallExpr, bool) {
 	switch v := node.(type) {
 	case *dst.AssignStmt:
 		if len(v.Rhs) == 1 {
@@ -75,8 +75,8 @@ func grpcNewServerCall(node dst.Node) (*dst.CallExpr, bool) {
 // Stateless Tracing Functions
 // ////////////////////////////////////////////
 
-// traceObject must not be nil if grpcServerTxnData is returned
-type grpcServerTxnData struct {
+// traceObject must not be nil if GrpcServerTxnData is returned
+type GrpcServerTxnData struct {
 	assignment  *dst.AssignStmt
 	traceObject traceobject.TraceObject
 }
@@ -84,7 +84,7 @@ type grpcServerTxnData struct {
 // getTxnFromGrpcServer finds the transaction object from a gRPC server method
 // This is done by looking for a context object or a stream server object in the function parameters
 // and then pulling the transaction from that object and assigning it to a variable.
-func getTxnFromGrpcServer(manager *parser.InstrumentationManager, params []*dst.Field, txnVariableName string) (*grpcServerTxnData, bool) {
+func GetTxnFromGrpcServer(manager *parser.InstrumentationManager, params []*dst.Field, txnVariableName string) (*GrpcServerTxnData, bool) {
 	// Find stream server object parameters first
 	var streamServerIdent *dst.Ident
 	var contextIdent *dst.Ident
@@ -97,7 +97,7 @@ func getTxnFromGrpcServer(manager *parser.InstrumentationManager, params []*dst.
 			if len(param.Names) == 1 {
 				// check if this is a stream server object or a context object
 				paramTypeName := paramType.String()
-				if util.IsUnderlyingType(underlyingType, grpcServerStreamType) {
+				if util.IsUnderlyingType(underlyingType, GrpcServerStreamType) {
 					streamServerIdent = param.Names[0]
 				} else if paramTypeName == contextType {
 					contextIdent = param.Names[0]
@@ -106,17 +106,17 @@ func getTxnFromGrpcServer(manager *parser.InstrumentationManager, params []*dst.
 		}
 	}
 
-	var txnData *grpcServerTxnData
+	var txnData *GrpcServerTxnData
 	var ok bool
 	if streamServerIdent != nil {
 		ok = true
-		txnData = &grpcServerTxnData{
+		txnData = &GrpcServerTxnData{
 			assignment:  codegen.TxnFromContext(txnVariableName, GrpcStreamContext(streamServerIdent)),
 			traceObject: traceobject.NewTransaction(),
 		}
 	} else if contextIdent != nil {
 		ok = true
-		txnData = &grpcServerTxnData{
+		txnData = &GrpcServerTxnData{
 			traceObject: traceobject.NewContext(contextIdent.Name),
 		}
 	}
@@ -153,7 +153,7 @@ func InstrumentGrpcServerMethod(manager *parser.InstrumentationManager, c *dstut
 	}
 
 	// find either a context or a server stream object
-	txnData, ok := getTxnFromGrpcServer(manager, funcDecl.Type.Params.List, codegen.DefaultTransactionVariable)
+	txnData, ok := GetTxnFromGrpcServer(manager, funcDecl.Type.Params.List, codegen.DefaultTransactionVariable)
 	if !ok {
 		return
 	}
@@ -172,7 +172,7 @@ func InstrumentGrpcServerMethod(manager *parser.InstrumentationManager, c *dstut
 // This function does not need any tracing context to work, nor will it produce any tracing context
 func InstrumentGrpcDial(manager *parser.InstrumentationManager, c *dstutil.Cursor) {
 	currentNode := c.Node()
-	if callExpr, ok := grpcDialCall(currentNode); ok {
+	if callExpr, ok := GrpcDialCall(currentNode); ok {
 		comment.Debug(manager.GetDecoratorPackage(), currentNode, "Injecting gRPC client interceptors into grpc.Dial")
 		callExpr.Args = append(callExpr.Args, NrGrpcUnaryClientInterceptor(callExpr))
 		callExpr.Args = append(callExpr.Args, NrGrpcStreamClientInterceptor(callExpr))
@@ -186,7 +186,7 @@ func InstrumentGrpcDial(manager *parser.InstrumentationManager, c *dstutil.Curso
 // InstrumentGrpcServer adds the New Relic gRPC server interceptors to the grpc.NewServer call
 func InstrumentGrpcServer(manager *parser.InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 	// determine if this is a gRPC server initialization
-	callExpr, ok := grpcNewServerCall(stmt)
+	callExpr, ok := GrpcNewServerCall(stmt)
 	if !ok {
 		return false
 	}
@@ -204,7 +204,7 @@ func InstrumentGrpcServer(manager *parser.InstrumentationManager, stmt dst.Stmt,
 
 // isGrpcRegisterServerCall checks if a call expression is a call to a gRPC Register***Server function
 // must check length of call.Args == 2 before calling this.
-func isGrpcRegisterServerCall(call *dst.CallExpr, pkg *decorator.Package) bool {
+func IsGrpcRegisterServerCall(call *dst.CallExpr, pkg *decorator.Package) bool {
 	if len(call.Args) != 2 {
 		return false
 	}
@@ -220,7 +220,7 @@ func isGrpcRegisterServerCall(call *dst.CallExpr, pkg *decorator.Package) bool {
 }
 
 // Must be called on a call with 2 arguments
-func getRegisteredServerIdent(call *dst.CallExpr) (*dst.Ident, bool) {
+func GetRegisteredServerIdent(call *dst.CallExpr) (*dst.Ident, bool) {
 	switch v := call.Args[1].(type) {
 	case *dst.Ident:
 		return v, true
@@ -249,12 +249,12 @@ func FindGrpcServerObject(pkg *decorator.Package, node dst.Node) (facts.Entry, b
 
 	// look for gRPC server registration call
 	call, ok := expr.X.(*dst.CallExpr)
-	if !ok || !isGrpcRegisterServerCall(call, pkg) {
+	if !ok || !IsGrpcRegisterServerCall(call, pkg) {
 		return facts.Entry{}, false
 	}
 
 	// get the server object that was registered
-	serverHandlerIdent, ok := getRegisteredServerIdent(call)
+	serverHandlerIdent, ok := GetRegisteredServerIdent(call)
 	if !ok {
 		return facts.Entry{}, false
 	}

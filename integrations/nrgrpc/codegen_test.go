@@ -135,7 +135,7 @@ func Test_GetCallExpressionArgumentSpacing(t *testing.T) {
 	}
 }
 
-func Testnrgrpc.NrGrpcUnaryClientInterceptor(t *testing.T) {
+func Test_NrGrpcUnaryClientInterceptor(t *testing.T) {
 	tests := []struct {
 		name     string
 		call     *dst.CallExpr
@@ -204,14 +204,14 @@ func Testnrgrpc.NrGrpcUnaryClientInterceptor(t *testing.T) {
 			if argIdent.Name != "UnaryClientInterceptor" {
 				t.Errorf("expected arg name %q, got %q", "UnaryClientInterceptor", argIdent.Name)
 			}
-			if argIdent.Path != NrgrpcImportPath {
-				t.Errorf("expected arg path %q, got %q", NrgrpcImportPath, argIdent.Path)
+			if argIdent.Path != nrgrpc.NrgrpcImportPath {
+				t.Errorf("expected arg path %q, got %q", nrgrpc.NrgrpcImportPath, argIdent.Path)
 			}
 		})
 	}
 }
 
-func Testnrgrpc.NrGrpcStreamClientInterceptor(t *testing.T) {
+func Test_NrGrpcStreamClientInterceptor(t *testing.T) {
 	tests := []struct {
 		name     string
 		call     *dst.CallExpr
@@ -263,14 +263,14 @@ func Testnrgrpc.NrGrpcStreamClientInterceptor(t *testing.T) {
 			if argIdent.Name != "StreamClientInterceptor" {
 				t.Errorf("expected arg name %q, got %q", "StreamClientInterceptor", argIdent.Name)
 			}
-			if argIdent.Path != NrgrpcImportPath {
-				t.Errorf("expected arg path %q, got %q", NrgrpcImportPath, argIdent.Path)
+			if argIdent.Path != nrgrpc.NrgrpcImportPath {
+				t.Errorf("expected arg path %q, got %q", nrgrpc.NrgrpcImportPath, argIdent.Path)
 			}
 		})
 	}
 }
 
-func Testnrgrpc.NrGrpcUnaryServerInterceptor(t *testing.T) {
+func Test_NrGrpcUnaryServerInterceptor(t *testing.T) {
 	tests := []struct {
 		name          string
 		agentVariable dst.Expr
@@ -330,8 +330,8 @@ func Testnrgrpc.NrGrpcUnaryServerInterceptor(t *testing.T) {
 			if innerFun.Name != "UnaryServerInterceptor" {
 				t.Errorf("expected inner function name %q, got %q", "UnaryServerInterceptor", innerFun.Name)
 			}
-			if innerFun.Path != NrgrpcImportPath {
-				t.Errorf("expected inner function path %q, got %q", NrgrpcImportPath, innerFun.Path)
+			if innerFun.Path != nrgrpc.NrgrpcImportPath {
+				t.Errorf("expected inner function path %q, got %q", nrgrpc.NrgrpcImportPath, innerFun.Path)
 			}
 
 			// Check the agent variable is passed
@@ -342,7 +342,7 @@ func Testnrgrpc.NrGrpcUnaryServerInterceptor(t *testing.T) {
 	}
 }
 
-func Testnrgrpc.NrGrpcStreamServerInterceptor(t *testing.T) {
+func Test_NrGrpcStreamServerInterceptor(t *testing.T) {
 	tests := []struct {
 		name          string
 		agentVariable dst.Expr
@@ -402,8 +402,8 @@ func Testnrgrpc.NrGrpcStreamServerInterceptor(t *testing.T) {
 			if innerFun.Name != "StreamServerInterceptor" {
 				t.Errorf("expected inner function name %q, got %q", "StreamServerInterceptor", innerFun.Name)
 			}
-			if innerFun.Path != NrgrpcImportPath {
-				t.Errorf("expected inner function path %q, got %q", NrgrpcImportPath, innerFun.Path)
+			if innerFun.Path != nrgrpc.NrgrpcImportPath {
+				t.Errorf("expected inner function path %q, got %q", nrgrpc.NrgrpcImportPath, innerFun.Path)
 			}
 
 			// Check the agent variable is passed
@@ -414,7 +414,7 @@ func Testnrgrpc.NrGrpcStreamServerInterceptor(t *testing.T) {
 	}
 }
 
-func Testnrgrpc.GrpcStreamContext(t *testing.T) {
+func Test_GrpcStreamContext(t *testing.T) {
 	tests := []struct {
 		name              string
 		streamServerObject *dst.Ident

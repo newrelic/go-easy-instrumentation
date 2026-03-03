@@ -1,6 +1,7 @@
 package nrgrpc_test
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"go/ast"
 	"go/token"
@@ -17,7 +18,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func Testnrgrpc.InstrumentGrpcDial(t *testing.T) {
+func Test_InstrumentGrpcDial(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -43,6 +44,7 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"github.com/newrelic/go-agent/v3/integrations/nrgrpc"
 	"google.golang.org/grpc"
@@ -72,7 +74,7 @@ func main() {
 	}
 }
 
-func Testnrgrpc.InstrumentGrpcServer(t *testing.T) {
+func Test_InstrumentGrpcServer(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -93,6 +95,7 @@ func main() {
 			expect: `package main
 
 import (
+	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"github.com/newrelic/go-agent/v3/integrations/nrgrpc"
 	"google.golang.org/grpc"
@@ -118,7 +121,7 @@ func main() {
 	}
 }
 
-func Test_grpcDialCall(t *testing.T) {
+func Test_GrpcDialCall(t *testing.T) {
 	type args struct {
 		node dst.Node
 	}
@@ -136,7 +139,7 @@ func Test_grpcDialCall(t *testing.T) {
 						&dst.CallExpr{
 							Fun: &dst.Ident{
 								Name: "Dial",
-								Path: codegen.GrpcImportPath,
+								Path: nrgrpc.GrpcImportPath,
 							},
 							Args: []dst.Expr{
 								&dst.BasicLit{
@@ -159,7 +162,7 @@ func Test_grpcDialCall(t *testing.T) {
 			want: &dst.CallExpr{
 				Fun: &dst.Ident{
 					Name: "Dial",
-					Path: codegen.GrpcImportPath,
+					Path: nrgrpc.GrpcImportPath,
 				},
 				Args: []dst.Expr{
 					&dst.BasicLit{
@@ -177,7 +180,7 @@ func Test_grpcDialCall(t *testing.T) {
 					X: &dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "Dial",
-							Path: codegen.GrpcImportPath,
+							Path: nrgrpc.GrpcImportPath,
 						},
 						Args: []dst.Expr{
 							&dst.BasicLit{
@@ -191,7 +194,7 @@ func Test_grpcDialCall(t *testing.T) {
 			want: &dst.CallExpr{
 				Fun: &dst.Ident{
 					Name: "Dial",
-					Path: codegen.GrpcImportPath,
+					Path: nrgrpc.GrpcImportPath,
 				},
 				Args: []dst.Expr{
 					&dst.BasicLit{
@@ -257,18 +260,18 @@ func Test_grpcDialCall(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := grpcDialCall(tt.args.node)
+			got, got1 := nrgrpc.GrpcDialCall(tt.args.node)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("grpcDialCall() got = %v, want %v", got, tt.want)
+				t.Errorf("nrgrpc.GrpcDialCall() got = %v, want %v", got, tt.want)
 			}
 			if got1 != tt.want1 {
-				t.Errorf("grpcDialCall() got1 = %v, want %v", got1, tt.want1)
+				t.Errorf("nrgrpc.GrpcDialCall() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
 	}
 }
 
-func Test_grpcNewServerCall(t *testing.T) {
+func Test_GrpcNewServerCall(t *testing.T) {
 	type args struct {
 		node dst.Node
 	}
@@ -286,7 +289,7 @@ func Test_grpcNewServerCall(t *testing.T) {
 						&dst.CallExpr{
 							Fun: &dst.Ident{
 								Name: "NewServer",
-								Path: codegen.GrpcImportPath,
+								Path: nrgrpc.GrpcImportPath,
 							},
 							Args: []dst.Expr{},
 						},
@@ -299,7 +302,7 @@ func Test_grpcNewServerCall(t *testing.T) {
 			want: &dst.CallExpr{
 				Fun: &dst.Ident{
 					Name: "NewServer",
-					Path: codegen.GrpcImportPath,
+					Path: nrgrpc.GrpcImportPath,
 				},
 				Args: []dst.Expr{},
 			},
@@ -312,7 +315,7 @@ func Test_grpcNewServerCall(t *testing.T) {
 					X: &dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "NewServer",
-							Path: codegen.GrpcImportPath,
+							Path: nrgrpc.GrpcImportPath,
 						},
 						Args: []dst.Expr{},
 					},
@@ -321,7 +324,7 @@ func Test_grpcNewServerCall(t *testing.T) {
 			want: &dst.CallExpr{
 				Fun: &dst.Ident{
 					Name: "NewServer",
-					Path: codegen.GrpcImportPath,
+					Path: nrgrpc.GrpcImportPath,
 				},
 				Args: []dst.Expr{},
 			},
@@ -367,18 +370,18 @@ func Test_grpcNewServerCall(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, got1 := grpcNewServerCall(tt.args.node)
+			got, got1 := nrgrpc.GrpcNewServerCall(tt.args.node)
 			if !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("grpcNewServerCall() got = %v, want %v", got, tt.want)
+				t.Errorf("nrgrpc.GrpcNewServerCall() got = %v, want %v", got, tt.want)
 			}
 			if got1 != tt.want1 {
-				t.Errorf("grpcNewServerCall() got1 = %v, want %v", got1, tt.want1)
+				t.Errorf("nrgrpc.GrpcNewServerCall() got1 = %v, want %v", got1, tt.want1)
 			}
 		})
 	}
 }
 
-func Test_isGrpcRegisterServerCall(t *testing.T) {
+func Test_IsGrpcRegisterServerCall(t *testing.T) {
 	serverArg := &dst.Ident{
 		Name: "grpcServer",
 	}
@@ -415,7 +418,7 @@ func Test_isGrpcRegisterServerCall(t *testing.T) {
 		},
 	}
 
-	ok := isGrpcRegisterServerCall(functionCallExpr, pkg)
+	ok := nrgrpc.IsGrpcRegisterServerCall(functionCallExpr, pkg)
 	if !ok {
 		t.Error("expected valid server to return true")
 	}
@@ -425,7 +428,7 @@ func Test_isGrpcRegisterServerCall(t *testing.T) {
 		Name: "RegisterTestFooBarServer",
 		Path: "testGrpcPackage",
 	}
-	ok = isGrpcRegisterServerCall(functionCallExpr, pkg)
+	ok = nrgrpc.IsGrpcRegisterServerCall(functionCallExpr, pkg)
 	if !ok {
 		t.Error("expected valid server to return true")
 	}
@@ -435,14 +438,14 @@ func Test_isGrpcRegisterServerCall(t *testing.T) {
 		Name: "RegisterTestService",
 		Path: "testGrpcPackage",
 	}
-	ok = isGrpcRegisterServerCall(functionCallExpr, pkg)
+	ok = nrgrpc.IsGrpcRegisterServerCall(functionCallExpr, pkg)
 	if ok {
 		t.Error("expected invalid call to return false")
 	}
 
 }
 
-func Test_getRegisteredServerIdent(t *testing.T) {
+func Test_GetRegisteredServerIdent(t *testing.T) {
 	type args struct {
 		call *dst.CallExpr
 	}
@@ -490,7 +493,7 @@ func Test_getRegisteredServerIdent(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := getRegisteredServerIdent(tt.args.call)
+			got, ok := nrgrpc.GetRegisteredServerIdent(tt.args.call)
 			if ok && tt.expect {
 				assert.Equal(t, tt.want, got)
 			}
@@ -499,7 +502,7 @@ func Test_getRegisteredServerIdent(t *testing.T) {
 	}
 }
 
-func TestFindGrpcServerObject(t *testing.T) {
+func Test_FindGrpcServerObject(t *testing.T) {
 	serverArg := &dst.Ident{
 		Name: "grpcServer",
 	}
@@ -548,7 +551,7 @@ func TestFindGrpcServerObject(t *testing.T) {
 		},
 	}
 
-	fact, ok := FindGrpcServerObject(pkg, functionCallExpr)
+	fact, ok := nrgrpc.FindGrpcServerObject(pkg, functionCallExpr)
 	if !ok {
 		t.Error("expected valid server to return true")
 	} else {
@@ -561,14 +564,14 @@ func TestFindGrpcServerObject(t *testing.T) {
 	}
 }
 
-func TestGetTxnFromGrpcServer(t *testing.T) {
-	grpcServerStreamType := types.NewNamed(
+func Test_GetTxnFromGrpcServer(t *testing.T) {
+	nrgrpc.GrpcServerStreamType := types.NewNamed(
 		types.NewTypeName(0, nil, "mainType", nil), // Main Type
 		types.NewInterfaceType( // Underlying Type
 			nil,
 			[]types.Type{
 				types.NewNamed(
-					types.NewTypeName(0, nil, grpcServerStreamType, nil),
+					types.NewTypeName(0, nil, nrgrpc.GrpcServerStreamType, nil),
 					nil,
 					nil,
 				),
@@ -581,9 +584,9 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 	astContext := &ast.Ident{Name: "ctx"}
 	serverStreamParamName := &dst.Ident{Name: "stream"}
 	astServerStream := &ast.Ident{Name: "stream"}
-	manager := &InstrumentationManager{
+	manager := &parser.InstrumentationManager{
 		currentPackage: "test",
-		packages: map[string]*packageState{
+		packages: map[string]*parser.PackageState{
 			"test": {
 				pkg: &decorator.Package{
 					Package: &packages.Package{
@@ -593,7 +596,7 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 									Type: types.NewNamed(types.NewTypeName(token.NoPos, types.NewPackage("context", "context"), "Context", nil), nil, nil),
 								},
 								astServerStream: {
-									Type: grpcServerStreamType,
+									Type: nrgrpc.GrpcServerStreamType,
 								},
 							},
 						},
@@ -613,13 +616,13 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 		},
 	}
 	type args struct {
-		manager *InstrumentationManager
+		manager *parser.InstrumentationManager
 		params  []*dst.Field
 	}
 	tests := []struct {
 		name string
 		args
-		want   *grpcServerTxnData
+		want   *nrgrpc.GrpcServerTxnData
 		expect bool
 	}{
 		{
@@ -632,8 +635,8 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 					},
 				},
 			},
-			want: &grpcServerTxnData{
-				codegen.TxnFromContext("txn", codegen.GrpcStreamContext(serverStreamParamName)),
+			want: &nrgrpc.GrpcServerTxnData{
+				codegen.TxnFromContext("txn", nrgrpc.GrpcStreamContext(serverStreamParamName)),
 				traceobject.NewTransaction(),
 			},
 			expect: true,
@@ -648,7 +651,7 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 					},
 				},
 			},
-			want: &grpcServerTxnData{
+			want: &nrgrpc.GrpcServerTxnData{
 				traceObject: traceobject.NewContext(contextParamName.Name),
 			},
 			expect: true,
@@ -680,7 +683,7 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := getTxnFromGrpcServer(tt.args.manager, tt.args.params, "txn")
+			got, ok := nrgrpc.GetTxnFromGrpcServer(tt.args.manager, tt.args.params, "txn")
 			if tt.expect {
 				if !ok {
 					t.Error("expected a transaction to be gotten from grpc server agrument")
@@ -695,7 +698,7 @@ func TestGetTxnFromGrpcServer(t *testing.T) {
 		})
 	}
 }
-func TestIsGrpcServerMethod(t *testing.T) {
+func Test_IsGrpcServerMethod(t *testing.T) {
 	serverRecv := &dst.Ident{
 		Name: "srv",
 	}
@@ -703,9 +706,9 @@ func TestIsGrpcServerMethod(t *testing.T) {
 		Name: "srv",
 	}
 
-	manager := &InstrumentationManager{
+	manager := &parser.InstrumentationManager{
 		currentPackage: "test",
-		packages: map[string]*packageState{
+		packages: map[string]*parser.PackageState{
 			"test": {
 				pkg: &decorator.Package{
 					Package: &packages.Package{
@@ -733,7 +736,7 @@ func TestIsGrpcServerMethod(t *testing.T) {
 	}
 
 	type args struct {
-		manager *InstrumentationManager
+		manager *parser.InstrumentationManager
 		decl    *dst.FuncDecl
 	}
 	tests := []struct {

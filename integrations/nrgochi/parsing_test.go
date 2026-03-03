@@ -149,7 +149,7 @@ func TestChiMiddlewareCall(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "NewRouter",
-							Path: gochiImportPath,
+							Path: nrgochi.GochiImportPath,
 						},
 					},
 				},
@@ -189,7 +189,7 @@ func TestChiMiddlewareCall(t *testing.T) {
 					&dst.CallExpr{
 						Fun: &dst.Ident{
 							Name: "New",
-							Path: gochiImportPath,
+							Path: nrgochi.GochiImportPath,
 						},
 					},
 				},
@@ -200,13 +200,13 @@ func TestChiMiddlewareCall(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			got := getChiRouterName(tt.stmt)
+			got := nrgochi.GetChiRouterName(tt.stmt)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func Testnrgochi.InstrumentChiRouterLiteral(t *testing.T) {
+func Test_InstrumentChiRouterLiteral(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string

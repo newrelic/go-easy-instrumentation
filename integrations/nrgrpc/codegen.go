@@ -8,7 +8,7 @@ const (
 )
 
 // This must be invoked on each argument added to a call expression to ensure the correct spacing rules are applied
-func getCallExpressionArgumentSpacing(call *dst.CallExpr) dst.NodeDecs {
+func GetCallExpressionArgumentSpacing(call *dst.CallExpr) dst.NodeDecs {
 	// no standard has been set yet, we prefer to newline each new statement we add.
 	// this will change the original decorator rules
 	if len(call.Args) == 1 {
@@ -34,7 +34,7 @@ func getCallExpressionArgumentSpacing(call *dst.CallExpr) dst.NodeDecs {
 
 // GrpcUnaryInterceptor generates a dst Call Expression for a newrelic nrgrpc unary interceptor
 func NrGrpcUnaryClientInterceptor(call *dst.CallExpr) *dst.CallExpr {
-	decs := getCallExpressionArgumentSpacing(call)
+	decs := GetCallExpressionArgumentSpacing(call)
 	return &dst.CallExpr{
 		Fun: &dst.Ident{
 			Name: "WithUnaryInterceptor",
@@ -53,7 +53,7 @@ func NrGrpcUnaryClientInterceptor(call *dst.CallExpr) *dst.CallExpr {
 }
 
 func NrGrpcStreamClientInterceptor(call *dst.CallExpr) *dst.CallExpr {
-	decs := getCallExpressionArgumentSpacing(call)
+	decs := GetCallExpressionArgumentSpacing(call)
 	return &dst.CallExpr{
 		Fun: &dst.Ident{
 			Name: "WithStreamInterceptor",
@@ -72,7 +72,7 @@ func NrGrpcStreamClientInterceptor(call *dst.CallExpr) *dst.CallExpr {
 }
 
 func NrGrpcUnaryServerInterceptor(agentVariable dst.Expr, call *dst.CallExpr) *dst.CallExpr {
-	decs := getCallExpressionArgumentSpacing(call)
+	decs := GetCallExpressionArgumentSpacing(call)
 	return &dst.CallExpr{
 		Fun: &dst.Ident{
 			Name: "UnaryInterceptor",
@@ -96,7 +96,7 @@ func NrGrpcUnaryServerInterceptor(agentVariable dst.Expr, call *dst.CallExpr) *d
 }
 
 func NrGrpcStreamServerInterceptor(agentVariable dst.Expr, call *dst.CallExpr) *dst.CallExpr {
-	decs := getCallExpressionArgumentSpacing(call)
+	decs := GetCallExpressionArgumentSpacing(call)
 	return &dst.CallExpr{
 		Fun: &dst.Ident{
 			Name: "StreamInterceptor",

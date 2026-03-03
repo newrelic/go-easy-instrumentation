@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	gochiImportPath = "github.com/go-chi/chi/v5"
+	GochiImportPath = "github.com/go-chi/chi/v5"
 )
 
 // Return the variable name of the Chi router object.
@@ -23,7 +23,7 @@ const (
 //
 //	router := chi.NewRouter()
 //	^^^^^^
-func getChiRouterName(stmt dst.Stmt) string {
+func GetChiRouterName(stmt dst.Stmt) string {
 	// Verify we're dealing with an assignment operation
 	v, ok := stmt.(*dst.AssignStmt)
 	if !ok || len(v.Rhs) != 1 {
@@ -47,7 +47,7 @@ func getChiRouterName(stmt dst.Stmt) string {
 	}
 
 	// Reject calls that are not to the `NewRouter` Fn. Verify Chi relationship with the import path.
-	if ident.Name != "NewRouter" || ident.Path != gochiImportPath {
+	if ident.Name != "NewRouter" || ident.Path != GochiImportPath {
 		return ""
 	}
 
@@ -112,7 +112,7 @@ func getChiHTTPHandlerRouteName(callExpr *dst.CallExpr) (string, *dst.FuncLit) {
 // and adds New Relic Go Agent Middleware via the router.Use() method to
 // instrument the routes registered to the router.
 func InstrumentChiMiddleware(manager *parser.InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
-	routerName := getChiRouterName(stmt)
+	routerName := GetChiRouterName(stmt)
 	if routerName == "" {
 		return false
 	}
