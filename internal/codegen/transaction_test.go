@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_startTransaction(t *testing.T) {
+func TeststartTransaction(t *testing.T) {
 	type args struct {
 		appVariableName         string
 		transactionVariableName string
@@ -83,7 +83,7 @@ func Test_startTransaction(t *testing.T) {
 	}
 }
 
-func Test_endTransaction(t *testing.T) {
+func TestendTransaction(t *testing.T) {
 	type args struct {
 		transactionVariableName string
 	}
@@ -115,7 +115,7 @@ func Test_endTransaction(t *testing.T) {
 	}
 }
 
-func Test_NewTransactionParameter(t *testing.T) {
+func TestNewTransactionParameter(t *testing.T) {
 	type args struct {
 		txnName string
 	}
@@ -152,7 +152,7 @@ func Test_NewTransactionParameter(t *testing.T) {
 	}
 }
 
-func Test_txnNewGoroutine(t *testing.T) {
+func TesttxnNewGoroutine(t *testing.T) {
 	type args struct {
 		txnVarName string
 	}
@@ -186,7 +186,7 @@ func Test_txnNewGoroutine(t *testing.T) {
 	}
 }
 
-func Test_generateNoticeError(t *testing.T) {
+func TestgenerateNoticeError(t *testing.T) {
 	type args struct {
 		errExpr  dst.Expr
 		txnName  string

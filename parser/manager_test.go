@@ -14,7 +14,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func Test_AddImport(t *testing.T) {
+func TestAddImport(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -75,7 +75,7 @@ func Test_AddImport(t *testing.T) {
 	}
 }
 
-func Test_GetImports(t *testing.T) {
+func TestGetImports(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -131,7 +131,7 @@ func Test_GetImports(t *testing.T) {
 	}
 }
 
-func Test_CreateFunctionDeclaration(t *testing.T) {
+func TestCreateFunctionDeclaration(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -207,7 +207,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 	}
 }
 
-func Test_UpdateFunctionDeclaration(t *testing.T) {
+func TestUpdateFunctionDeclaration(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -269,7 +269,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 }
 
 // What if there are two instrumentable function invocations in a statement?
-func Test_GetPackageFunctionInvocation(t *testing.T) {
+func TestGetPackageFunctionInvocation(t *testing.T) {
 	testFuncDecl := &dst.FuncDecl{}
 	state := map[string]*packageState{"foo": {
 		tracedFuncs: map[string]*tracedFunctionDecl{
@@ -433,7 +433,7 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 	}
 }
 
-func Test_ShouldInstrumentFunction(t *testing.T) {
+func TestShouldInstrumentFunction(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -507,7 +507,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 	}
 }
 
-func Test_GetInvocationInfoFromCall(t *testing.T) {
+func TestGetInvocationInfoFromCall(t *testing.T) {
 	testFuncDecl := &dst.FuncDecl{}
 	state := map[string]*packageState{"foo": {
 		tracedFuncs: map[string]*tracedFunctionDecl{"bar": {body: testFuncDecl}},
@@ -575,7 +575,7 @@ func Test_GetInvocationInfoFromCall(t *testing.T) {
 	}
 }
 
-func Test_NewInstrumentationManager(t *testing.T) {
+func TestNewInstrumentationManager(t *testing.T) {
 	type args struct {
 		pkgs              []*decorator.Package
 		appName           string
@@ -646,7 +646,7 @@ func Test_NewInstrumentationManager(t *testing.T) {
 	}
 }
 
-func Test_SetPackage(t *testing.T) {
+func TestSetPackage(t *testing.T) {
 	type fields struct {
 		currentPackage string
 	}
@@ -680,7 +680,7 @@ func Test_SetPackage(t *testing.T) {
 	}
 }
 
-func Test_GetPackageName(t *testing.T) {
+func TestGetPackageName(t *testing.T) {
 	type fields struct {
 		currentPackage string
 	}
@@ -711,7 +711,7 @@ func Test_GetPackageName(t *testing.T) {
 	}
 }
 
-func Test_GetDecoratorPackage(t *testing.T) {
+func TestGetDecoratorPackage(t *testing.T) {
 	testPkg := &decorator.Package{Package: &packages.Package{ID: "test"}}
 	type fields struct {
 		currentPackage string
@@ -751,7 +751,7 @@ func Test_GetDecoratorPackage(t *testing.T) {
 	}
 }
 
-func Test_IsDefinedInPackage(t *testing.T) {
+func TestIsDefinedInPackage(t *testing.T) {
 	type fields struct {
 		packages map[string]*packageState
 	}
@@ -805,7 +805,7 @@ func Test_IsDefinedInPackage(t *testing.T) {
 	}
 }
 
-func Test_ResolvePath(t *testing.T) {
+func TestResolvePath(t *testing.T) {
 	type args struct {
 		identPath      string
 		currentPackage string
@@ -852,7 +852,7 @@ func Test_ResolvePath(t *testing.T) {
 	}
 }
 
-func Test_GetSortedPackages(t *testing.T) {
+func TestGetSortedPackages(t *testing.T) {
 	type fields struct {
 		packages map[string]*packageState
 	}
@@ -900,7 +900,7 @@ func Test_GetSortedPackages(t *testing.T) {
 	}
 }
 
-func Test_LoadTracingFunctions(t *testing.T) {
+func TestLoadTracingFunctions(t *testing.T) {
 	mockStateless := func(m *InstrumentationManager, c *dstutil.Cursor) {}
 	mockStateful := func(m *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 		return false
@@ -961,7 +961,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 	}
 }
 
-func Test_ErrorNoMain(t *testing.T) {
+func TestErrorNoMain(t *testing.T) {
 	type args struct {
 		path string
 	}
@@ -992,7 +992,7 @@ func Test_ErrorNoMain(t *testing.T) {
 	}
 }
 
-func Test_AddImport_EmptyPath(t *testing.T) {
+func TestAddImport_EmptyPath(t *testing.T) {
 	m := &InstrumentationManager{
 		packages:       map[string]*packageState{"foo": {importsAdded: map[string]bool{}}},
 		currentPackage: "foo",
@@ -1004,11 +1004,11 @@ func Test_AddImport_EmptyPath(t *testing.T) {
 // Test_DetectDependencyIntegrations is obsolete - integration registration moved to cmd/instrument.go
 // Integration registration is now done via cmd/instrument.go's registerIntegrations() function
 // which uses dependency injection to register all integration functions with the manager.
-func Test_DetectDependencyIntegrations(t *testing.T) {
+func TestDetectDependencyIntegrations(t *testing.T) {
 	t.Skip("Integration registration moved to cmd/instrument.go - test no longer applicable")
 }
 
-func Test_InstrumentPackages(t *testing.T) {
+func TestInstrumentPackages(t *testing.T) {
 	type args struct {
 		instrumentationFunctions []StatelessTracingFunction
 	}
@@ -1061,7 +1061,7 @@ func Test_InstrumentPackages(t *testing.T) {
 	}
 }
 
-func Test_ScanPackages(t *testing.T) {
+func TestScanPackages(t *testing.T) {
 	type args struct {
 		instrumentationFunctions []PreInstrumentationTracingFunction
 	}
@@ -1114,7 +1114,7 @@ func Test_ScanPackages(t *testing.T) {
 	}
 }
 
-func Test_TracePackageCalls(t *testing.T) {
+func TestTracePackageCalls(t *testing.T) {
 	tests := []struct {
 		name    string
 		manager *InstrumentationManager
@@ -1141,7 +1141,7 @@ func Test_TracePackageCalls(t *testing.T) {
 	}
 }
 
-func Test_ScanApplication(t *testing.T) {
+func TestScanApplication(t *testing.T) {
 	tests := []struct {
 		name    string
 		manager *InstrumentationManager
@@ -1168,7 +1168,7 @@ func Test_ScanApplication(t *testing.T) {
 	}
 }
 
-func Test_InstrumentApplication(t *testing.T) {
+func TestInstrumentApplication(t *testing.T) {
 	tests := []struct {
 		name    string
 		manager *InstrumentationManager

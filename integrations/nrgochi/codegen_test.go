@@ -12,7 +12,7 @@ const (
 	ChiImportPath = "github.com/go-chi/chi/v5"
 )
 
-func Test_NrChiMiddleware(t *testing.T) {
+func TestNrChiMiddleware(t *testing.T) {
 	type args struct {
 		call              *dst.CallExpr
 		routerName        string

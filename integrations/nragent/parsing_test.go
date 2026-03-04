@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_IsNewRelicMethod(t *testing.T) {
+func TestIsNewRelicMethod(t *testing.T) {
 	type args struct {
 		call *dst.CallExpr
 	}
@@ -70,7 +70,7 @@ func Test_IsNewRelicMethod(t *testing.T) {
 	}
 }
 
-func Test_noticeError(t *testing.T) {
+func TestnoticeError(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -326,7 +326,7 @@ func main() {
 	}
 }
 
-func Test_InstrumentMain(t *testing.T) {
+func TestInstrumentMain(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string

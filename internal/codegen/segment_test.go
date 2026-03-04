@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_endExternalSegment(t *testing.T) {
+func TestendExternalSegment(t *testing.T) {
 	type args struct {
 		segmentName string
 		nodeDecs    *dst.NodeDecs
@@ -62,7 +62,7 @@ func Test_endExternalSegment(t *testing.T) {
 	}
 }
 
-func Test_startExternalSegment(t *testing.T) {
+func TeststartExternalSegment(t *testing.T) {
 	type args struct {
 		request    dst.Expr
 		txnVar     dst.Expr
@@ -126,7 +126,7 @@ func Test_startExternalSegment(t *testing.T) {
 	}
 }
 
-func Test_captureHttpResponse(t *testing.T) {
+func TestcaptureHttpResponse(t *testing.T) {
 	type args struct {
 		segmentVariable  string
 		responseVariable dst.Expr
@@ -171,7 +171,7 @@ func Test_captureHttpResponse(t *testing.T) {
 	}
 }
 
-func Test_deferSegment(t *testing.T) {
+func TestdeferSegment(t *testing.T) {
 	type args struct {
 		segmentName string
 		txnVarName  string

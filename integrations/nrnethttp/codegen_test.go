@@ -10,7 +10,7 @@ import (
 	"github.com/dave/dst"
 )
 
-func Test_RoundTripper(t *testing.T) {
+func TestRoundTripper(t *testing.T) {
 	type args struct {
 		clientVariable dst.Expr
 		spacingAfter   dst.SpaceType
@@ -65,7 +65,7 @@ func Test_RoundTripper(t *testing.T) {
 	}
 }
 
-func Test_addTxnToRequestContext(t *testing.T) {
+func TestaddTxnToRequestContext(t *testing.T) {
 	type args struct {
 		request  dst.Expr
 		txnVar   dst.Expr

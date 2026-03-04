@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_isNetHttpClient(t *testing.T) {
+func TestisNetHttpClient(t *testing.T) {
 	tests := []struct {
 		name    string
 		code    string
@@ -93,7 +93,7 @@ func main() {
 	}
 }
 
-func Test_isNetHttpMethodCannotInstrument(t *testing.T) {
+func TestisNetHttpMethodCannotInstrument(t *testing.T) {
 	tests := []struct {
 		name         string
 		code         string
@@ -216,7 +216,7 @@ func main() {
 	}
 }
 
-func Test_isHttpHandler(t *testing.T) {
+func TestisHttpHandler(t *testing.T) {
 	tests := []struct {
 		name     string
 		code     string
@@ -271,7 +271,7 @@ func index(w http.ResponseWriter, r *http.Request, x string) {
 	}
 }
 
-func Test_getNetHttpMethod(t *testing.T) {
+func TestgetNetHttpMethod(t *testing.T) {
 	tests := []struct {
 		name         string
 		code         string
@@ -387,7 +387,7 @@ func main() {
 	}
 }
 
-func Test_GetNetHttpClientVariableName(t *testing.T) {
+func TestGetNetHttpClientVariableName(t *testing.T) {
 	tests := []struct {
 		name     string
 		code     string
@@ -481,7 +481,7 @@ func main() {
 	}
 }
 
-func Test_cannotTraceOutboundHttp(t *testing.T) {
+func TestcannotTraceOutboundHttp(t *testing.T) {
 	type args struct {
 		method string
 		decs   *dst.NodeDecs
@@ -523,7 +523,7 @@ func Test_cannotTraceOutboundHttp(t *testing.T) {
 	}
 }
 
-func Test_TxnFromCtx(t *testing.T) {
+func TestTxnFromCtx(t *testing.T) {
 	type args struct {
 		fn          *dst.FuncDecl
 		txnVariable string
@@ -628,7 +628,7 @@ func Test_TxnFromCtx(t *testing.T) {
 	}
 }
 
-func Test_getHttpResponseVariable(t *testing.T) {
+func TestgetHttpResponseVariable(t *testing.T) {
 	tests := []struct {
 		name     string
 		code     string
@@ -739,7 +739,7 @@ func main() {
 	}
 }
 
-func Test_ExternalHttpCall(t *testing.T) {
+func TestExternalHttpCall(t *testing.T) {
 
 	tests := []struct {
 		name   string
@@ -862,7 +862,7 @@ func main() {
 	}
 }
 
-func Test_WrapNestedHandleFunction(t *testing.T) {
+func TestWrapNestedHandleFunction(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -929,7 +929,7 @@ func main() {
 	}
 }
 
-func Test_CannotInstrumentHttpMethod(t *testing.T) {
+func TestCannotInstrumentHttpMethod(t *testing.T) {
 
 	tests := []struct {
 		name   string
@@ -990,7 +990,7 @@ func main() {
 	}
 }
 
-func Test_InstrumentHttpClient(t *testing.T) {
+func TestInstrumentHttpClient(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -1062,7 +1062,7 @@ func main() {
 	}
 }
 
-func Test_InstrumentHandleFunction(t *testing.T) {
+func TestInstrumentHandleFunction(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -1546,7 +1546,7 @@ func main() {
 	}
 }
 
-func Test_getHTTPRequestArgNameDecl(t *testing.T) {
+func TestgetHTTPRequestArgNameDecl(t *testing.T) {
 	tests := []struct {
 		name   string
 		fn     *dst.FuncDecl
@@ -1668,7 +1668,7 @@ func Test_getHTTPRequestArgNameDecl(t *testing.T) {
 	}
 }
 
-func Test_getHTTPRequestArgNameLit(t *testing.T) {
+func TestgetHTTPRequestArgNameLit(t *testing.T) {
 	tests := []struct {
 		name   string
 		fn     *dst.FuncLit
@@ -1883,7 +1883,7 @@ func main() {
 	}
 }
 
-func Test_DetectWrappedRoutes(t *testing.T) {
+func TestDetectWrappedRoutes(t *testing.T) {
 	tests := []struct {
 		name          string
 		code          string
@@ -2034,7 +2034,7 @@ func main() {
 	}
 }
 
-func Test_InstrumentHandleFunction_SkipsInstrumented(t *testing.T) {
+func TestInstrumentHandleFunction_SkipsInstrumented(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string

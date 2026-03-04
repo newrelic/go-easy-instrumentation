@@ -19,7 +19,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func Test_GetTxnFromGrpcServer(t *testing.T) {
+func TestGetTxnFromGrpcServer(t *testing.T) {
 	grpcServerStreamType := types.NewNamed(
 		types.NewTypeName(0, types.NewPackage("github.com/example/testapp", "testapp"), "TestApp_StreamServer", nil), // Main Type
 		types.NewInterfaceType( // Underlying Type
@@ -152,7 +152,7 @@ func Test_GetTxnFromGrpcServer(t *testing.T) {
 	}
 }
 
-func Test_IsGrpcServerMethod(t *testing.T) {
+func TestIsGrpcServerMethod(t *testing.T) {
 	serverRecv := &dst.Ident{
 		Name: "srv",
 	}

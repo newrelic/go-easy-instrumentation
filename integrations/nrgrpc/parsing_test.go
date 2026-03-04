@@ -17,7 +17,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func Test_InstrumentGrpcDial(t *testing.T) {
+func TestInstrumentGrpcDial(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -71,7 +71,7 @@ func main() {
 	}
 }
 
-func Test_InstrumentGrpcServer(t *testing.T) {
+func TestInstrumentGrpcServer(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string
@@ -116,7 +116,7 @@ func main() {
 	}
 }
 
-func Test_GrpcDialCall(t *testing.T) {
+func TestGrpcDialCall(t *testing.T) {
 	type args struct {
 		node dst.Node
 	}
@@ -266,7 +266,7 @@ func Test_GrpcDialCall(t *testing.T) {
 	}
 }
 
-func Test_GrpcNewServerCall(t *testing.T) {
+func TestGrpcNewServerCall(t *testing.T) {
 	type args struct {
 		node dst.Node
 	}
@@ -376,7 +376,7 @@ func Test_GrpcNewServerCall(t *testing.T) {
 	}
 }
 
-func Test_IsGrpcRegisterServerCall(t *testing.T) {
+func TestIsGrpcRegisterServerCall(t *testing.T) {
 	serverArg := &dst.Ident{
 		Name: "grpcServer",
 	}
@@ -440,7 +440,7 @@ func Test_IsGrpcRegisterServerCall(t *testing.T) {
 
 }
 
-func Test_GetRegisteredServerIdent(t *testing.T) {
+func TestGetRegisteredServerIdent(t *testing.T) {
 	type args struct {
 		call *dst.CallExpr
 	}
@@ -497,7 +497,7 @@ func Test_GetRegisteredServerIdent(t *testing.T) {
 	}
 }
 
-func Test_FindGrpcServerObject(t *testing.T) {
+func TestFindGrpcServerObject(t *testing.T) {
 	serverArg := &dst.Ident{
 		Name: "grpcServer",
 	}

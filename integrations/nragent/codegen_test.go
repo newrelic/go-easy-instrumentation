@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_InitializeAgent(t *testing.T) {
+func TestInitializeAgent(t *testing.T) {
 	type args struct {
 		AppName           string
 		AgentVariableName string
@@ -107,7 +107,7 @@ func Test_InitializeAgent(t *testing.T) {
 	}
 }
 
-func Test_shutdownAgent(t *testing.T) {
+func TestshutdownAgent(t *testing.T) {
 	type args struct {
 		AgentVariableName string
 	}
@@ -161,7 +161,7 @@ func Test_shutdownAgent(t *testing.T) {
 	}
 }
 
-func Test_PanicOnError(t *testing.T) {
+func TestPanicOnError(t *testing.T) {
 	tests := []struct {
 		name string
 		want *dst.IfStmt

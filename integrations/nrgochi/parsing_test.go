@@ -197,7 +197,7 @@ func TestChiMiddlewareCall(t *testing.T) {
 	}
 }
 
-func Test_InstrumentChiRouterLiteral(t *testing.T) {
+func TestInstrumentChiRouterLiteral(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string

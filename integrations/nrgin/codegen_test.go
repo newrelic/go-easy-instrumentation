@@ -9,7 +9,7 @@ import (
 	"github.com/dave/dst"
 )
 
-func Test_NrGinMiddleware(t *testing.T) {
+func TestNrGinMiddleware(t *testing.T) {
 	type args struct {
 		call              *dst.CallExpr
 		routerName        string
@@ -72,7 +72,7 @@ func Test_NrGinMiddleware(t *testing.T) {
 	}
 }
 
-func Test_TxnFromGinContext(t *testing.T) {
+func TestTxnFromGinContext(t *testing.T) {
 	type args struct {
 		txnVariable string
 		ctxName     string

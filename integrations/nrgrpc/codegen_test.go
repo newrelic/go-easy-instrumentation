@@ -9,7 +9,7 @@ import (
 	"github.com/dave/dst"
 )
 
-func Test_GetCallExpressionArgumentSpacing(t *testing.T) {
+func TestGetCallExpressionArgumentSpacing(t *testing.T) {
 	type args struct {
 		call *dst.CallExpr
 	}
@@ -135,7 +135,7 @@ func Test_GetCallExpressionArgumentSpacing(t *testing.T) {
 	}
 }
 
-func Test_NrGrpcUnaryClientInterceptor(t *testing.T) {
+func TestNrGrpcUnaryClientInterceptor(t *testing.T) {
 	tests := []struct {
 		name     string
 		call     *dst.CallExpr
@@ -211,7 +211,7 @@ func Test_NrGrpcUnaryClientInterceptor(t *testing.T) {
 	}
 }
 
-func Test_NrGrpcStreamClientInterceptor(t *testing.T) {
+func TestNrGrpcStreamClientInterceptor(t *testing.T) {
 	tests := []struct {
 		name     string
 		call     *dst.CallExpr
@@ -270,7 +270,7 @@ func Test_NrGrpcStreamClientInterceptor(t *testing.T) {
 	}
 }
 
-func Test_NrGrpcUnaryServerInterceptor(t *testing.T) {
+func TestNrGrpcUnaryServerInterceptor(t *testing.T) {
 	tests := []struct {
 		name          string
 		agentVariable dst.Expr
@@ -342,7 +342,7 @@ func Test_NrGrpcUnaryServerInterceptor(t *testing.T) {
 	}
 }
 
-func Test_NrGrpcStreamServerInterceptor(t *testing.T) {
+func TestNrGrpcStreamServerInterceptor(t *testing.T) {
 	tests := []struct {
 		name          string
 		agentVariable dst.Expr
@@ -414,7 +414,7 @@ func Test_NrGrpcStreamServerInterceptor(t *testing.T) {
 	}
 }
 
-func Test_GrpcStreamContext(t *testing.T) {
+func TestGrpcStreamContext(t *testing.T) {
 	tests := []struct {
 		name              string
 		streamServerObject *dst.Ident
