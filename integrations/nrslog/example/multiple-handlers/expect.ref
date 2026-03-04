@@ -1,0 +1,39 @@
+--- a/main.go
++++ b/main.go
+@@ -3,20 +3,34 @@
+ import (
+ 	"log/slog"
+ 	"os"
++	"time"
++
++	"github.com/newrelic/go-agent/v3/integrations/logcontext-v2/nrslog"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	debugHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+ 		Level: slog.LevelDebug,
+ 	})
++	NRdebugHandler := nrslog.WrapHandler(NewRelicAgent, debugHandler)
+ 	errorHandler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+ 		Level: slog.LevelError,
+ 	})
+ 
+-	debugLog := slog.New(debugHandler)
+-	errorLog := slog.New(errorHandler)
++	NRerrorHandler := nrslog.WrapHandler(NewRelicAgent, errorHandler)
+ 
++	debugLog := slog.New(NRdebugHandler)
++	errorLog := slog.New(NRerrorHandler)
++
+ 	debugLog.Debug("debug info to stdout")
+ 	debugLog.Info("info message to stdout")
+ 	errorLog.Error("critical error to stderr", "code", 500)
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

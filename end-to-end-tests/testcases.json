@@ -41,6 +41,26 @@
       "dir": "integrations/nrslog/example/slog-examples"
     },
     {
+      "name": "slog - json handler",
+      "dir": "integrations/nrslog/example/json-handler"
+    },
+    {
+      "name": "slog - set default",
+      "dir": "integrations/nrslog/example/set-default"
+    },
+    {
+      "name": "slog - with chaining",
+      "dir": "integrations/nrslog/example/with-chaining"
+    },
+    {
+      "name": "slog - handler options",
+      "dir": "integrations/nrslog/example/handler-options"
+    },
+    {
+      "name": "slog - multiple handlers",
+      "dir": "integrations/nrslog/example/multiple-handlers"
+    },
+    {
       "name": "mysql app",
       "dir": "integrations/nrmysql/example/mysql"
     }

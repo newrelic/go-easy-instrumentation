@@ -1,0 +1,32 @@
+--- a/main.go
++++ b/main.go
+@@ -3,11 +3,21 @@
+ import (
+ 	"log/slog"
+ 	"os"
++	"time"
++
++	"github.com/newrelic/go-agent/v3/integrations/logcontext-v2/nrslog"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	handler := slog.NewTextHandler(os.Stdout, nil)
+-	logger := slog.New(handler)
++	NRhandler := nrslog.WrapHandler(NewRelicAgent, handler)
++	logger := slog.New(NRhandler)
+ 
+ 	// Test With() chaining preserves instrumentation
+ 	requestLogger := logger.With("request_id", "12345")
+@@ -16,4 +22,6 @@
+ 	userLogger := requestLogger.With("user_id", "user_67890")
+ 	userLogger.Info("user action", "action", "login")
+ 	userLogger.Warn("user warning", "attempts", 3)
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
