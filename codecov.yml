@@ -4,7 +4,7 @@ coverage:
   precision: 2
 
 ignore:
-  - end-to-end-tests/**
+  - validation-tests/**
 
 component_management:
   individual_components:

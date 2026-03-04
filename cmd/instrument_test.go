@@ -309,7 +309,7 @@ func TestWaitForNext(t *testing.T) {
 // Integration tests for instrumentPackages
 
 func TestInstrumentPackages_BasicGin(t *testing.T) {
-	packagePath := filepath.Join("..", "end-to-end-tests", "gin-examples", "basic")
+	packagePath := filepath.Join("..", "validation-tests", "gin-examples", "basic")
 	if _, err := os.Stat(packagePath); err != nil {
 		t.Skipf("test fixture not found: %v", err)
 	}
@@ -332,7 +332,7 @@ func TestInstrumentPackages_BasicGin(t *testing.T) {
 }
 
 func TestInstrumentPackages_HttpApp(t *testing.T) {
-	packagePath := filepath.Join("..", "end-to-end-tests", "http-app")
+	packagePath := filepath.Join("..", "validation-tests", "http-app")
 	if _, err := os.Stat(packagePath); err != nil {
 		t.Skipf("test fixture not found: %v", err)
 	}
@@ -354,7 +354,7 @@ func TestInstrumentPackages_HttpApp(t *testing.T) {
 }
 
 func TestInstrumentPackages_CustomPatterns(t *testing.T) {
-	packagePath := filepath.Join("..", "end-to-end-tests", "gin-examples", "basic")
+	packagePath := filepath.Join("..", "validation-tests", "gin-examples", "basic")
 	if _, err := os.Stat(packagePath); err != nil {
 		t.Skipf("test fixture not found: %v", err)
 	}
