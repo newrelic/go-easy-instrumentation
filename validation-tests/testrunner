@@ -6,7 +6,7 @@ import os
 import uuid
 
 DEFAULT_REF_FILE_NAME   = "expect.ref"
-TEST_CASE_FILE_NAME = "end-to-end-tests/testcases.json"
+TEST_CASE_FILE_NAME = "validation-tests/testcases.json"
 cleanup = True
 
 dirname = os.path.basename(os.getcwd())
