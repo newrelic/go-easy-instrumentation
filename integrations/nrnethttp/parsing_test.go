@@ -17,7 +17,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestisNetHttpClient(t *testing.T) {
+func TestIsNetHttpClient(t *testing.T) {
 	tests := []struct {
 		name    string
 		code    string
@@ -93,7 +93,7 @@ func main() {
 	}
 }
 
-func TestisNetHttpMethodCannotInstrument(t *testing.T) {
+func TestIsNetHttpMethodCannotInstrument(t *testing.T) {
 	tests := []struct {
 		name         string
 		code         string
@@ -216,7 +216,7 @@ func main() {
 	}
 }
 
-func TestisHttpHandler(t *testing.T) {
+func TestIsHttpHandler(t *testing.T) {
 	tests := []struct {
 		name     string
 		code     string
@@ -271,7 +271,7 @@ func index(w http.ResponseWriter, r *http.Request, x string) {
 	}
 }
 
-func TestgetNetHttpMethod(t *testing.T) {
+func TestGetNetHttpMethod(t *testing.T) {
 	tests := []struct {
 		name         string
 		code         string
@@ -481,7 +481,7 @@ func main() {
 	}
 }
 
-func TestcannotTraceOutboundHttp(t *testing.T) {
+func TestCannotTraceOutboundHttp(t *testing.T) {
 	type args struct {
 		method string
 		decs   *dst.NodeDecs
@@ -628,7 +628,7 @@ func TestTxnFromCtx(t *testing.T) {
 	}
 }
 
-func TestgetHttpResponseVariable(t *testing.T) {
+func TestGetHttpResponseVariable(t *testing.T) {
 	tests := []struct {
 		name     string
 		code     string
@@ -1546,7 +1546,7 @@ func main() {
 	}
 }
 
-func TestgetHTTPRequestArgNameDecl(t *testing.T) {
+func TestGetHTTPRequestArgNameDecl(t *testing.T) {
 	tests := []struct {
 		name   string
 		fn     *dst.FuncDecl
@@ -1668,7 +1668,7 @@ func TestgetHTTPRequestArgNameDecl(t *testing.T) {
 	}
 }
 
-func TestgetHTTPRequestArgNameLit(t *testing.T) {
+func TestGetHTTPRequestArgNameLit(t *testing.T) {
 	tests := []struct {
 		name   string
 		fn     *dst.FuncLit

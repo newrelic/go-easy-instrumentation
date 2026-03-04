@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func TestisNamedError(t *testing.T) {
+func TestIsNamedError(t *testing.T) {
 	type args struct {
 		n types.Type
 	}
@@ -45,7 +45,7 @@ func TestisNamedError(t *testing.T) {
 	}
 }
 
-func TestcheckUnderlyingType(t *testing.T) {
+func TestCheckUnderlyingType(t *testing.T) {
 	const grpcServerStreamType = "google.golang.org/grpc.ServerStream"
 
 	type args struct {

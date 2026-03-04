@@ -1,11 +1,12 @@
 package nrnethttp_test
 
 import (
-	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
 	"go/token"
 	"reflect"
 	"testing"
+
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
+	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
 
 	"github.com/dave/dst"
 )
@@ -65,7 +66,7 @@ func TestRoundTripper(t *testing.T) {
 	}
 }
 
-func TestaddTxnToRequestContext(t *testing.T) {
+func TestAddTxnToRequestContext(t *testing.T) {
 	type args struct {
 		request  dst.Expr
 		txnVar   dst.Expr
