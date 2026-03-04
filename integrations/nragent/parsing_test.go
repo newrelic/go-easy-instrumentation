@@ -70,7 +70,7 @@ func TestIsNewRelicMethod(t *testing.T) {
 	}
 }
 
-func TestnoticeError(t *testing.T) {
+func TestNoticeError(t *testing.T) {
 	tests := []struct {
 		name   string
 		code   string

@@ -107,7 +107,7 @@ func TestInitializeAgent(t *testing.T) {
 	}
 }
 
-func TestshutdownAgent(t *testing.T) {
+func TestShutdownAgent(t *testing.T) {
 	type args struct {
 		AgentVariableName string
 	}
