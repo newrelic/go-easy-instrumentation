@@ -1,0 +1,29 @@
+--- a/main.go
++++ b/main.go
+@@ -6,13 +6,19 @@
+ import (
+ 	"database/sql"
+ 	"fmt"
++	"time"
+ 
+ 	_ "github.com/go-sql-driver/mysql"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
+ 	// Set up a local mysql docker container with:
+ 	// docker run -it -p 3306:3306 --net "bridge" -e MYSQL_ALLOW_EMPTY_PASSWORD=true mysql
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
+ 
+ 	db, err := sql.Open("mysql", "root@/information_schema")
+ 	if err != nil {
+@@ -24,4 +23,6 @@
+ 	row.Scan(&count)
+ 
+ 	fmt.Println("number of tables in information_schema", count)
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
