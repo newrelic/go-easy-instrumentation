@@ -1,0 +1,80 @@
+--- a/multiple/main.go
++++ b/multiple/main.go
+@@ -3,16 +3,30 @@
+ import (
+ 	"net/http"
+ 	"path/filepath"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	router := gin.Default()
++	router.Use(nrgin.Middleware(NewRelicAgent))
+ 	// Set a lower memory limit for multipart forms (default is 32 MiB)
+ 	router.MaxMultipartMemory = 8 << 20 // 8 MiB
+ 	router.Static("/", "./public")
+ 	router.POST("/upload", func(c *gin.Context) {
++		// NR WARN: function literal segments will be named "function literal" by default
++		// declare a function instead to improve segment name generation
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		name := c.PostForm("name")
+ 		email := c.PostForm("email")
+ 
+@@ -35,4 +39,6 @@
+ 		c.String(http.StatusOK, "Uploaded successfully %d files with fields name=%s and email=%s.", len(files), name, email)
+ 	})
+ 	router.Run(":8080")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+--- a/single/main.go
++++ b/single/main.go
+@@ -3,16 +3,30 @@
+ import (
+ 	"net/http"
+ 	"path/filepath"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	router := gin.Default()
++	router.Use(nrgin.Middleware(NewRelicAgent))
+ 	// Set a lower memory limit for multipart forms (default is 32 MiB)
+ 	router.MaxMultipartMemory = 8 << 20 // 8 MiB
+ 	router.Static("/", "./public")
+ 	router.POST("/upload", func(c *gin.Context) {
++		// NR WARN: function literal segments will be named "function literal" by default
++		// declare a function instead to improve segment name generation
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		name := c.PostForm("name")
+ 		email := c.PostForm("email")
+ 
+@@ -32,4 +36,6 @@
+ 		c.String(http.StatusOK, "File %s uploaded successfully with fields name=%s and email=%s.", file.Filename, name, email)
+ 	})
+ 	router.Run(":8080")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

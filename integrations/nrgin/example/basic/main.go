@@ -2,69 +2,36 @@ package main
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/newrelic/go-agent/v3/integrations/nrgin"
-	"github.com/newrelic/go-agent/v3/newrelic"
 )
 
 var db = make(map[string]string)
 
-func setupRouter(nrTxn *newrelic.Transaction) *gin.Engine {
-	defer nrTxn.StartSegment("setupRouter").End()
-
+func setupRouter() *gin.Engine {
 	// Disable Console Color
 	// gin.DisableConsoleColor()
 	r := gin.Default()
 
-	r.Use(nrgin.Middleware(nrTxn.Application()))
-
 	// Ping test
-	// NR WARN: function literal segments will be named "function literal" by default
-	// declare a function instead to improve segment name generation
 	r.GET("/ping", func(c *gin.Context) {
-		nrTxn := nrgin.Transaction(c)
-		defer nrTxn.StartSegment("function literal").End()
-
 		c.String(http.StatusOK, "pong")
-		// the "http.Get()" net/http method can not be instrumented and its outbound traffic can not be traced
-		// please see these examples of code patterns for external http calls that can be instrumented:
-		// https://docs.newrelic.com/docs/apm/agents/go-agent/configuration/distributed-tracing-go-agent/#make-http-requests
-		//
 		// make a dummy request and err check
 		_, err := http.Get("http://localhost:8080/ping")
 		if err != nil {
-			nrTxn.NoticeError(err)
 			c.String(http.StatusInternalServerError, "error")
 			return
 		}
 	})
 	// two test
-	// NR WARN: function literal segments will be named "function literal" by default
-	// declare a function instead to improve segment name generation
-	//
-	// NR WARN: function literal segments will be named "function literal" by default
-	// declare a function instead to improve segment name generation
 	r.GET("/", func(c *gin.Context) {
-		nrTxn := nrgin.Transaction(c)
-		defer nrTxn.StartSegment("function literal").End()
-
 		c.String(http.StatusOK, "pong")
 	}, func(c *gin.Context) {
-		nrTxn := nrgin.Transaction(c)
-		defer nrTxn.StartSegment("function literal").End()
-
 		c.String(http.StatusOK, "second function")
 	})
 
 	// Get user value
-	// NR WARN: function literal segments will be named "function literal" by default
-	// declare a function instead to improve segment name generation
 	r.GET("/user/:name", func(c *gin.Context) {
-		nrTxn := nrgin.Transaction(c)
-		defer nrTxn.StartSegment("function literal").End()
-
 		user := c.Params.ByName("name")
 		value, ok := db[user]
 		if ok {
@@ -95,12 +62,7 @@ func setupRouter(nrTxn *newrelic.Transaction) *gin.Engine {
 	  	-H 'content-type: application/json' \
 	  	-d '{"value":"bar"}'
 	*/
-	// NR WARN: function literal segments will be named "function literal" by default
-	// declare a function instead to improve segment name generation
 	authorized.POST("admin", func(c *gin.Context) {
-		nrTxn := nrgin.Transaction(c)
-		defer nrTxn.StartSegment("function literal").End()
-
 		user := c.MustGet(gin.AuthUserKey).(string)
 
 		// Parse JSON
@@ -118,16 +80,7 @@ func setupRouter(nrTxn *newrelic.Transaction) *gin.Engine {
 }
 
 func main() {
-	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
-	if agentInitError != nil {
-		panic(agentInitError)
-	}
-
-	nrTxn := NewRelicAgent.StartTransaction("setupRouter")
-	r := setupRouter(nrTxn)
-	nrTxn.End()
+	r := setupRouter()
 	// Listen and Server in 0.0.0.0:8080
 	r.Run(":8080")
-
-	NewRelicAgent.Shutdown(5 * time.Second)
 }

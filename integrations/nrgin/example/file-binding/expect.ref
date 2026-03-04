@@ -1,0 +1,44 @@
+--- a/main.go
++++ b/main.go
+@@ -5,8 +5,11 @@
+ 	"mime/multipart"
+ 	"net/http"
+ 	"path/filepath"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ type BindFile struct {
+@@ -16,11 +17,22 @@
+ }
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	router := gin.Default()
++	router.Use(nrgin.Middleware(NewRelicAgent))
+ 	// Set a lower memory limit for multipart forms (default is 32 MiB)
+ 	router.MaxMultipartMemory = 8 << 20 // 8 MiB
+ 	router.Static("/", "./public")
+ 	router.POST("/upload", func(c *gin.Context) {
++		// NR WARN: function literal segments will be named "function literal" by default
++		// declare a function instead to improve segment name generation
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		var bindFile BindFile
+ 
+ 		// Bind file
+@@ -40,4 +47,6 @@
+ 		c.String(http.StatusOK, fmt.Sprintf("File %s uploaded successfully with fields name=%s and email=%s.", file.Filename, bindFile.Name, bindFile.Email))
+ 	})
+ 	router.Run(":8080")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

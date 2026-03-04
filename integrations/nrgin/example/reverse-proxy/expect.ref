@@ -1,0 +1,96 @@
+--- a/realServer/main.go
++++ b/realServer/main.go
+@@ -3,8 +3,11 @@
+ import (
+ 	"fmt"
+ 	"log"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ const (
+@@ -12,8 +13,19 @@
+ )
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	r := gin.Default()
++	r.Use(nrgin.Middleware(NewRelicAgent))
+ 	r.GET("/:path", func(c *gin.Context) {
++		// NR WARN: function literal segments will be named "function literal" by default
++		// declare a function instead to improve segment name generation
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		// in this handler, we just simply send some basic info back to proxy response.
+ 		req := c.Request
+ 		urlPath := fmt.Sprintf("http://%s%s", Addr, req.URL.Path)
+@@ -27,4 +37,6 @@
+ 	if err := r.Run(Addr); err != nil {
+ 		log.Printf("Error: %v", err)
+ 	}
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
+--- a/reverseServer/main.go
++++ b/reverseServer/main.go
+@@ -5,8 +5,11 @@
+ 	"log"
+ 	"net/http"
+ 	"net/url"
++	"time"
+ 
+ 	"github.com/gin-gonic/gin"
++	"github.com/newrelic/go-agent/v3/integrations/nrgin"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ const (
+@@ -20,16 +21,31 @@
+ }
+ 
+ // a fake function that we can do strategy here.
+-func getLoadBalanceAddr() string {
++func getLoadBalanceAddr(nrTxn *newrelic.Transaction) string {
++	defer nrTxn.StartSegment("getLoadBalanceAddr").End()
++
+ 	return RealAddr[0]
+ }
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	r := gin.Default()
++	r.Use(nrgin.Middleware(NewRelicAgent))
+ 	r.GET("/:path", func(c *gin.Context) {
++		// NR WARN: function literal segments will be named "function literal" by default
++		// declare a function instead to improve segment name generation
++		nrTxn := nrgin.Transaction(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		// step 1: resolve proxy address, change scheme and host in requets
+ 		req := c.Request
+-		proxy, err := url.Parse(getLoadBalanceAddr())
++		nrTxn := NewRelicAgent.StartTransaction("getLoadBalanceAddr")
++		proxy, err := url.Parse(getLoadBalanceAddr(nrTxn))
++		nrTxn.End()
+ 		if err != nil {
+ 			log.Printf("error in parse addr: %v", err)
+ 			c.String(500, "error")
+@@ -61,4 +69,6 @@
+ 	if err := r.Run(ReverseServerAddr); err != nil {
+ 		log.Printf("Error: %v", err)
+ 	}
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
