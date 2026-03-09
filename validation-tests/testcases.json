@@ -1,0 +1,48 @@
+{
+  "tests": [
+    {
+      "name": "http web app",
+      "dir": "integrations/nrnethttp/example/http-app"
+    },
+    {
+      "name": "http-mux web app",
+      "dir": "integrations/nrnethttp/example/http-mux-app"
+    },
+    {
+      "name": "grpc app",
+      "dir": "integrations/nrgrpc/example/grpc",
+      "builds": [
+        "integrations/nrgrpc/example/grpc/server",
+        "integrations/nrgrpc/example/grpc/client"
+      ]
+    },
+    {
+      "name": "gin - basic",
+      "dir": "integrations/nrgin/example/basic"
+    },
+    {
+      "name": "gin - multiple services",
+      "dir": "integrations/nrgin/example/multiple-service"
+    },
+    {
+      "name": "semi-instrumented - existing transactions",
+      "dir": "validation-tests/semi-instrumented/existing-transactions"
+    },
+    {
+      "name": "unit tests",
+      "dir": "validation-tests/unit-tests"
+    },
+    {
+      "name": "gochi app",
+      "dir": "integrations/nrgochi/example/gochi"
+    },
+    {
+      "name": "slog app",
+      "dir": "integrations/nrslog/example/slog-examples"
+    },
+    {
+      "name": "mysql app",
+      "dir": "integrations/nrmysql/example/mysql"
+    }
+  ]
+}

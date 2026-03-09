@@ -90,28 +90,23 @@ func NewInstrumentationManager(pkgs []*decorator.Package, appName, agentVariable
 	return manager
 }
 
-// DetectDependencyIntegrations
-func (m *InstrumentationManager) DetectDependencyIntegrations() error {
-	m.loadPreInstrumentationTracingFunctions(DetectTransactions, DetectErrors, DetectWrappedRoutes)
-	m.loadStatelessTracingFunctions(InstrumentMain, InstrumentHandleFunction, InstrumentHttpClient, CannotInstrumentHttpMethod, InstrumentGrpcDial, InstrumentGinFunction, InstrumentGrpcServerMethod, InstrumentSlogHandler)
-	m.loadStatefulTracingFunctions(ExternalHttpCall, WrapNestedHandleFunction, InstrumentGrpcServer, InstrumentGinMiddleware, InstrumentChiMiddleware, InstrumentChiRouterLiteral)
-	m.loadDependencyScans(FindGrpcServerObject)
-	return nil
-}
-
-func (m *InstrumentationManager) loadPreInstrumentationTracingFunctions(functions ...PreInstrumentationTracingFunction) {
+// LoadPreInstrumentationTracingFunctions registers pre-instrumentation tracing functions (exported for cmd)
+func (m *InstrumentationManager) LoadPreInstrumentationTracingFunctions(functions ...PreInstrumentationTracingFunction) {
 	m.tracingFunctions.preinstrumentation = append(m.tracingFunctions.preinstrumentation, functions...)
 }
 
-func (m *InstrumentationManager) loadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
+// LoadStatefulTracingFunctions registers stateful tracing functions (exported for cmd)
+func (m *InstrumentationManager) LoadStatefulTracingFunctions(functions ...StatefulTracingFunction) {
 	m.tracingFunctions.stateful = append(m.tracingFunctions.stateful, functions...)
 }
 
-func (m *InstrumentationManager) loadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
+// LoadStatelessTracingFunctions registers stateless tracing functions (exported for cmd)
+func (m *InstrumentationManager) LoadStatelessTracingFunctions(functions ...StatelessTracingFunction) {
 	m.tracingFunctions.stateless = append(m.tracingFunctions.stateless, functions...)
 }
 
-func (m *InstrumentationManager) loadDependencyScans(scans ...FactDiscoveryFunction) {
+// LoadDependencyScans registers fact discovery functions (exported for cmd)
+func (m *InstrumentationManager) LoadDependencyScans(scans ...FactDiscoveryFunction) {
 	m.tracingFunctions.dependency = append(m.tracingFunctions.dependency, scans...)
 }
 
@@ -128,7 +123,8 @@ func (m *InstrumentationManager) setPackage(pkgName string) {
 	m.currentPackage = pkgName
 }
 
-func (m *InstrumentationManager) addImport(path string) {
+// AddImport adds an import path to the current package (exported for integrations)
+func (m *InstrumentationManager) AddImport(path string) {
 	if path == "" {
 		return
 	}
@@ -136,6 +132,56 @@ func (m *InstrumentationManager) addImport(path string) {
 	if ok {
 		state.importsAdded[path] = true
 	}
+}
+
+// addImport is the internal version that calls AddImport
+func (m *InstrumentationManager) addImport(path string) {
+	m.AddImport(path)
+}
+
+// AgentVariableName returns the New Relic agent variable name (exported for integrations)
+func (m *InstrumentationManager) AgentVariableName() string {
+	return m.agentVariableName
+}
+
+// SetAgentVariableName sets the New Relic agent variable name (exported for integrations)
+func (m *InstrumentationManager) SetAgentVariableName(name string) {
+	m.agentVariableName = name
+}
+
+// GetDecoratorPackage returns the decorator package for the current package (exported for integrations)
+func (m *InstrumentationManager) GetDecoratorPackage() *decorator.Package {
+	return m.getDecoratorPackage()
+}
+
+// Facts returns the facts keeper (exported for integrations)
+func (m *InstrumentationManager) Facts() *facts.Keeper {
+	return &m.facts
+}
+
+// AppName returns the application name (exported for integrations)
+func (m *InstrumentationManager) AppName() string {
+	return m.appName
+}
+
+// SetupFunc returns the setup function declaration (exported for integrations)
+func (m *InstrumentationManager) SetupFunc() *dst.FuncDecl {
+	return m.setupFunc
+}
+
+// SetSetupFunc sets the setup function declaration (exported for integrations)
+func (m *InstrumentationManager) SetSetupFunc(fn *dst.FuncDecl) {
+	m.setupFunc = fn
+}
+
+// ErrorCache returns the error cache (exported for integrations)
+func (m *InstrumentationManager) ErrorCache() *errorcache.ErrorCache {
+	return &m.errorCache
+}
+
+// TransactionCache returns the transaction cache (exported for integrations)
+func (m *InstrumentationManager) TransactionCache() *transactioncache.TransactionCache {
+	return &m.transactionCache
 }
 
 func (m *InstrumentationManager) getImports() []string {
@@ -645,4 +691,35 @@ func (m *InstrumentationManager) ResolveUnitTests() error {
 	}
 
 	return nil
+}
+
+// Test helper methods - only for use in tests to construct managers with specific state
+
+// SetCurrentPackage sets the current package (for tests only)
+func (m *InstrumentationManager) SetCurrentPackage(pkg string) {
+	m.currentPackage = pkg
+}
+
+// SetPackageState sets package state for a specific package ID (for tests only)
+func (m *InstrumentationManager) SetPackageState(pkgID string, state *PackageState) {
+	if m.packages == nil {
+		m.packages = make(map[string]*packageState)
+	}
+	m.packages[pkgID] = &packageState{
+		pkg:          state.Pkg,
+		tracedFuncs:  state.TracedFuncs,
+		importsAdded: state.ImportsAdded,
+	}
+}
+
+// SetFacts sets the facts keeper (for tests only)
+func (m *InstrumentationManager) SetFacts(f facts.Keeper) {
+	m.facts = f
+}
+
+// PackageState holds state for a single package (exported for test construction)
+type PackageState struct {
+	Pkg          *decorator.Package
+	TracedFuncs  map[string]*tracedFunctionDecl
+	ImportsAdded map[string]bool
 }

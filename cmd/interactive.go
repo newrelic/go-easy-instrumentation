@@ -62,7 +62,7 @@ func scanGoFiles(root string, excludedDirs []string) ([]string, error) {
 			base := info.Name()
 			for _, excluded := range excludedDirs {
 				// Simple check: if directory name matches excluded name exacty
-				// Or if path contains it? User asked to "exclude folders like end-to-end-tests".
+				// Or if path contains it? User asked to "exclude folders like validation-tests".
 				// Let's do a strict component match to be safe, or just check if it matches the name.
 				if base == excluded {
 					return filepath.SkipDir

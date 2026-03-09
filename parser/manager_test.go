@@ -14,7 +14,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-func Test_AddImport(t *testing.T) {
+func TestAddImport(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -61,7 +61,7 @@ func Test_AddImport(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			m.addImport(tt.args.path)
 
 			if m.packages["foo"].importsAdded["bar"] != true && tt.expect {
@@ -75,7 +75,7 @@ func Test_AddImport(t *testing.T) {
 	}
 }
 
-func Test_GetImports(t *testing.T) {
+func TestGetImports(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -131,7 +131,7 @@ func Test_GetImports(t *testing.T) {
 	}
 }
 
-func Test_CreateFunctionDeclaration(t *testing.T) {
+func TestCreateFunctionDeclaration(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -186,7 +186,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			m.createFunctionDeclaration(tt.args.decl)
 
 			if tt.expect {
@@ -207,7 +207,7 @@ func Test_CreateFunctionDeclaration(t *testing.T) {
 	}
 }
 
-func Test_UpdateFunctionDeclaration(t *testing.T) {
+func TestUpdateFunctionDeclaration(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -254,7 +254,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 				packages:          tt.fields.packages,
 			}
 
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			m.updateFunctionDeclaration(tt.args.decl)
 
 			if tt.updates && reflect.DeepEqual(m.packages["foo"].tracedFuncs["bar"].body, tt.args.decl) == false {
@@ -269,7 +269,7 @@ func Test_UpdateFunctionDeclaration(t *testing.T) {
 }
 
 // What if there are two instrumentable function invocations in a statement?
-func Test_GetPackageFunctionInvocation(t *testing.T) {
+func TestGetPackageFunctionInvocation(t *testing.T) {
 	testFuncDecl := &dst.FuncDecl{}
 	state := map[string]*packageState{"foo": {
 		tracedFuncs: map[string]*tracedFunctionDecl{
@@ -426,14 +426,14 @@ func Test_GetPackageFunctionInvocation(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			got := m.findInvocationInfo(tt.args.node, tracestate.FunctionBody(codegen.DefaultTransactionVariable))
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func Test_ShouldInstrumentFunction(t *testing.T) {
+func TestShouldInstrumentFunction(t *testing.T) {
 	type fields struct {
 		userAppPath       string
 		diffFile          string
@@ -498,7 +498,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			got := m.shouldInstrumentFunction(tt.args.inv)
 			if got != tt.want {
 				t.Errorf("InstrumentationManager.ShouldInstrumentFunction() = %v, want %v", got, tt.want)
@@ -507,7 +507,7 @@ func Test_ShouldInstrumentFunction(t *testing.T) {
 	}
 }
 
-func Test_GetInvocationInfoFromCall(t *testing.T) {
+func TestGetInvocationInfoFromCall(t *testing.T) {
 	testFuncDecl := &dst.FuncDecl{}
 	state := map[string]*packageState{"foo": {
 		tracedFuncs: map[string]*tracedFunctionDecl{"bar": {body: testFuncDecl}},
@@ -568,14 +568,14 @@ func Test_GetInvocationInfoFromCall(t *testing.T) {
 				currentPackage:    tt.fields.currentPackage,
 				packages:          tt.fields.packages,
 			}
-			defer panicRecovery(t)
+			defer PanicRecovery(t)
 			got := m.getInvocationInfoFromCall(tt.args.call, tt.args.forTest)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 }
 
-func Test_NewInstrumentationManager(t *testing.T) {
+func TestNewInstrumentationManager(t *testing.T) {
 	type args struct {
 		pkgs              []*decorator.Package
 		appName           string
@@ -646,7 +646,7 @@ func Test_NewInstrumentationManager(t *testing.T) {
 	}
 }
 
-func Test_SetPackage(t *testing.T) {
+func TestSetPackage(t *testing.T) {
 	type fields struct {
 		currentPackage string
 	}
@@ -680,7 +680,7 @@ func Test_SetPackage(t *testing.T) {
 	}
 }
 
-func Test_GetPackageName(t *testing.T) {
+func TestGetPackageName(t *testing.T) {
 	type fields struct {
 		currentPackage string
 	}
@@ -711,7 +711,7 @@ func Test_GetPackageName(t *testing.T) {
 	}
 }
 
-func Test_GetDecoratorPackage(t *testing.T) {
+func TestGetDecoratorPackage(t *testing.T) {
 	testPkg := &decorator.Package{Package: &packages.Package{ID: "test"}}
 	type fields struct {
 		currentPackage string
@@ -751,7 +751,7 @@ func Test_GetDecoratorPackage(t *testing.T) {
 	}
 }
 
-func Test_IsDefinedInPackage(t *testing.T) {
+func TestIsDefinedInPackage(t *testing.T) {
 	type fields struct {
 		packages map[string]*packageState
 	}
@@ -805,7 +805,7 @@ func Test_IsDefinedInPackage(t *testing.T) {
 	}
 }
 
-func Test_ResolvePath(t *testing.T) {
+func TestResolvePath(t *testing.T) {
 	type args struct {
 		identPath      string
 		currentPackage string
@@ -852,7 +852,7 @@ func Test_ResolvePath(t *testing.T) {
 	}
 }
 
-func Test_GetSortedPackages(t *testing.T) {
+func TestGetSortedPackages(t *testing.T) {
 	type fields struct {
 		packages map[string]*packageState
 	}
@@ -900,7 +900,7 @@ func Test_GetSortedPackages(t *testing.T) {
 	}
 }
 
-func Test_LoadTracingFunctions(t *testing.T) {
+func TestLoadTracingFunctions(t *testing.T) {
 	mockStateless := func(m *InstrumentationManager, c *dstutil.Cursor) {}
 	mockStateful := func(m *InstrumentationManager, stmt dst.Stmt, c *dstutil.Cursor, tracing *tracestate.State) bool {
 		return false
@@ -918,7 +918,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 		{
 			name: "loadStatelessTracingFunctions_adds_functions",
 			testFunc: func(m *InstrumentationManager) {
-				m.loadStatelessTracingFunctions(mockStateless, mockStateless)
+				m.LoadStatelessTracingFunctions(mockStateless, mockStateless)
 			},
 			verify: func(t *testing.T, m *InstrumentationManager) {
 				assert.Equal(t, 2, len(m.tracingFunctions.stateless))
@@ -927,7 +927,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 		{
 			name: "loadStatefulTracingFunctions_adds_functions",
 			testFunc: func(m *InstrumentationManager) {
-				m.loadStatefulTracingFunctions(mockStateful, mockStateful, mockStateful)
+				m.LoadStatefulTracingFunctions(mockStateful, mockStateful, mockStateful)
 			},
 			verify: func(t *testing.T, m *InstrumentationManager) {
 				assert.Equal(t, 3, len(m.tracingFunctions.stateful))
@@ -936,7 +936,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 		{
 			name: "loadDependencyScans_adds_scans",
 			testFunc: func(m *InstrumentationManager) {
-				m.loadDependencyScans(mockDependency)
+				m.LoadDependencyScans(mockDependency)
 			},
 			verify: func(t *testing.T, m *InstrumentationManager) {
 				assert.Equal(t, 1, len(m.tracingFunctions.dependency))
@@ -945,7 +945,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 		{
 			name: "loadPreInstrumentationTracingFunctions_adds_functions",
 			testFunc: func(m *InstrumentationManager) {
-				m.loadPreInstrumentationTracingFunctions(mockPreInstrumentation, mockPreInstrumentation)
+				m.LoadPreInstrumentationTracingFunctions(mockPreInstrumentation, mockPreInstrumentation)
 			},
 			verify: func(t *testing.T, m *InstrumentationManager) {
 				assert.Equal(t, 2, len(m.tracingFunctions.preinstrumentation))
@@ -961,7 +961,7 @@ func Test_LoadTracingFunctions(t *testing.T) {
 	}
 }
 
-func Test_ErrorNoMain(t *testing.T) {
+func TestErrorNoMain(t *testing.T) {
 	type args struct {
 		path string
 	}
@@ -992,7 +992,7 @@ func Test_ErrorNoMain(t *testing.T) {
 	}
 }
 
-func Test_AddImport_EmptyPath(t *testing.T) {
+func TestAddImport_EmptyPath(t *testing.T) {
 	m := &InstrumentationManager{
 		packages:       map[string]*packageState{"foo": {importsAdded: map[string]bool{}}},
 		currentPackage: "foo",
@@ -1001,28 +1001,14 @@ func Test_AddImport_EmptyPath(t *testing.T) {
 	assert.Equal(t, 0, len(m.packages["foo"].importsAdded))
 }
 
-func Test_DetectDependencyIntegrations(t *testing.T) {
-	tests := []struct {
-		name string
-	}{
-		{
-			name: "loads_all_tracing_functions",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			m := NewInstrumentationManager([]*decorator.Package{}, "app", "agent", "diff.txt", "/path")
-			err := m.DetectDependencyIntegrations()
-			assert.NoError(t, err)
-			assert.Greater(t, len(m.tracingFunctions.stateless), 0)
-			assert.Greater(t, len(m.tracingFunctions.stateful), 0)
-			assert.Greater(t, len(m.tracingFunctions.dependency), 0)
-			assert.Greater(t, len(m.tracingFunctions.preinstrumentation), 0)
-		})
-	}
+// Test_DetectDependencyIntegrations is obsolete - integration registration moved to cmd/instrument.go
+// Integration registration is now done via cmd/instrument.go's registerIntegrations() function
+// which uses dependency injection to register all integration functions with the manager.
+func TestDetectDependencyIntegrations(t *testing.T) {
+	t.Skip("Integration registration moved to cmd/instrument.go - test no longer applicable")
 }
 
-func Test_InstrumentPackages(t *testing.T) {
+func TestInstrumentPackages(t *testing.T) {
 	type args struct {
 		instrumentationFunctions []StatelessTracingFunction
 	}
@@ -1075,7 +1061,7 @@ func Test_InstrumentPackages(t *testing.T) {
 	}
 }
 
-func Test_ScanPackages(t *testing.T) {
+func TestScanPackages(t *testing.T) {
 	type args struct {
 		instrumentationFunctions []PreInstrumentationTracingFunction
 	}
@@ -1128,7 +1114,7 @@ func Test_ScanPackages(t *testing.T) {
 	}
 }
 
-func Test_TracePackageCalls(t *testing.T) {
+func TestTracePackageCalls(t *testing.T) {
 	tests := []struct {
 		name    string
 		manager *InstrumentationManager
@@ -1137,7 +1123,7 @@ func Test_TracePackageCalls(t *testing.T) {
 		{
 			name: "errors_without_main_method",
 			manager: &InstrumentationManager{
-				packages:       map[string]*packageState{},
+				packages: map[string]*packageState{},
 				tracingFunctions: tracingFunctions{
 					dependency: []FactDiscoveryFunction{},
 				},
@@ -1155,7 +1141,7 @@ func Test_TracePackageCalls(t *testing.T) {
 	}
 }
 
-func Test_ScanApplication(t *testing.T) {
+func TestScanApplication(t *testing.T) {
 	tests := []struct {
 		name    string
 		manager *InstrumentationManager
@@ -1182,7 +1168,7 @@ func Test_ScanApplication(t *testing.T) {
 	}
 }
 
-func Test_InstrumentApplication(t *testing.T) {
+func TestInstrumentApplication(t *testing.T) {
 	tests := []struct {
 		name    string
 		manager *InstrumentationManager

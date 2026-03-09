@@ -133,22 +133,22 @@ func main() {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			id, err := pseudo_uuid()
+			defer PanicRecovery(t)
+			id, err := Pseudo_uuid()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			testDir := fmt.Sprintf("tmp_%s", id)
-			defer cleanTestApp(t, testDir)
+			defer CleanTestApp(t, testDir)
 
-			manager := testInstrumentationManager(t, tt.code, testDir)
+			manager := TestInstrumentationManager(t, tt.code, testDir)
 			pkg := manager.getDecoratorPackage()
 			if pkg == nil {
 				t.Fatalf("Package was nil: %+v", manager.packages)
 			}
 
-			manager.loadPreInstrumentationTracingFunctions(DetectTransactions)
+			manager.LoadPreInstrumentationTracingFunctions(DetectTransactions)
 			err = manager.ScanApplication()
 			if err != nil {
 				t.Fatalf("Failed to instrument packages: %v", err)
@@ -222,22 +222,22 @@ func main() {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			defer panicRecovery(t)
-			id, err := pseudo_uuid()
+			defer PanicRecovery(t)
+			id, err := Pseudo_uuid()
 			if err != nil {
 				t.Fatal(err)
 			}
 
 			testDir := fmt.Sprintf("tmp_%s", id)
-			defer cleanTestApp(t, testDir)
+			defer CleanTestApp(t, testDir)
 
-			manager := testInstrumentationManager(t, tt.code, testDir)
+			manager := TestInstrumentationManager(t, tt.code, testDir)
 			pkg := manager.getDecoratorPackage()
 			if pkg == nil {
 				t.Fatalf("Package was nil: %+v", manager.packages)
 			}
 
-			manager.loadPreInstrumentationTracingFunctions(DetectTransactions, DetectErrors)
+			manager.LoadPreInstrumentationTracingFunctions(DetectTransactions, DetectErrors)
 			err = manager.ScanApplication()
 			if err != nil {
 				t.Fatalf("Failed to instrument packages: %v", err)

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func Test_startTransaction(t *testing.T) {
+func TestStartTransaction(t *testing.T) {
 	type args struct {
 		appVariableName         string
 		transactionVariableName string
@@ -83,7 +83,7 @@ func Test_startTransaction(t *testing.T) {
 	}
 }
 
-func Test_endTransaction(t *testing.T) {
+func TestEndTransaction(t *testing.T) {
 	type args struct {
 		transactionVariableName string
 	}
@@ -115,7 +115,7 @@ func Test_endTransaction(t *testing.T) {
 	}
 }
 
-func Test_NewTransactionParameter(t *testing.T) {
+func TestNewTransactionParameter(t *testing.T) {
 	type args struct {
 		txnName string
 	}
@@ -152,7 +152,7 @@ func Test_NewTransactionParameter(t *testing.T) {
 	}
 }
 
-func Test_txnNewGoroutine(t *testing.T) {
+func TestTxnNewGoroutine(t *testing.T) {
 	type args struct {
 		txnVarName string
 	}
@@ -186,7 +186,7 @@ func Test_txnNewGoroutine(t *testing.T) {
 	}
 }
 
-func Test_generateNoticeError(t *testing.T) {
+func TestGenerateNoticeError(t *testing.T) {
 	type args struct {
 		errExpr  dst.Expr
 		txnName  string
@@ -286,19 +286,19 @@ func Test_generateNoticeError(t *testing.T) {
 
 func TestGetApplication(t *testing.T) {
 	tests := []struct {
-		name                         string
+		name                          string
 		transactionVariableExpression dst.Expr
-		wantTxnVarName               string
+		wantTxnVarName                string
 	}{
 		{
-			name:                         "generates Application() call",
+			name:                          "generates Application() call",
 			transactionVariableExpression: dst.NewIdent("txn"),
-			wantTxnVarName:               "txn",
+			wantTxnVarName:                "txn",
 		},
 		{
-			name:                         "generates Application() call with custom name",
+			name:                          "generates Application() call with custom name",
 			transactionVariableExpression: dst.NewIdent("myTransaction"),
-			wantTxnVarName:               "myTransaction",
+			wantTxnVarName:                "myTransaction",
 		},
 	}
 

@@ -1,3 +1,5 @@
+// testhelpers.go provides shared test utilities for parser and integration tests.
+// These functions are used across multiple test files and packages.
 package parser
 
 import (
@@ -17,10 +19,9 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// createTestApp creates a test app in the given directory with the given file name and contents
-// codegen is expensive, so this will be skipped in short mode
-func createTestApp(t *testing.T, testAppDir, fileName, contents string) ([]*decorator.Package, error) {
-	// integration tests are slow, so we skip them in short mode
+// CreateTestApp creates a test app in the given directory with the given file name and contents.
+// Codegen is expensive, so this will be skipped in short mode.
+func CreateTestApp(t *testing.T, testAppDir, fileName, contents string) ([]*decorator.Package, error) {
 	if testing.Short() {
 		t.Skip("Skipping Stateful Tracing Function Integration Tests in short mode")
 	}
@@ -31,7 +32,6 @@ func createTestApp(t *testing.T, testAppDir, fileName, contents string) ([]*deco
 	}
 
 	filepath := filepath.Join(testAppDir, fileName)
-
 	f, err := os.Create(filepath)
 	if err != nil {
 		return nil, err
@@ -44,38 +44,37 @@ func createTestApp(t *testing.T, testAppDir, fileName, contents string) ([]*deco
 	return decorator.Load(&packages.Config{Dir: testAppDir, Mode: packages.LoadSyntax})
 }
 
-func cleanTestApp(t *testing.T, appDirectoryName string) {
+// CleanTestApp removes the test app directory.
+func CleanTestApp(t *testing.T, appDirectoryName string) {
 	err := os.RemoveAll(appDirectoryName)
 	if err != nil {
 		t.Logf("Failed to cleanup test app directory %s: %v", appDirectoryName, err)
 	}
 }
 
-func panicRecovery(t *testing.T) {
+// PanicRecovery recovers from panics in tests and reports them with stack traces.
+func PanicRecovery(t *testing.T) {
 	err := recover()
 	if err != nil {
 		t.Fatalf("%s recovered from panic: %+v\n\n%s", t.Name(), err, debug.Stack())
 	}
 }
 
-func pseudo_uuid() (string, error) {
+func Pseudo_uuid() (string, error) {
 	b := make([]byte, 16)
 	_, err := rand.Read(b)
 	if err != nil {
 		return "", fmt.Errorf("Failed to generate random number from bytes: %v", err)
 	}
-
-	uuid := fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:])
-
-	return uuid, nil
+	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
 }
 
-func testInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
-	defer panicRecovery(t)
+func TestInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
+	defer PanicRecovery(t)
 	fileName := "app.go"
-	pkgs, err := createTestApp(t, testAppDir, fileName, code)
+	pkgs, err := CreateTestApp(t, testAppDir, fileName, code)
 	if err != nil {
-		cleanTestApp(t, testAppDir)
+		CleanTestApp(t, testAppDir)
 		t.Fatal(err)
 	}
 
@@ -84,11 +83,11 @@ func testInstrumentationManager(t *testing.T, code, testAppDir string) *Instrume
 	diffFile := filepath.Join(testAppDir, "new-relic-instrumentation.diff")
 
 	manager := NewInstrumentationManager(pkgs, appName, varName, diffFile, testAppDir)
-	configureTestInstrumentationManager(manager)
+	ConfigureTestInstrumentationManager(manager)
 	return manager
 }
 
-func configureTestInstrumentationManager(manager *InstrumentationManager) error {
+func ConfigureTestInstrumentationManager(manager *InstrumentationManager) error {
 	pkgs := []string{}
 	for pkg := range manager.packages {
 		if pkg != "" {
@@ -103,34 +102,18 @@ func configureTestInstrumentationManager(manager *InstrumentationManager) error 
 	return nil
 }
 
-func unitTest(t *testing.T, code string) []*decorator.Package {
-	id, err := pseudo_uuid()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	testAppDir := fmt.Sprintf("tmp_%s", id)
-	fileName := "app.go"
-	pkgs, err := createTestApp(t, testAppDir, fileName, code)
-	defer cleanTestApp(t, testAppDir)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	return pkgs
-}
-
-func runStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction, downstream bool) string {
-	id, err := pseudo_uuid()
+// RunStatefulTracingFunction runs a stateful tracing function against test code.
+func RunStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTracingFunction, downstream bool) string {
+	id, err := Pseudo_uuid()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	testDir := fmt.Sprintf("tmp_%s", id)
-	defer cleanTestApp(t, testDir)
+	defer CleanTestApp(t, testDir)
 
-	manager := testInstrumentationManager(t, code, testDir)
-	pkg := manager.GetDecoratorPackage()
+	manager := TestInstrumentationManager(t, code, testDir)
+	pkg := manager.getDecoratorPackage()
 	if pkg == nil {
 		t.Fatalf("Package was nil: %+v", manager.packages)
 	}
@@ -159,16 +142,17 @@ func runStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTrac
 	return buf.String()
 }
 
-func runStatelessTracingFunction(t *testing.T, code string, tracingFunc StatelessTracingFunction, statefulTracingFuncs ...StatefulTracingFunction) string {
-	id, err := pseudo_uuid()
+// RunStatelessTracingFunction runs a stateless tracing function against test code.
+func RunStatelessTracingFunction(t *testing.T, code string, tracingFunc StatelessTracingFunction, statefulTracingFuncs ...StatefulTracingFunction) string {
+	id, err := Pseudo_uuid()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	testDir := fmt.Sprintf("tmp_%s", id)
-	defer cleanTestApp(t, testDir)
+	defer CleanTestApp(t, testDir)
 
-	manager := testInstrumentationManager(t, code, testDir)
+	manager := TestInstrumentationManager(t, code, testDir)
 	pkg := manager.getDecoratorPackage()
 	if pkg == nil {
 		t.Fatalf("Package was nil: %+v", manager.packages)
@@ -196,16 +180,16 @@ func runStatelessTracingFunction(t *testing.T, code string, tracingFunc Stateles
 }
 
 // UnitTest creates a temporary test package from the given code string.
-func unitTestHelper(t *testing.T, code string) []*decorator.Package {
-	id, err := pseudo_uuid()
+func UnitTest(t *testing.T, code string) []*decorator.Package {
+	id, err := Pseudo_uuid()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	testAppDir := fmt.Sprintf("tmp_%s", id)
 	fileName := "app.go"
-	pkgs, err := createTestApp(t, testAppDir, fileName, code)
-	defer cleanTestApp(t, testAppDir)
+	pkgs, err := CreateTestApp(t, testAppDir, fileName, code)
+	defer CleanTestApp(t, testAppDir)
 	if err != nil {
 		t.Fatal(err)
 	}
