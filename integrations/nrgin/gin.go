@@ -62,6 +62,73 @@ func GetGinContextFromHandler(nodeType *dst.FuncType, pkg *decorator.Package) st
 	return ""
 }
 
+// hasExistingGinTransaction checks if a function already has nrgin.Transaction calls
+func hasExistingGinTransaction(funcDecl *dst.FuncDecl) bool {
+	if funcDecl == nil || funcDecl.Body == nil {
+		return false
+	}
+
+	hasTransaction := false
+	dstutil.Apply(funcDecl.Body, func(c *dstutil.Cursor) bool {
+		node := c.Node()
+		if stmt, ok := node.(*dst.AssignStmt); ok {
+			for _, rhs := range stmt.Rhs {
+				if callExpr, ok := rhs.(*dst.CallExpr); ok {
+					if ident, ok := callExpr.Fun.(*dst.Ident); ok {
+						if ident.Name == "Transaction" && ident.Path == NrginImportPath {
+							hasTransaction = true
+							return false
+						}
+					}
+				}
+			}
+		}
+		return true
+	}, nil)
+
+	return hasTransaction
+}
+
+// hasExistingGinMiddleware checks if nrgin.Middleware is already present after the current router assignment
+func hasExistingGinMiddleware(c *dstutil.Cursor) bool {
+	// Check all remaining statements to see if middleware is already added
+	parent := c.Parent()
+	if blockStmt, ok := parent.(*dst.BlockStmt); ok {
+		// Find current statement index
+		currentIndex := -1
+		for i, stmt := range blockStmt.List {
+			if stmt == c.Node() {
+				currentIndex = i
+				break
+			}
+		}
+
+		// Check all remaining statements for existing middleware
+		if currentIndex >= 0 {
+			for i := currentIndex + 1; i < len(blockStmt.List); i++ {
+				if exprStmt, ok := blockStmt.List[i].(*dst.ExprStmt); ok {
+					if callExpr, ok := exprStmt.X.(*dst.CallExpr); ok {
+						if selExpr, ok := callExpr.Fun.(*dst.SelectorExpr); ok {
+							// Check for router.Use(nrgin.Middleware(...))
+							if selExpr.Sel.Name == "Use" && len(callExpr.Args) > 0 {
+								if argCall, ok := callExpr.Args[0].(*dst.CallExpr); ok {
+									if ident, ok := argCall.Fun.(*dst.Ident); ok {
+										if ident.Name == "Middleware" && ident.Path == NrginImportPath {
+											return true
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return false
+}
+
 // defineTxnFromGinCtx injects a line of code that extracts a transaction from the gin context into the function body
 func DefineTxnFromGinCtx(body *dst.BlockStmt, txnVariable string, ctxName string) {
 	stmts := make([]dst.Stmt, len(body.List)+1)
@@ -83,6 +150,13 @@ func InstrumentGinMiddleware(manager *parser.InstrumentationManager, stmt dst.St
 	if routerName == "" {
 		return false
 	}
+
+	// Check if middleware is already present by looking at the next statement
+	if hasExistingGinMiddleware(c) {
+		comment.Debug(manager.GetDecoratorPackage(), stmt, fmt.Sprintf("Skipping gin middleware for router %s: already instrumented", routerName))
+		return false
+	}
+
 	// Append at the current stmt location
 	middleware, goGet := NrGinMiddleware(routerName, tracing.AgentVariable())
 	comment.Debug(manager.GetDecoratorPackage(), stmt, fmt.Sprintf("Injecting nrgin middleware for router: %s", routerName))
@@ -103,6 +177,12 @@ func InstrumentGinFunction(manager *parser.InstrumentationManager, c *dstutil.Cu
 	case *dst.FuncDecl:
 		ctxName := GetGinContextFromHandler(v.Type, manager.GetDecoratorPackage())
 		if ctxName == "" {
+			return
+		}
+
+		// Check if nrgin.Transaction is already present in the function body
+		if hasExistingGinTransaction(v) {
+			comment.Debug(manager.GetDecoratorPackage(), v, fmt.Sprintf("Skipping gin handler %s: already has nrgin.Transaction", v.Name.Name))
 			return
 		}
 

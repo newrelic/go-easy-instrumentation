@@ -40,6 +40,7 @@ func registerIntegrations(manager *parser.InstrumentationManager) {
 	manager.LoadPreInstrumentationTracingFunctions(
 		parser.DetectTransactions,
 		parser.DetectErrors,
+		parser.DetectGinInstrumentation,
 		nrnethttp.DetectWrappedRoutes,
 	)
 

@@ -272,6 +272,16 @@ func (m *InstrumentationManager) isDefinedInPackage(functionName, packageName st
 	return false
 }
 
+// IsFunctionTraced checks if a function has been marked as already traced in the current package
+func (m *InstrumentationManager) IsFunctionTraced(functionName string) bool {
+	state, ok := m.packages[m.currentPackage]
+	if ok {
+		tracedFunc, ok := state.tracedFuncs[functionName]
+		return ok && tracedFunc.traced
+	}
+	return false
+}
+
 // getInvocationInfoFromCall returns a collection of data about a function call if it was defined
 // in the scope of this application. If the expression passed does not contain a valid function
 // call, this method will return nil.

@@ -95,6 +95,12 @@ func InstrumentMain(manager *parser.InstrumentationManager, c *dstutil.Cursor) {
 		// We don't want to propagate tracing into the setup function so later on in our trace function we will ignore it
 		checkForExistingApplicationInFunctions(manager, c)
 		if decl.Name.Name == "main" {
+			// Check if main already has transaction instrumentation
+			if manager.IsFunctionTraced("main") {
+				comment.Debug(manager.GetDecoratorPackage(), decl, "Skipping main: already has transaction instrumentation")
+				return
+			}
+
 			if !checkForExistingApplicationInMain(manager, decl) {
 				comment.Debug(manager.GetDecoratorPackage(), decl, "Injecting New Relic agent initialization into main()")
 				agentDecl := InitializeAgent(manager.AppName(), manager.AgentVariableName())
