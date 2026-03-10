@@ -259,8 +259,7 @@ func TestTransactionCache_AddTxnToCache(t *testing.T) {
 func TestTransactionCache_AddCall(t *testing.T) {
 	tests := []struct {
 		name        string
-		setupCache  func() *TransactionCache
-		transaction *dst.Ident
+		setupCache  func() (*TransactionCache, *dst.Ident)
 		expr        dst.Expr
 		want        bool
 		checkClosed bool
@@ -268,10 +267,10 @@ func TestTransactionCache_AddCall(t *testing.T) {
 	}{
 		{
 			name: "adds_call_to_open_transaction",
-			setupCache: func() *TransactionCache {
-				return NewTransactionCache()
+			setupCache: func() (*TransactionCache, *dst.Ident) {
+				txn := dst.NewIdent("txn")
+				return NewTransactionCache(), txn
 			},
-			transaction: dst.NewIdent("txn"),
 			expr: &dst.CallExpr{
 				Fun: &dst.SelectorExpr{
 					X:   dst.NewIdent("txn"),
@@ -283,15 +282,14 @@ func TestTransactionCache_AddCall(t *testing.T) {
 		},
 		{
 			name: "rejects_call_to_closed_transaction",
-			setupCache: func() *TransactionCache {
+			setupCache: func() (*TransactionCache, *dst.Ident) {
 				tc := NewTransactionCache()
 				txnKey := dst.NewIdent("txn")
 				txnData := NewTxnData()
 				txnData.IsClosed = true
 				tc.AddTxnToCache(txnKey, txnData)
-				return tc
+				return tc, txnKey
 			},
-			transaction: dst.NewIdent("txn"),
 			expr: &dst.CallExpr{
 				Fun: &dst.SelectorExpr{
 					X:   dst.NewIdent("txn"),
@@ -303,10 +301,10 @@ func TestTransactionCache_AddCall(t *testing.T) {
 		},
 		{
 			name: "detects_and_closes_on_end_call",
-			setupCache: func() *TransactionCache {
-				return NewTransactionCache()
+			setupCache: func() (*TransactionCache, *dst.Ident) {
+				txn := dst.NewIdent("txn")
+				return NewTransactionCache(), txn
 			},
-			transaction: dst.NewIdent("txn"),
 			expr: &dst.CallExpr{
 				Fun: &dst.SelectorExpr{
 					X:   dst.NewIdent("txn"),
@@ -319,10 +317,10 @@ func TestTransactionCache_AddCall(t *testing.T) {
 		},
 		{
 			name: "auto_creates_transaction_if_not_exists",
-			setupCache: func() *TransactionCache {
-				return NewTransactionCache()
+			setupCache: func() (*TransactionCache, *dst.Ident) {
+				txn := dst.NewIdent("newTxn")
+				return NewTransactionCache(), txn
 			},
-			transaction: dst.NewIdent("newTxn"),
 			expr: &dst.CallExpr{
 				Fun: &dst.SelectorExpr{
 					X:   dst.NewIdent("newTxn"),
@@ -334,41 +332,39 @@ func TestTransactionCache_AddCall(t *testing.T) {
 		},
 		{
 			name: "handles_nil_cache",
-			setupCache: func() *TransactionCache {
-				return nil
+			setupCache: func() (*TransactionCache, *dst.Ident) {
+				return nil, dst.NewIdent("txn")
 			},
-			transaction: dst.NewIdent("txn"),
-			expr:        dst.NewIdent("test"),
-			want:        false,
+			expr: dst.NewIdent("test"),
+			want: false,
 		},
 		{
 			name: "handles_nil_transaction",
-			setupCache: func() *TransactionCache {
-				return NewTransactionCache()
+			setupCache: func() (*TransactionCache, *dst.Ident) {
+				return NewTransactionCache(), nil
 			},
-			transaction: nil,
-			expr:        dst.NewIdent("test"),
-			want:        false,
+			expr: dst.NewIdent("test"),
+			want: false,
 		},
 		{
 			name: "handles_nil_expression",
-			setupCache: func() *TransactionCache {
-				return NewTransactionCache()
+			setupCache: func() (*TransactionCache, *dst.Ident) {
+				txn := dst.NewIdent("txn")
+				return NewTransactionCache(), txn
 			},
-			transaction: dst.NewIdent("txn"),
-			expr:        nil,
-			want:        false,
+			expr: nil,
+			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := tt.setupCache()
-			got := tc.AddCall(tt.transaction, tt.expr)
+			tc, transaction := tt.setupCache()
+			got := tc.AddCall(transaction, tt.expr)
 			assert.Equal(t, tt.want, got)
 
-			if tt.checkClosed && tc != nil && tt.transaction != nil {
-				txnData := tc.Transactions[tt.transaction]
+			if tt.checkClosed && tc != nil && transaction != nil {
+				txnData := tc.Transactions[transaction]
 				assert.NotNil(t, txnData)
 				assert.Equal(t, tt.expectClose, txnData.IsClosed)
 			}
@@ -529,36 +525,34 @@ func TestTransactionCache_IsFunctionInTransactionScope(t *testing.T) {
 // TestTransactionCache_CheckTransactionExists tests transaction existence checking
 func TestTransactionCache_CheckTransactionExists(t *testing.T) {
 	tests := []struct {
-		name        string
-		setupCache  func() *TransactionCache
-		transaction *dst.Ident
-		want        bool
+		name       string
+		setupCache func() (*TransactionCache, *dst.Ident)
+		want       bool
 	}{
 		{
 			name: "finds_existing_transaction",
-			setupCache: func() *TransactionCache {
+			setupCache: func() (*TransactionCache, *dst.Ident) {
 				tc := NewTransactionCache()
 				txnKey := dst.NewIdent("txn")
 				tc.AddTxnToCache(txnKey, NewTxnData())
-				return tc
+				return tc, txnKey
 			},
-			transaction: dst.NewIdent("txn"),
-			want:        true,
+			want: true,
 		},
 		{
 			name: "does_not_find_missing_transaction",
-			setupCache: func() *TransactionCache {
-				return NewTransactionCache()
+			setupCache: func() (*TransactionCache, *dst.Ident) {
+				tc := NewTransactionCache()
+				return tc, dst.NewIdent("missing")
 			},
-			transaction: dst.NewIdent("missing"),
-			want:        false,
+			want: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tc := tt.setupCache()
-			got := tc.CheckTransactionExists(tt.transaction)
+			tc, transaction := tt.setupCache()
+			got := tc.CheckTransactionExists(transaction)
 			assert.Equal(t, tt.want, got)
 		})
 	}

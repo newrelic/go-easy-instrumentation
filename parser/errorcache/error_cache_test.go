@@ -69,58 +69,54 @@ func TestLoadExistingErrors(t *testing.T) {
 func TestIsExistingError(t *testing.T) {
 	tests := []struct {
 		name          string
-		setupCache    func() *ErrorCache
-		testError     dst.Expr
+		setupCache    func() (*ErrorCache, dst.Expr)
 		expectExisting bool
 	}{
 		{
 			name: "finds_existing_error",
-			setupCache: func() *ErrorCache {
+			setupCache: func() (*ErrorCache, dst.Expr) {
 				ec := &ErrorCache{}
 				err := dst.NewIdent("err")
 				ec.LoadExistingErrors(err)
-				return ec
+				return ec, err
 			},
-			testError:     dst.NewIdent("err"),
 			expectExisting: true,
 		},
 		{
 			name: "does_not_find_non_existing_error",
-			setupCache: func() *ErrorCache {
+			setupCache: func() (*ErrorCache, dst.Expr) {
 				ec := &ErrorCache{}
 				ec.LoadExistingErrors(dst.NewIdent("err1"))
-				return ec
+				return ec, dst.NewIdent("err2")
 			},
-			testError:     dst.NewIdent("err2"),
 			expectExisting: false,
 		},
 		{
 			name: "handles_non_ident_expression",
-			setupCache: func() *ErrorCache {
+			setupCache: func() (*ErrorCache, dst.Expr) {
 				ec := &ErrorCache{}
 				ec.LoadExistingErrors(dst.NewIdent("err"))
-				return ec
-			},
-			testError: &dst.SelectorExpr{
-				X:   dst.NewIdent("obj"),
-				Sel: dst.NewIdent("err"),
+				testErr := &dst.SelectorExpr{
+					X:   dst.NewIdent("obj"),
+					Sel: dst.NewIdent("err"),
+				}
+				return ec, testErr
 			},
 			expectExisting: false,
 		},
 		{
 			name: "handles_empty_cache",
-			setupCache: func() *ErrorCache {
-				return &ErrorCache{}
+			setupCache: func() (*ErrorCache, dst.Expr) {
+				return &ErrorCache{}, dst.NewIdent("err")
 			},
-			testError:     dst.NewIdent("err"),
 			expectExisting: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ec := tt.setupCache()
-			got := ec.IsExistingError(tt.testError)
+			ec, testError := tt.setupCache()
+			got := ec.IsExistingError(testError)
 			assert.Equal(t, tt.expectExisting, got)
 		})
 	}
@@ -343,12 +339,14 @@ func TestErrorCache_Integration(t *testing.T) {
 		assert.NotNil(t, ec.GetStatement())
 
 		// Load existing errors
-		ec.LoadExistingErrors(dst.NewIdent("oldErr1"))
-		ec.LoadExistingErrors(dst.NewIdent("oldErr2"))
+		oldErr1 := dst.NewIdent("oldErr1")
+		oldErr2 := dst.NewIdent("oldErr2")
+		ec.LoadExistingErrors(oldErr1)
+		ec.LoadExistingErrors(oldErr2)
 		assert.Equal(t, 2, len(ec.ExistingErrors))
 
-		// Check for existing error
-		assert.True(t, ec.IsExistingError(dst.NewIdent("oldErr1")))
+		// Check for existing error using same pointers
+		assert.True(t, ec.IsExistingError(oldErr1))
 		assert.False(t, ec.IsExistingError(dst.NewIdent("newErr")))
 
 		// Extract names
@@ -392,17 +390,19 @@ func TestErrorCache_Integration(t *testing.T) {
 	t.Run("concurrent_existing_errors", func(t *testing.T) {
 		ec := &ErrorCache{}
 
-		// Load multiple existing errors
+		// Load multiple existing errors and save pointers
+		errs := make([]*dst.Ident, 5)
 		for i := 1; i <= 5; i++ {
-			ec.LoadExistingErrors(dst.NewIdent("err" + string(rune('0'+i))))
+			errs[i-1] = dst.NewIdent("err" + string(rune('0'+i)))
+			ec.LoadExistingErrors(errs[i-1])
 		}
 
 		assert.Equal(t, 5, len(ec.ExistingErrors))
 
-		// All should be detectable
-		assert.True(t, ec.IsExistingError(dst.NewIdent("err1")))
-		assert.True(t, ec.IsExistingError(dst.NewIdent("err3")))
-		assert.True(t, ec.IsExistingError(dst.NewIdent("err5")))
+		// All should be detectable using the same pointers
+		assert.True(t, ec.IsExistingError(errs[0]))
+		assert.True(t, ec.IsExistingError(errs[2]))
+		assert.True(t, ec.IsExistingError(errs[4]))
 	})
 }
 
