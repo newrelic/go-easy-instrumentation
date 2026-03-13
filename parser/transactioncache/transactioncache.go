@@ -145,6 +145,11 @@ func (tc *TransactionCache) AddFuncDecl(funcDecl *dst.FuncDecl) bool {
 		return false // Enforce initialization of TransactionCache
 	}
 
+	// If function has no body, cannot add to cache
+	if funcDecl.Body == nil {
+		return false
+	}
+
 	// Initialize a new transaction data object for fresh transactions
 	txnData := NewTxnData()
 
