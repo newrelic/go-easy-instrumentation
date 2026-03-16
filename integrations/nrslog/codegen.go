@@ -11,11 +11,6 @@ const (
 	SlogImportPath   = "log/slog"
 )
 
-// TODO: SlogHandlerWrapper to correctly return nrslog.WrapHandler(app, handler)
-// TODO: Detect slog.New(....) function call. Once we do, we can modify the argument to use our new wrapped handler from above ^
-
-// SlogHandlerWrapper returns a New Relic  middleware call, and a string representing the import path
-// of the library that contains the middleware function
 func SlogHandlerWrapper(handlerName, nrHandlerName string) (*dst.AssignStmt, string) {
 	return &dst.AssignStmt{
 		Lhs: []dst.Expr{
@@ -46,21 +41,4 @@ func SlogHandlerWrapper(handlerName, nrHandlerName string) (*dst.AssignStmt, str
 			},
 		},
 	}, NrslogImportPath
-
-	//	return &dst.ExprStmt{
-	//		X: &dst.CallExpr{
-	//			Fun: &dst.SelectorExpr{
-	//				X:   &dst.Ident{Name: handlerName},
-	//				Sel: &dst.Ident{Name: "Use"},
-	//			},
-	//			Args: []dst.Expr{
-	//				&dst.CallExpr{
-	//					Fun: &dst.Ident{
-	//						Name: "Middleware",
-	//						Path: NrslogImportPath,
-	//					},
-	//				},
-	//			},
-	//		},
-	//	}, NrslogImportPath
 }

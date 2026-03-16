@@ -20,7 +20,7 @@ func slogMiddlewareCall(stmt dst.Stmt) string {
 	}
 	if call, ok := v.Rhs[0].(*dst.CallExpr); ok {
 		if ident, ok := call.Fun.(*dst.Ident); ok {
-			if (ident.Name == "NewTextHandler") && ident.Path == slogImportPath {
+			if (ident.Name == "NewTextHandler" || ident.Name == "NewJSONHandler") && ident.Path == slogImportPath {
 				if v.Lhs != nil {
 					return v.Lhs[0].(*dst.Ident).Name
 				}
@@ -31,17 +31,34 @@ func slogMiddlewareCall(stmt dst.Stmt) string {
 	return ""
 }
 
+// detectSetDefaultCall checks if a statement is slog.SetDefault()
+func detectSetDefaultCall(stmt dst.Stmt) (*dst.CallExpr, bool) {
+	exprStmt, ok := stmt.(*dst.ExprStmt)
+	if !ok {
+		return nil, false
+	}
+
+	call, ok := exprStmt.X.(*dst.CallExpr)
+	if !ok {
+		return nil, false
+	}
+
+	if ident, ok := call.Fun.(*dst.Ident); ok {
+		if ident.Name == "SetDefault" && ident.Path == slogImportPath {
+			return call, true
+		}
+	}
+
+	return nil, false
+}
+
 // Stateless Tracing Functions
 // ////////////////////////////////////////////
-// InstrumentSlogHandler will check to see if any slog.NewTextHandler calls are made within the main function
-// NOTE: Should we be limiting this to main? Is it possible/widely accepted to initialize a logging library outside of main?
+// InstrumentSlogHandler will check to see if any slog.NewTextHandler or slog.NewJSONHandler calls are made within any function
 
 func InstrumentSlogHandler(manager *parser.InstrumentationManager, c *dstutil.Cursor) {
 	mainFunctionNode := c.Node()
 	if decl, ok := mainFunctionNode.(*dst.FuncDecl); ok {
-		if decl.Name.Name != "main" {
-			return
-		}
 
 		// loop through all statements within the body of the main method to see if any slog TextHandler calls are made
 		var handlerNames []string
@@ -73,9 +90,35 @@ func InstrumentSlogHandler(manager *parser.InstrumentationManager, c *dstutil.Cu
 							}
 						}
 					}
+				case *dst.ReturnStmt:
+					// Handle return statements with slog.New(handler)
+					for _, result := range s.Results {
+						if cs, isCall := result.(*dst.CallExpr); isCall {
+							for ai, arg := range cs.Args {
+								if aident, isIdentifier := arg.(*dst.Ident); isIdentifier {
+									if slices.Contains(handlerNames, aident.Name) {
+										cs.Args[ai].(*dst.Ident).Name = "NR" + aident.Name
+									}
+								}
+							}
+						}
+					}
 				case *dst.ExprStmt:
-					// TODO - in the future, be more aggressive about hunting more cases where these
-					// identifiers appear
+					// Handle slog.SetDefault() calls
+					if setDefaultCall, isSetDefault := detectSetDefaultCall(s); isSetDefault {
+						// Replace handler references in SetDefault call
+						if len(setDefaultCall.Args) == 1 {
+							if nestedCall, ok := setDefaultCall.Args[0].(*dst.CallExpr); ok {
+								for ai, arg := range nestedCall.Args {
+									if aident, isIdentifier := arg.(*dst.Ident); isIdentifier {
+										if slices.Contains(handlerNames, aident.Name) {
+											nestedCall.Args[ai].(*dst.Ident).Name = "NR" + aident.Name
+										}
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 		}
