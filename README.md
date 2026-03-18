@@ -144,7 +144,7 @@ Should you need assistance with New Relic products, you are in good hands with s
 If the issue has been confirmed as a bug or is a Feature request, please file a Github issue.
 
 
-* [New Relic Documentation](https://docs.newrelic.com/docs/agents/go-agent): Comprehensive guidance for using our platform
+* [New Relic Documentation](https://docs.newrelic.com/docs/apm/agents/go-agent/installation/install-automation-new-relic-go/#generate-suggestions): Comprehensive guidance for using our platform
 * [Troubleshooting framework](https://discuss.newrelic.com/t/troubleshooting-frameworks/108787): Steps you through common troubleshooting questions
 * [New Relic Community](https://discuss.newrelic.com/tags/goagent): The best place to engage in troubleshooting questions
 * [New Relic Developer](https://developer.newrelic.com/): Resources for building a custom observability applications
