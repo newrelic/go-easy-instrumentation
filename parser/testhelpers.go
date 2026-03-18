@@ -31,8 +31,8 @@ func CreateTestApp(t *testing.T, testAppDir, fileName, contents string) ([]*deco
 		return nil, err
 	}
 
-	filepath := filepath.Join(testAppDir, fileName)
-	f, err := os.Create(filepath)
+	filePath := filepath.Join(testAppDir, fileName)
+	f, err := os.Create(filePath)
 	if err != nil {
 		return nil, err
 	}
@@ -41,6 +41,13 @@ func CreateTestApp(t *testing.T, testAppDir, fileName, contents string) ([]*deco
 	if err != nil {
 		return nil, err
 	}
+	f.Close()
+
+	// Create go.mod to support Go 1.25+ which requires modules for package loading
+	if err := os.WriteFile(filepath.Join(testAppDir, "go.mod"), []byte("module testapp\n\ngo 1.24\n"), 0644); err != nil {
+		return nil, err
+	}
+
 	return decorator.Load(&packages.Config{Dir: testAppDir, Mode: packages.LoadSyntax})
 }
 
