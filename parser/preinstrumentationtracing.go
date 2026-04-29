@@ -155,6 +155,83 @@ func DetectErrors(manager *InstrumentationManager, c *dstutil.Cursor) {
 	}
 }
 
+// DetectEchoInstrumentation analyzes the AST to identify existing Echo v4 instrumentation.
+// It detects functions that already have nrecho.FromContext() calls and marks them as traced
+// to prevent duplicate instrumentation.
+func DetectEchoInstrumentation(manager *InstrumentationManager, c *dstutil.Cursor) {
+	detectEchoInstrumentationWithPath(manager, c, "github.com/newrelic/go-agent/v3/integrations/nrecho-v4")
+}
+
+// DetectEchoV3Instrumentation analyzes the AST to identify existing Echo v3 instrumentation.
+// It detects functions that already have nrecho.FromContext() calls and marks them as traced
+// to prevent duplicate instrumentation.
+func DetectEchoV3Instrumentation(manager *InstrumentationManager, c *dstutil.Cursor) {
+	detectEchoInstrumentationWithPath(manager, c, "github.com/newrelic/go-agent/v3/integrations/nrecho-v3")
+}
+
+// detectEchoInstrumentationWithPath is a helper function that detects Echo instrumentation
+// for a specific nrecho package path.
+func detectEchoInstrumentationWithPath(manager *InstrumentationManager, c *dstutil.Cursor, nrechoPath string) {
+	funcNode := c.Node()
+	if decl, ok := funcNode.(*dst.FuncDecl); ok {
+		manager.transactionCache.Functions[decl.Name.Name] = decl
+
+		// Traverse the function body to look for existing Echo instrumentation patterns
+		hasEchoTransaction := false
+		dstutil.Apply(decl.Body, func(c *dstutil.Cursor) bool {
+			node := c.Node()
+			switch stmt := node.(type) {
+			case *dst.AssignStmt:
+				for _, rhs := range stmt.Rhs {
+					callExpr, ok := rhs.(*dst.CallExpr)
+					if !ok {
+						continue
+					}
+					// Check for nrecho.FromContext(c) pattern
+					if ident, ok := callExpr.Fun.(*dst.Ident); ok {
+						if ident.Name == "FromContext" && ident.Path == nrechoPath {
+							hasEchoTransaction = true
+							// Capture the transaction variable name
+							if len(stmt.Lhs) > 0 {
+								if txnVar, ok := stmt.Lhs[0].(*dst.Ident); ok && txnVar != nil {
+									txnData := transactioncache.NewTxnData()
+									manager.transactionCache.AddTxnToCache(txnVar, txnData)
+								}
+							}
+						}
+					}
+				}
+			case *dst.ExprStmt:
+				// Check for router.Use(nrecho.Middleware(...)) pattern
+				if callExpr, ok := stmt.X.(*dst.CallExpr); ok {
+					if selExpr, ok := callExpr.Fun.(*dst.SelectorExpr); ok {
+						if selExpr.Sel.Name == "Use" {
+							// Check if the argument is nrecho.Middleware
+							if len(callExpr.Args) > 0 {
+								if argCall, ok := callExpr.Args[0].(*dst.CallExpr); ok {
+									if ident, ok := argCall.Fun.(*dst.Ident); ok {
+										if ident.Name == "Middleware" && ident.Path == nrechoPath {
+											// Echo middleware is already present
+											hasEchoTransaction = true
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+			return true
+		}, nil)
+
+		// If we found existing Echo instrumentation, mark the function as already traced
+		if hasEchoTransaction {
+			manager.createFunctionDeclaration(decl)
+			manager.updateFunctionDeclaration(decl)
+		}
+	}
+}
+
 // DetectGinInstrumentation analyzes the AST to identify existing Gin instrumentation.
 // It detects functions that already have nrgin.Transaction() calls and marks them as traced
 // to prevent duplicate instrumentation.

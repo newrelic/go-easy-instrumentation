@@ -13,6 +13,7 @@ import (
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/decorator"
+	"github.com/dave/dst/decorator/resolver"
 	"github.com/dave/dst/decorator/resolver/guess"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
@@ -74,6 +75,37 @@ func Pseudo_uuid() (string, error) {
 		return "", fmt.Errorf("Failed to generate random number from bytes: %v", err)
 	}
 	return fmt.Sprintf("%X-%X-%X-%X-%X", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
+}
+
+// createTestResolver creates a resolver that handles hyphenated import paths
+// like nrecho-v4 by using a predefined map for known integrations.
+func createTestResolver(dir string) resolver.RestorerResolver {
+	// Pre-populate known aliases for hyphenated paths that guess.New() can't handle
+	knownAliases := map[string]string{
+		"github.com/newrelic/go-agent/v3/integrations/nrecho-v4": "nrecho",
+		"github.com/newrelic/go-agent/v3/integrations/nrecho-v3": "nrecho",
+	}
+
+	return &combinedResolver{
+		known: guess.WithMap(knownAliases),
+		guess: guess.New(),
+	}
+}
+
+// combinedResolver tries known aliases first, then falls back to guess.
+type combinedResolver struct {
+	known resolver.RestorerResolver
+	guess resolver.RestorerResolver
+}
+
+func (r *combinedResolver) ResolvePackage(path string) (string, error) {
+	// Try known aliases first (handles hyphenated paths)
+	alias, err := r.known.ResolvePackage(path)
+	if err == nil && alias != "" {
+		return alias, nil
+	}
+	// Fall back to guess for everything else
+	return r.guess.ResolvePackage(path)
 }
 
 func TestInstrumentationManager(t *testing.T, code, testAppDir string) *InstrumentationManager {
@@ -138,7 +170,7 @@ func RunStatefulTracingFunction(t *testing.T, code string, stmtFunc StatefulTrac
 		}
 		return true
 	})
-	restorer := decorator.NewRestorerWithImports(testDir, guess.New())
+	restorer := decorator.NewRestorerWithImports(testDir, createTestResolver(testDir))
 
 	buf := bytes.NewBuffer([]byte{})
 	err = restorer.Fprint(buf, pkg.Syntax[0])
@@ -176,7 +208,7 @@ func RunStatelessTracingFunction(t *testing.T, code string, tracingFunc Stateles
 		t.Fatalf("Failed to instrument packages: %v", err)
 	}
 
-	restorer := decorator.NewRestorerWithImports(testDir, guess.New())
+	restorer := decorator.NewRestorerWithImports(testDir, createTestResolver(testDir))
 	buf := bytes.NewBuffer([]byte{})
 	err = restorer.Fprint(buf, pkg.Syntax[0])
 	if err != nil {

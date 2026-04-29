@@ -25,6 +25,14 @@
       "dir": "integrations/nrgin/example/multiple-service"
     },
     {
+      "name": "echo - basic (v4)",
+      "dir": "integrations/nrecho-v4/example/basic"
+    },
+    {
+      "name": "echo - basic (v3)",
+      "dir": "integrations/nrecho-v3/example/basic"
+    },
+    {
       "name": "semi-instrumented - existing transactions",
       "dir": "validation-tests/semi-instrumented/existing-transactions"
     },
