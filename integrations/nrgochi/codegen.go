@@ -1,34 +1,26 @@
 package nrgochi
 
-import "github.com/dave/dst"
+import (
+	"github.com/dave/dst"
+	"github.com/newrelic/go-easy-instrumentation/integrations/common"
+)
 
 const (
 	NrChiImportPath = "github.com/newrelic/go-agent/v3/integrations/nrgochi"
 )
 
-// Inject NR Middleware instrumentation logic to the Chi application via the `Use` directive.
-// Ex:
+// ChiMiddleware is the configured HttpMiddleware for the nrgochi integration.
+var ChiMiddleware = &common.HttpMiddleware{
+	ImportPath:         NrChiImportPath,
+	MiddlewareFuncName: "Middleware",
+	RouterMethodName:   "Use",
+}
+
+// NrChiMiddleware injects New Relic middleware into the Chi router via router.Use().
 //
-//	router := chi.NewRouter()
-//	router.Use(nrgochi.Middleware(app)) <--- Midddleware injection
+// Example output:
+//
+//	router.Use(nrgochi.Middleware(app))
 func NrChiMiddleware(routerName string, agentVariableName dst.Expr) (*dst.ExprStmt, string) {
-	return &dst.ExprStmt{
-		X: &dst.CallExpr{
-			Fun: &dst.SelectorExpr{
-				X:   &dst.Ident{Name: routerName},
-				Sel: &dst.Ident{Name: "Use"},
-			},
-			Args: []dst.Expr{
-				&dst.CallExpr{
-					Fun: &dst.Ident{
-						Name: "Middleware",
-						Path: NrChiImportPath,
-					},
-					Args: []dst.Expr{
-						agentVariableName,
-					},
-				},
-			},
-		},
-	}, NrChiImportPath
+	return ChiMiddleware.MiddlewareStmt(routerName, agentVariableName)
 }
