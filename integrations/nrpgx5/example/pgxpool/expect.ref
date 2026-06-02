@@ -6,7 +6,7 @@
  	"fmt"
 +	"time"
  
- 	"github.com/jackc/pgx/v5"
+ 	"github.com/jackc/pgx/v5/pgxpool"
 +	"github.com/newrelic/go-agent/v3/integrations/nrpgx5"
 +	"github.com/newrelic/go-agent/v3/newrelic"
  )
@@ -19,10 +19,10 @@
 +		panic(agentInitError)
 +	}
  
--	conn, err := pgx.Connect(context.Background(), "postgres://postgres:password@localhost/postgres")
-+	config, err := pgx.ParseConfig("postgres://postgres:password@localhost/postgres")
-+	config.Tracer = nrpgx5.NewTracer()
-+	conn, err := pgx.ConnectConfig(context.Background(), config)
+-	pool, err := pgxpool.New(context.Background(), "postgres://postgres:password@localhost/postgres")
++	config, err := pgxpool.ParseConfig("postgres://postgres:password@localhost/postgres")
++	config.ConnConfig.Tracer = nrpgx5.NewTracer()
++	pool, err := pgxpool.NewWithConfig(context.Background(), config)
  	if err != nil {
  		panic(err)
  	}

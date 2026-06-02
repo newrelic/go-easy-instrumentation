@@ -6,6 +6,12 @@ import (
 	"github.com/dave/dst"
 )
 
+const (
+	PgxImportPath     = "github.com/jackc/pgx/v5"
+	PgxPoolImportPath = "github.com/jackc/pgx/v5/pgxpool"
+	Nrpgx5ImportPath  = "github.com/newrelic/go-agent/v3/integrations/nrpgx5"
+)
+
 // CreatePgxParseConfig creates an assignment that parses a pgx connection string into a config.
 // config, err := pgx.ParseConfig(connStr)
 func CreatePgxParseConfig(configVar string, connStrExpr dst.Expr) *dst.AssignStmt {

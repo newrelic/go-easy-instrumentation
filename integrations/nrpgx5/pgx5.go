@@ -1,35 +1,75 @@
 package nrpgx5
 
 import (
+	"slices"
+
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
+	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/parser"
-)
-
-const (
-	PgxImportPath     = "github.com/jackc/pgx/v5"
-	PgxPoolImportPath = "github.com/jackc/pgx/v5/pgxpool"
-	Nrpgx5ImportPath  = "github.com/newrelic/go-agent/v3/integrations/nrpgx5"
 )
 
 // InstrumentPgxHandler instruments pgx/v5 connections by injecting an nrpgx5 tracer into the
 // connection config. It handles both direct connections (pgx.Connect) and connection pools
 // (pgxpool.New), transforming each into a three-statement ParseConfig + Tracer + Connect sequence.
+// It handles both named functions and function literals.
 func InstrumentPgxHandler(manager *parser.InstrumentationManager, c *dstutil.Cursor) {
-	funcDecl, ok := c.Node().(*dst.FuncDecl)
-	if !ok {
+	var body *dst.BlockStmt
+	switch node := c.Node().(type) {
+	case *dst.FuncDecl:
+		body = node.Body
+	case *dst.FuncLit:
+		body = node.Body
+	default:
 		return
 	}
 
-	for i, stmt := range funcDecl.Body.List {
+	if HasExistingPgxTracer(body) {
+		comment.Debug(manager.GetDecoratorPackage(), body, "pgx tracer already configured, skipping")
+		return
+	}
+
+	for i, stmt := range body.List {
 		replacement := buildPgxReplacement(stmt)
 		if replacement == nil {
 			continue
 		}
-		funcDecl.Body.List = replaceStatement(funcDecl.Body.List, i, replacement)
+		body.List = slices.Concat(body.List[:i], replacement, body.List[i+1:])
 		manager.AddImport(Nrpgx5ImportPath)
 		return
 	}
+}
+
+// HasExistingPgxTracer reports whether body already contains an nrpgx5.NewTracer() assignment,
+// indicating the pgx connection has already been instrumented.
+func HasExistingPgxTracer(body *dst.BlockStmt) bool {
+	if body == nil {
+		return false
+	}
+	for _, stmt := range body.List {
+		assign, ok := stmt.(*dst.AssignStmt)
+		if !ok || len(assign.Rhs) != 1 {
+			continue
+		}
+		call, ok := assign.Rhs[0].(*dst.CallExpr)
+		if !ok {
+			continue
+		}
+		switch fun := call.Fun.(type) {
+		case *dst.Ident:
+			// DST represents package-qualified calls as *dst.Ident with Path set to the import path.
+			if fun.Name == "NewTracer" && fun.Path == Nrpgx5ImportPath {
+				return true
+			}
+		case *dst.SelectorExpr:
+			// Without full type info, DST uses SelectorExpr instead of Ident with Path.
+			_, ok := fun.X.(*dst.Ident)
+			if ok && fun.Sel.Name == "NewTracer" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // buildPgxReplacement detects a pgx.Connect or pgxpool.New call and returns the three replacement
@@ -52,11 +92,6 @@ func buildPgxReplacement(stmt dst.Stmt) []dst.Stmt {
 	}
 
 	return nil
-}
-
-// replaceStatement replaces stmts[i] with one or more replacement statements.
-func replaceStatement(stmts []dst.Stmt, i int, replacement []dst.Stmt) []dst.Stmt {
-	return append(stmts[:i], append(replacement, stmts[i+1:]...)...)
 }
 
 // DetectPgxConnectCall checks if a statement is a pgx.Connect(ctx, connStr) call.

@@ -95,6 +95,127 @@ func main() {
 `,
 		},
 		{
+			name: "skip already instrumented pgx.Connect",
+			code: `package main
+
+import (
+	"context"
+	pgx "github.com/jackc/pgx/v5"
+	"github.com/newrelic/go-agent/v3/integrations/nrpgx5"
+)
+
+func main() {
+	config, err := pgx.ParseConfig("postgres://user:pass@localhost/mydb")
+	config.Tracer = nrpgx5.NewTracer()
+	conn, err := pgx.ConnectConfig(context.Background(), config)
+	if err != nil {
+		panic(err)
+	}
+	_ = conn
+}
+`,
+			expect: `package main
+
+import (
+	"context"
+	pgx "github.com/jackc/pgx/v5"
+	"github.com/newrelic/go-agent/v3/integrations/nrpgx5"
+)
+
+func main() {
+	config, err := pgx.ParseConfig("postgres://user:pass@localhost/mydb")
+	config.Tracer = nrpgx5.NewTracer()
+	conn, err := pgx.ConnectConfig(context.Background(), config)
+	if err != nil {
+		panic(err)
+	}
+	_ = conn
+}
+`,
+		},
+		{
+			name: "skip already instrumented pgxpool.New",
+			code: `package main
+
+import (
+	"context"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/newrelic/go-agent/v3/integrations/nrpgx5"
+)
+
+func main() {
+	config, err := pgxpool.ParseConfig("postgres://user:pass@localhost/mydb")
+	config.ConnConfig.Tracer = nrpgx5.NewTracer()
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		panic(err)
+	}
+	_ = pool
+}
+`,
+			expect: `package main
+
+import (
+	"context"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/newrelic/go-agent/v3/integrations/nrpgx5"
+)
+
+func main() {
+	config, err := pgxpool.ParseConfig("postgres://user:pass@localhost/mydb")
+	config.ConnConfig.Tracer = nrpgx5.NewTracer()
+	pool, err := pgxpool.NewWithConfig(context.Background(), config)
+	if err != nil {
+		panic(err)
+	}
+	_ = pool
+}
+`,
+		},
+		{
+			name: "instrument pgx.Connect in function literal",
+			code: `package main
+
+import (
+	"context"
+	pgx "github.com/jackc/pgx/v5"
+)
+
+func main() {
+	connect := func() {
+		conn, err := pgx.Connect(context.Background(), "postgres://user:pass@localhost/mydb")
+		if err != nil {
+			panic(err)
+		}
+		_ = conn
+	}
+	connect()
+}
+`,
+			expect: `package main
+
+import (
+	"context"
+
+	pgx "github.com/jackc/pgx/v5"
+	"github.com/newrelic/go-agent/v3/integrations/nrpgx5"
+)
+
+func main() {
+	connect := func() {
+		config, err := pgx.ParseConfig("postgres://user:pass@localhost/mydb")
+		config.Tracer = nrpgx5.NewTracer()
+		conn, err := pgx.ConnectConfig(context.Background(), config)
+		if err != nil {
+			panic(err)
+		}
+		_ = conn
+	}
+	connect()
+}
+`,
+		},
+		{
 			name: "non-pgx function call is not instrumented",
 			code: `package main
 
@@ -285,6 +406,78 @@ func TestDetectPgxPoolNewCall(t *testing.T) {
 				assert.NotNil(t, ctxExpr)
 				assert.NotNil(t, connStrExpr)
 			}
+		})
+	}
+}
+
+func TestHasExistingPgxTracer(t *testing.T) {
+	tracerAssignIdent := &dst.AssignStmt{
+		Lhs: []dst.Expr{
+			&dst.SelectorExpr{X: dst.NewIdent("config"), Sel: dst.NewIdent("Tracer")},
+		},
+		Tok: token.ASSIGN,
+		Rhs: []dst.Expr{
+			&dst.CallExpr{Fun: &dst.Ident{Name: "NewTracer", Path: nrpgx5.Nrpgx5ImportPath}},
+		},
+	}
+	tracerAssignSelector := &dst.AssignStmt{
+		Lhs: []dst.Expr{
+			&dst.SelectorExpr{X: dst.NewIdent("config"), Sel: dst.NewIdent("Tracer")},
+		},
+		Tok: token.ASSIGN,
+		Rhs: []dst.Expr{
+			&dst.CallExpr{
+				Fun: &dst.SelectorExpr{X: dst.NewIdent("nrpgx5"), Sel: dst.NewIdent("NewTracer")},
+			},
+		},
+	}
+	unrelatedStmt := &dst.AssignStmt{
+		Lhs: []dst.Expr{dst.NewIdent("x")},
+		Tok: token.DEFINE,
+		Rhs: []dst.Expr{&dst.BasicLit{Value: `"hello"`}},
+	}
+
+	tests := []struct {
+		name string
+		body *dst.BlockStmt
+		want bool
+	}{
+		{
+			name: "nil body",
+			body: nil,
+			want: false,
+		},
+		{
+			name: "empty body",
+			body: &dst.BlockStmt{List: []dst.Stmt{}},
+			want: false,
+		},
+		{
+			name: "body without tracer",
+			body: &dst.BlockStmt{List: []dst.Stmt{unrelatedStmt}},
+			want: false,
+		},
+		{
+			name: "body with tracer (Ident form)",
+			body: &dst.BlockStmt{List: []dst.Stmt{tracerAssignIdent}},
+			want: true,
+		},
+		{
+			name: "body with tracer (SelectorExpr form)",
+			body: &dst.BlockStmt{List: []dst.Stmt{tracerAssignSelector}},
+			want: true,
+		},
+		{
+			name: "tracer after other statements",
+			body: &dst.BlockStmt{List: []dst.Stmt{unrelatedStmt, tracerAssignIdent}},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := nrpgx5.HasExistingPgxTracer(tt.body)
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
