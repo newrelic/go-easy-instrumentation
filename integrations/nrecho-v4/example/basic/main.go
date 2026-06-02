@@ -12,7 +12,7 @@ func ping(c echo.Context) error {
 	return c.String(http.StatusOK, "pong")
 }
 
-func setupRouter() *echo.Echo {
+func main() {
 	e := echo.New()
 
 	e.GET("/ping", ping)
@@ -30,10 +30,5 @@ func setupRouter() *echo.Echo {
 		return c.JSON(http.StatusOK, map[string]string{"user": user, "status": "no value"})
 	})
 
-	return e
-}
-
-func main() {
-	e := setupRouter()
 	e.Start(":8080")
 }

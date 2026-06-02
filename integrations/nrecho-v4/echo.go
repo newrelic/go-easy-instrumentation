@@ -18,23 +18,28 @@ const (
 	echoContextObject = echoImportPath + ".Context"
 )
 
-// EchoMiddlewareCall returns the variable name of the echo router so that new relic middleware can be appended
+// EchoMiddlewareCall returns the variable name of the echo router so that new relic middleware can be appended.
+// Returns an empty string if the statement is not an echo.New() assignment.
 func EchoMiddlewareCall(stmt dst.Stmt) string {
 	v, ok := stmt.(*dst.AssignStmt)
 	if !ok || len(v.Rhs) != 1 {
 		return ""
 	}
-	if call, ok := v.Rhs[0].(*dst.CallExpr); ok {
-		if ident, ok := call.Fun.(*dst.Ident); ok {
-			if ident.Name == "New" && ident.Path == echoImportPath {
-				if v.Lhs != nil {
-					return v.Lhs[0].(*dst.Ident).Name
-				}
-			}
-		}
+	call, ok := v.Rhs[0].(*dst.CallExpr)
+	if !ok {
+		return ""
 	}
-
-	return ""
+	ident, ok := call.Fun.(*dst.Ident)
+	if !ok {
+		return ""
+	}
+	if ident.Name != "New" || ident.Path != echoImportPath {
+		return ""
+	}
+	if v.Lhs == nil {
+		return ""
+	}
+	return v.Lhs[0].(*dst.Ident).Name
 }
 
 // GetEchoContextFromHandler checks the type of a function or function literal declaration to determine if
@@ -62,6 +67,28 @@ func GetEchoContextFromHandler(nodeType *dst.FuncType, pkg *decorator.Package) s
 	return ""
 }
 
+// isFromContextCall reports whether a DST node is an assignment containing a call to nrecho.FromContext.
+func isFromContextCall(node dst.Node) bool {
+	stmt, ok := node.(*dst.AssignStmt)
+	if !ok {
+		return false
+	}
+	for _, rhs := range stmt.Rhs {
+		callExpr, ok := rhs.(*dst.CallExpr)
+		if !ok {
+			continue
+		}
+		ident, ok := callExpr.Fun.(*dst.Ident)
+		if !ok {
+			continue
+		}
+		if ident.Name == "FromContext" && ident.Path == NrechoImportPath {
+			return true
+		}
+	}
+	return false
+}
+
 // hasExistingEchoTransaction checks if a function already has nrecho.FromContext calls
 func hasExistingEchoTransaction(funcDecl *dst.FuncDecl) bool {
 	if funcDecl == nil || funcDecl.Body == nil {
@@ -70,18 +97,9 @@ func hasExistingEchoTransaction(funcDecl *dst.FuncDecl) bool {
 
 	hasTransaction := false
 	dstutil.Apply(funcDecl.Body, func(c *dstutil.Cursor) bool {
-		node := c.Node()
-		if stmt, ok := node.(*dst.AssignStmt); ok {
-			for _, rhs := range stmt.Rhs {
-				if callExpr, ok := rhs.(*dst.CallExpr); ok {
-					if ident, ok := callExpr.Fun.(*dst.Ident); ok {
-						if ident.Name == "FromContext" && ident.Path == NrechoImportPath {
-							hasTransaction = true
-							return false
-						}
-					}
-				}
-			}
+		if isFromContextCall(c.Node()) {
+			hasTransaction = true
+			return false
 		}
 		return true
 	}, nil)
@@ -89,43 +107,56 @@ func hasExistingEchoTransaction(funcDecl *dst.FuncDecl) bool {
 	return hasTransaction
 }
 
+// isNrechoMiddlewareStmt reports whether a statement is a router.Use(nrecho.Middleware(...)) call.
+func isNrechoMiddlewareStmt(stmt dst.Stmt) bool {
+	exprStmt, ok := stmt.(*dst.ExprStmt)
+	if !ok {
+		return false
+	}
+	callExpr, ok := exprStmt.X.(*dst.CallExpr)
+	if !ok {
+		return false
+	}
+	selExpr, ok := callExpr.Fun.(*dst.SelectorExpr)
+	if !ok {
+		return false
+	}
+	// must be a .Use() call with at least one argument
+	if selExpr.Sel.Name != "Use" || len(callExpr.Args) == 0 {
+		return false
+	}
+	argCall, ok := callExpr.Args[0].(*dst.CallExpr)
+	if !ok {
+		return false
+	}
+	// nrecho.Middleware is a *dst.Ident with Path set when type-checked (generated code or
+	// packages loaded with full type info), or a *dst.SelectorExpr when loaded without type info.
+	switch fun := argCall.Fun.(type) {
+	case *dst.Ident:
+		return fun.Name == "Middleware" && fun.Path == NrechoImportPath
+	case *dst.SelectorExpr:
+		_, ok := fun.X.(*dst.Ident)
+		return ok && fun.Sel.Name == "Middleware"
+	}
+	return false
+}
+
 // hasExistingEchoMiddleware checks if nrecho.Middleware is already present after the current router assignment
 func hasExistingEchoMiddleware(c *dstutil.Cursor) bool {
-	// Check all remaining statements to see if middleware is already added
 	parent := c.Parent()
-	if blockStmt, ok := parent.(*dst.BlockStmt); ok {
-		// Find current statement index
-		currentIndex := -1
-		for i, stmt := range blockStmt.List {
-			if stmt == c.Node() {
-				currentIndex = i
-				break
-			}
-		}
-
-		// Check all remaining statements for existing middleware
-		if currentIndex >= 0 {
-			for i := currentIndex + 1; i < len(blockStmt.List); i++ {
-				if exprStmt, ok := blockStmt.List[i].(*dst.ExprStmt); ok {
-					if callExpr, ok := exprStmt.X.(*dst.CallExpr); ok {
-						if selExpr, ok := callExpr.Fun.(*dst.SelectorExpr); ok {
-							// Check for router.Use(nrecho.Middleware(...))
-							if selExpr.Sel.Name == "Use" && len(callExpr.Args) > 0 {
-								if argCall, ok := callExpr.Args[0].(*dst.CallExpr); ok {
-									if ident, ok := argCall.Fun.(*dst.Ident); ok {
-										if ident.Name == "Middleware" && ident.Path == NrechoImportPath {
-											return true
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
+	blockStmt, ok := parent.(*dst.BlockStmt)
+	if !ok {
+		return false
+	}
+	currentIndex := c.Index()
+	if currentIndex < 0 {
+		return false
+	}
+	for i := currentIndex + 1; i < len(blockStmt.List); i++ {
+		if isNrechoMiddlewareStmt(blockStmt.List[i]) {
+			return true
 		}
 	}
-
 	return false
 }
 

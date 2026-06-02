@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrecho-v3"
+	nrecho "github.com/newrelic/go-easy-instrumentation/integrations/nrecho-v3"
 	"github.com/newrelic/go-easy-instrumentation/parser"
 
 	"github.com/dave/dst"
@@ -109,6 +109,57 @@ func main() {
 }
 `,
 		},
+		{
+			name: "skip already instrumented echo router",
+			code: `package main
+
+import (
+	"time"
+
+	"github.com/labstack/echo"
+	"github.com/newrelic/go-agent/v3/integrations/nrecho-v3"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
+	}
+
+	e := echo.New()
+	e.Use(nrecho.Middleware(NewRelicAgent))
+	e.Start(":8000")
+
+	NewRelicAgent.Shutdown(5 * time.Second)
+}
+`,
+			// The restorer strips the nrecho import because existing SelectorExpr usage
+			// (nrecho.Middleware) has no Path annotation — only freshly generated Ident
+			// nodes carry Path. The key assertion is that no duplicate middleware is added.
+			expect: `package main
+
+import (
+	"time"
+
+	"github.com/labstack/echo"
+	"github.com/newrelic/go-agent/v3/newrelic"
+)
+
+func main() {
+	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
+	if agentInitError != nil {
+		panic(agentInitError)
+	}
+
+	e := echo.New()
+	e.Use(nrecho.Middleware(NewRelicAgent))
+	e.Start(":8000")
+
+	NewRelicAgent.Shutdown(5 * time.Second)
+}
+`,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -118,6 +169,7 @@ func main() {
 		})
 	}
 }
+
 
 func TestEchoMiddlewareCall(t *testing.T) {
 	tests := []struct {
@@ -319,6 +371,37 @@ func TestGetEchoHandlerContext(t *testing.T) {
 			pkg:  pkg,
 			want: "",
 		},
+		{
+			name: "invalid echo handler with zero params",
+			node: &dst.FuncType{
+				Params: &dst.FieldList{
+					List: []*dst.Field{},
+				},
+			},
+			pkg:  pkg,
+			want: "",
+		},
+		{
+			name: "invalid echo handler with two names on single param",
+			node: &dst.FuncType{
+				Params: &dst.FieldList{
+					List: []*dst.Field{
+						{
+							Names: []*dst.Ident{
+								{Name: "c"},
+								{Name: "d"},
+							},
+							Type: &dst.Ident{
+								Name: "Context",
+								Path: nrecho.EchoImportPath,
+							},
+						},
+					},
+				},
+			},
+			pkg:  pkg,
+			want: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -331,7 +414,29 @@ func TestGetEchoHandlerContext(t *testing.T) {
 	}
 }
 
+func txnAssignStmtV3(txnVar, ctxName string) *dst.AssignStmt {
+	return &dst.AssignStmt{
+		Lhs: []dst.Expr{&dst.Ident{Name: txnVar}},
+		Tok: token.DEFINE,
+		Rhs: []dst.Expr{
+			&dst.CallExpr{
+				Fun: &dst.Ident{
+					Name: "FromContext",
+					Path: nrecho.NrechoImportPath,
+				},
+				Args: []dst.Expr{&dst.Ident{Name: ctxName}},
+			},
+		},
+		Decs: dst.AssignStmtDecorations{
+			NodeDecs: dst.NodeDecs{Before: dst.NewLine},
+		},
+	}
+}
+
 func TestDefineTxnFromEchoCtx(t *testing.T) {
+	doSomething := &dst.ExprStmt{X: &dst.CallExpr{Fun: &dst.Ident{Name: "doSomething"}}}
+	doOther := &dst.ExprStmt{X: &dst.CallExpr{Fun: &dst.Ident{Name: "doOther"}}}
+
 	tests := []struct {
 		name        string
 		body        *dst.BlockStmt
@@ -340,52 +445,30 @@ func TestDefineTxnFromEchoCtx(t *testing.T) {
 		want        *dst.BlockStmt
 	}{
 		{
-			name: "inject transaction into echo context",
-			body: &dst.BlockStmt{
-				List: []dst.Stmt{
-					&dst.ExprStmt{
-						X: &dst.CallExpr{
-							Fun: &dst.Ident{Name: "doSomething"},
-						},
-					},
-				},
-			},
+			name:        "inject transaction into single-statement body",
+			body:        &dst.BlockStmt{List: []dst.Stmt{doSomething}},
 			txnVariable: "nrTxn",
 			ctxName:     "c",
 			want: &dst.BlockStmt{
-				List: []dst.Stmt{
-					&dst.AssignStmt{
-						Lhs: []dst.Expr{
-							&dst.Ident{
-								Name: "nrTxn",
-							},
-						},
-						Tok: token.DEFINE,
-						Rhs: []dst.Expr{
-							&dst.CallExpr{
-								Fun: &dst.Ident{
-									Name: "FromContext",
-									Path: "github.com/newrelic/go-agent/v3/integrations/nrecho-v3",
-								},
-								Args: []dst.Expr{
-									&dst.Ident{
-										Name: "c",
-									},
-								},
-							},
-						},
-						Decs: dst.AssignStmtDecorations{
-							NodeDecs: dst.NodeDecs{
-								Before: dst.NewLine,
-							},
-						},
-					},
-					&dst.ExprStmt{
-						X: &dst.CallExpr{
-							Fun: &dst.Ident{Name: "doSomething"},
-						},
-					},
-				},
+				List: []dst.Stmt{txnAssignStmtV3("nrTxn", "c"), doSomething},
+			},
+		},
+		{
+			name:        "inject transaction into empty body",
+			body:        &dst.BlockStmt{List: []dst.Stmt{}},
+			txnVariable: "nrTxn",
+			ctxName:     "c",
+			want: &dst.BlockStmt{
+				List: []dst.Stmt{txnAssignStmtV3("nrTxn", "c")},
+			},
+		},
+		{
+			name:        "inject transaction into multi-statement body",
+			body:        &dst.BlockStmt{List: []dst.Stmt{doSomething, doOther}},
+			txnVariable: "nrTxn",
+			ctxName:     "c",
+			want: &dst.BlockStmt{
+				List: []dst.Stmt{txnAssignStmtV3("nrTxn", "c"), doSomething, doOther},
 			},
 		},
 	}
