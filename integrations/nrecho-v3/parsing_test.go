@@ -480,3 +480,211 @@ func TestDefineTxnFromEchoCtx(t *testing.T) {
 		})
 	}
 }
+
+func TestHasExistingEchoTransaction(t *testing.T) {
+	fromContextStmt := &dst.AssignStmt{
+		Lhs: []dst.Expr{&dst.Ident{Name: "nrTxn"}},
+		Tok: token.DEFINE,
+		Rhs: []dst.Expr{
+			&dst.CallExpr{
+				Fun: &dst.Ident{
+					Name: "FromContext",
+					Path: nrecho.NrechoImportPath,
+				},
+				Args: []dst.Expr{&dst.Ident{Name: "c"}},
+			},
+		},
+	}
+	otherCallStmt := &dst.AssignStmt{
+		Lhs: []dst.Expr{&dst.Ident{Name: "x"}},
+		Tok: token.DEFINE,
+		Rhs: []dst.Expr{
+			&dst.CallExpr{Fun: &dst.Ident{Name: "someOtherCall"}},
+		},
+	}
+
+	tests := []struct {
+		name     string
+		funcDecl *dst.FuncDecl
+		want     bool
+	}{
+		{
+			name:     "nil funcDecl",
+			funcDecl: nil,
+			want:     false,
+		},
+		{
+			name:     "nil body",
+			funcDecl: &dst.FuncDecl{Body: nil},
+			want:     false,
+		},
+		{
+			name:     "empty body",
+			funcDecl: &dst.FuncDecl{Body: &dst.BlockStmt{List: []dst.Stmt{}}},
+			want:     false,
+		},
+		{
+			name: "body without FromContext",
+			funcDecl: &dst.FuncDecl{Body: &dst.BlockStmt{
+				List: []dst.Stmt{otherCallStmt},
+			}},
+			want: false,
+		},
+		{
+			name: "body with FromContext",
+			funcDecl: &dst.FuncDecl{Body: &dst.BlockStmt{
+				List: []dst.Stmt{fromContextStmt},
+			}},
+			want: true,
+		},
+		{
+			name: "body with FromContext after other statements",
+			funcDecl: &dst.FuncDecl{Body: &dst.BlockStmt{
+				List: []dst.Stmt{otherCallStmt, fromContextStmt},
+			}},
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := nrecho.HasExistingEchoTransaction(tt.funcDecl)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestIsNrechoMiddlewareStmt(t *testing.T) {
+	tests := []struct {
+		name string
+		stmt dst.Stmt
+		want bool
+	}{
+		{
+			name: "valid nrecho middleware (Ident form, type-checked)",
+			stmt: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X:   &dst.Ident{Name: "e"},
+						Sel: &dst.Ident{Name: "Use"},
+					},
+					Args: []dst.Expr{
+						&dst.CallExpr{
+							Fun: &dst.Ident{
+								Name: "Middleware",
+								Path: nrecho.NrechoImportPath,
+							},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "valid nrecho middleware (SelectorExpr form, loaded without type info)",
+			stmt: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X:   &dst.Ident{Name: "e"},
+						Sel: &dst.Ident{Name: "Use"},
+					},
+					Args: []dst.Expr{
+						&dst.CallExpr{
+							Fun: &dst.SelectorExpr{
+								X:   &dst.Ident{Name: "nrecho"},
+								Sel: &dst.Ident{Name: "Middleware"},
+							},
+						},
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "wrong middleware name",
+			stmt: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X:   &dst.Ident{Name: "e"},
+						Sel: &dst.Ident{Name: "Use"},
+					},
+					Args: []dst.Expr{
+						&dst.CallExpr{
+							Fun: &dst.Ident{
+								Name: "OtherFunc",
+								Path: nrecho.NrechoImportPath,
+							},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "wrong import path",
+			stmt: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X:   &dst.Ident{Name: "e"},
+						Sel: &dst.Ident{Name: "Use"},
+					},
+					Args: []dst.Expr{
+						&dst.CallExpr{
+							Fun: &dst.Ident{
+								Name: "Middleware",
+								Path: "github.com/some/other/pkg",
+							},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "not a Use call",
+			stmt: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X:   &dst.Ident{Name: "e"},
+						Sel: &dst.Ident{Name: "GET"},
+					},
+					Args: []dst.Expr{
+						&dst.CallExpr{
+							Fun: &dst.Ident{Name: "Middleware", Path: nrecho.NrechoImportPath},
+						},
+					},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "Use with no arguments",
+			stmt: &dst.ExprStmt{
+				X: &dst.CallExpr{
+					Fun: &dst.SelectorExpr{
+						X:   &dst.Ident{Name: "e"},
+						Sel: &dst.Ident{Name: "Use"},
+					},
+					Args: []dst.Expr{},
+				},
+			},
+			want: false,
+		},
+		{
+			name: "not an expression statement",
+			stmt: &dst.AssignStmt{
+				Lhs: []dst.Expr{&dst.Ident{Name: "x"}},
+				Tok: token.DEFINE,
+				Rhs: []dst.Expr{&dst.Ident{Name: "y"}},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := nrecho.IsNrechoMiddlewareStmt(tt.stmt)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}

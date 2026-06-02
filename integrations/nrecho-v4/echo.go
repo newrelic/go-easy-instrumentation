@@ -68,6 +68,8 @@ func GetEchoContextFromHandler(nodeType *dst.FuncType, pkg *decorator.Package) s
 }
 
 // isFromContextCall reports whether a DST node is an assignment containing a call to nrecho.FromContext.
+// DST sets Ident.Path to the import path when type info is available, which is how we distinguish
+// nrecho.FromContext from any other package's FromContext.
 func isFromContextCall(node dst.Node) bool {
 	stmt, ok := node.(*dst.AssignStmt)
 	if !ok {
@@ -89,8 +91,9 @@ func isFromContextCall(node dst.Node) bool {
 	return false
 }
 
-// hasExistingEchoTransaction checks if a function already has nrecho.FromContext calls
-func hasExistingEchoTransaction(funcDecl *dst.FuncDecl) bool {
+// HasExistingEchoTransaction reports whether funcDecl already contains a nrecho.FromContext call,
+// indicating the handler has already been instrumented.
+func HasExistingEchoTransaction(funcDecl *dst.FuncDecl) bool {
 	if funcDecl == nil || funcDecl.Body == nil {
 		return false
 	}
@@ -107,8 +110,8 @@ func hasExistingEchoTransaction(funcDecl *dst.FuncDecl) bool {
 	return hasTransaction
 }
 
-// isNrechoMiddlewareStmt reports whether a statement is a router.Use(nrecho.Middleware(...)) call.
-func isNrechoMiddlewareStmt(stmt dst.Stmt) bool {
+// IsNrechoMiddlewareStmt reports whether a statement is a router.Use(nrecho.Middleware(...)) call.
+func IsNrechoMiddlewareStmt(stmt dst.Stmt) bool {
 	exprStmt, ok := stmt.(*dst.ExprStmt)
 	if !ok {
 		return false
@@ -141,7 +144,9 @@ func isNrechoMiddlewareStmt(stmt dst.Stmt) bool {
 	return false
 }
 
-// hasExistingEchoMiddleware checks if nrecho.Middleware is already present after the current router assignment
+// hasExistingEchoMiddleware checks if nrecho.Middleware is already present after the current router assignment.
+// c.Index() returns -1 when the node is not directly inside a list (e.g. it is the root of a function body),
+// which means there is nowhere to look for a following Use call.
 func hasExistingEchoMiddleware(c *dstutil.Cursor) bool {
 	parent := c.Parent()
 	blockStmt, ok := parent.(*dst.BlockStmt)
@@ -152,8 +157,9 @@ func hasExistingEchoMiddleware(c *dstutil.Cursor) bool {
 	if currentIndex < 0 {
 		return false
 	}
+	// Only scan statements that come after the router assignment.
 	for i := currentIndex + 1; i < len(blockStmt.List); i++ {
-		if isNrechoMiddlewareStmt(blockStmt.List[i]) {
+		if IsNrechoMiddlewareStmt(blockStmt.List[i]) {
 			return true
 		}
 	}
@@ -210,7 +216,7 @@ func InstrumentEchoFunction(manager *parser.InstrumentationManager, c *dstutil.C
 		}
 
 		// Check if nrecho.FromContext is already present in the function body
-		if hasExistingEchoTransaction(v) {
+		if HasExistingEchoTransaction(v) {
 			comment.Debug(manager.GetDecoratorPackage(), v, fmt.Sprintf("Skipping echo handler %s: already has nrecho.FromContext", v.Name.Name))
 			return
 		}
