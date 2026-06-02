@@ -1,0 +1,59 @@
+--- a/main.go
++++ b/main.go
+@@ -2,26 +2,49 @@
+ 
+ import (
+ 	"net/http"
++	"time"
+ 
+ 	"github.com/labstack/echo/v4"
++	"github.com/newrelic/go-agent/v3/integrations/nrecho-v4"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ var db = make(map[string]string)
+ 
+ func ping(c echo.Context) error {
++	nrTxn := nrecho.FromContext(c)
++	defer nrTxn.StartSegment("ping").End()
++
+ 	return c.String(http.StatusOK, "pong")
+ }
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	e := echo.New()
+ 
++	e.Use(nrecho.Middleware(NewRelicAgent))
++
+ 	e.GET("/ping", ping)
++	// NR WARN: function literal segments will be named "function literal" by default
++	// declare a function instead to improve segment name generation
+ 	e.GET("/", func(c echo.Context) error {
++		nrTxn := nrecho.FromContext(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		return c.String(http.StatusOK, "hello")
+ 	})
+ 
+ 	// Get user value
++	// NR WARN: function literal segments will be named "function literal" by default
++	// declare a function instead to improve segment name generation
+ 	e.GET("/user/:name", func(c echo.Context) error {
++		nrTxn := nrecho.FromContext(c)
++		defer nrTxn.StartSegment("function literal").End()
++
+ 		user := c.Param("name")
+ 		value, ok := db[user]
+ 		if ok {
+@@ -31,4 +34,6 @@
+ 	})
+ 
+ 	e.Start(":8080")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
