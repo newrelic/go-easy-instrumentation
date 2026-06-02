@@ -1,0 +1,33 @@
+--- a/main.go
++++ b/main.go
+@@ -3,12 +3,22 @@
+ import (
+ 	"context"
+ 	"fmt"
++	"time"
+
+ 	"github.com/jackc/pgx/v5"
++	"github.com/newrelic/go-agent/v3/integrations/nrpgx5"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+
+ func main() {
+-	conn, err := pgx.Connect(context.Background(), "postgres://user:pass@localhost/mydb")
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
++	config, err := pgx.ParseConfig("postgres://user:pass@localhost/mydb")
++	config.Tracer = nrpgx5.NewTracer()
++	conn, err := pgx.ConnectConfig(context.Background(), config)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+@@ -20,4 +25,6 @@
+ 		panic(err)
+ 	}
+ 	fmt.Println(greeting)
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }
