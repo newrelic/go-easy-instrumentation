@@ -1,152 +1,167 @@
-package nrpgx5_test
+package nrpgx5
 
 import (
 	"go/token"
 	"testing"
 
 	"github.com/dave/dst"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrpgx5"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCreatePgxParseConfig(t *testing.T) {
-	connStr := &dst.BasicLit{Kind: token.STRING, Value: `"postgres://localhost/mydb"`}
-	got := nrpgx5.CreatePgxParseConfig("config", connStr)
+func TestCreateParseConfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		importPath string
+	}{
+		{name: "pgx", importPath: PgxImportPath},
+		{name: "pgxpool", importPath: PgxPoolImportPath},
+	}
 
-	assert.NotNil(t, got)
-	assert.Equal(t, token.DEFINE, got.Tok)
-	assert.Len(t, got.Lhs, 2)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			connStr := &dst.BasicLit{Kind: token.STRING, Value: `"postgres://localhost/mydb"`}
+			got := CreateParseConfig(connStr, tt.importPath)
 
-	configIdent, ok := got.Lhs[0].(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "config", configIdent.Name)
+			assert.NotNil(t, got)
+			assert.Equal(t, token.DEFINE, got.Tok)
+			assert.Len(t, got.Lhs, 2)
 
-	call, ok := got.Rhs[0].(*dst.CallExpr)
-	assert.True(t, ok)
+			configIdent, ok := got.Lhs[0].(*dst.Ident)
+			assert.True(t, ok)
+			assert.Equal(t, configVar, configIdent.Name)
 
-	funIdent, ok := call.Fun.(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "ParseConfig", funIdent.Name)
-	assert.Equal(t, nrpgx5.PgxImportPath, funIdent.Path)
-	assert.Len(t, call.Args, 1)
-}
+			errIdent, ok := got.Lhs[1].(*dst.Ident)
+			assert.True(t, ok)
+			assert.Equal(t, "err", errIdent.Name)
 
-func TestCreatePgxPoolParseConfig(t *testing.T) {
-	connStr := &dst.BasicLit{Kind: token.STRING, Value: `"postgres://localhost/mydb"`}
-	got := nrpgx5.CreatePgxPoolParseConfig("config", connStr)
+			call, ok := got.Rhs[0].(*dst.CallExpr)
+			assert.True(t, ok)
+			assert.Len(t, call.Args, 1)
 
-	assert.NotNil(t, got)
-	assert.Equal(t, token.DEFINE, got.Tok)
+			funIdent, ok := call.Fun.(*dst.Ident)
+			assert.True(t, ok)
+			assert.Equal(t, "ParseConfig", funIdent.Name)
+			assert.Equal(t, tt.importPath, funIdent.Path)
 
-	call, ok := got.Rhs[0].(*dst.CallExpr)
-	assert.True(t, ok)
-
-	funIdent, ok := call.Fun.(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "ParseConfig", funIdent.Name)
-	assert.Equal(t, nrpgx5.PgxPoolImportPath, funIdent.Path)
+			// Connection string is cloned, not aliased — original must be untouched.
+			arg, ok := call.Args[0].(*dst.BasicLit)
+			assert.True(t, ok)
+			assert.Equal(t, connStr.Value, arg.Value)
+			assert.NotSame(t, connStr, arg)
+		})
+	}
 }
 
 func TestCreateTracerAssignment(t *testing.T) {
-	got := nrpgx5.CreateTracerAssignment("config")
+	tests := []struct {
+		name        string
+		receiver    dst.Expr
+		assertOnLhs func(t *testing.T, lhs *dst.SelectorExpr)
+	}{
+		{
+			name:     "direct config receiver (pgx)",
+			receiver: dst.NewIdent(configVar),
+			assertOnLhs: func(t *testing.T, lhs *dst.SelectorExpr) {
+				assert.Equal(t, "Tracer", lhs.Sel.Name)
+				ident, ok := lhs.X.(*dst.Ident)
+				assert.True(t, ok)
+				assert.Equal(t, configVar, ident.Name)
+			},
+		},
+		{
+			name: "nested config.ConnConfig receiver (pgxpool)",
+			receiver: &dst.SelectorExpr{
+				X:   dst.NewIdent(configVar),
+				Sel: dst.NewIdent("ConnConfig"),
+			},
+			assertOnLhs: func(t *testing.T, lhs *dst.SelectorExpr) {
+				assert.Equal(t, "Tracer", lhs.Sel.Name)
+				inner, ok := lhs.X.(*dst.SelectorExpr)
+				assert.True(t, ok)
+				assert.Equal(t, "ConnConfig", inner.Sel.Name)
+				ident, ok := inner.X.(*dst.Ident)
+				assert.True(t, ok)
+				assert.Equal(t, configVar, ident.Name)
+			},
+		},
+	}
 
-	assert.NotNil(t, got)
-	assert.Equal(t, token.ASSIGN, got.Tok)
-	assert.Len(t, got.Lhs, 1)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CreateTracerAssignment(tt.receiver)
 
-	lhsSel, ok := got.Lhs[0].(*dst.SelectorExpr)
-	assert.True(t, ok)
-	assert.Equal(t, "Tracer", lhsSel.Sel.Name)
+			assert.NotNil(t, got)
+			assert.Equal(t, token.ASSIGN, got.Tok)
+			assert.Len(t, got.Lhs, 1)
 
-	lhsX, ok := lhsSel.X.(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "config", lhsX.Name)
+			lhsSel, ok := got.Lhs[0].(*dst.SelectorExpr)
+			assert.True(t, ok)
+			tt.assertOnLhs(t, lhsSel)
 
-	call, ok := got.Rhs[0].(*dst.CallExpr)
-	assert.True(t, ok)
+			call, ok := got.Rhs[0].(*dst.CallExpr)
+			assert.True(t, ok)
 
-	funIdent, ok := call.Fun.(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "NewTracer", funIdent.Name)
-	assert.Equal(t, nrpgx5.Nrpgx5ImportPath, funIdent.Path)
+			funIdent, ok := call.Fun.(*dst.Ident)
+			assert.True(t, ok)
+			assert.Equal(t, "NewTracer", funIdent.Name)
+			assert.Equal(t, Nrpgx5ImportPath, funIdent.Path)
+		})
+	}
 }
 
-func TestCreatePoolTracerAssignment(t *testing.T) {
-	got := nrpgx5.CreatePoolTracerAssignment("config")
+func TestCreateConnectWithConfig(t *testing.T) {
+	tests := []struct {
+		name       string
+		varName    string
+		fun        dst.Expr
+		wantMethod string
+		wantPath   string
+	}{
+		{
+			name:       "pgx.ConnectConfig",
+			varName:    "conn",
+			fun:        &dst.Ident{Name: "ConnectConfig", Path: PgxImportPath},
+			wantMethod: "ConnectConfig",
+			wantPath:   PgxImportPath,
+		},
+		{
+			name:       "pgxpool.NewWithConfig",
+			varName:    "pool",
+			fun:        &dst.Ident{Name: "NewWithConfig", Path: PgxPoolImportPath},
+			wantMethod: "NewWithConfig",
+			wantPath:   PgxPoolImportPath,
+		},
+	}
 
-	assert.NotNil(t, got)
-	assert.Equal(t, token.ASSIGN, got.Tok)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctxExpr := &dst.Ident{Name: "ctx"}
+			got := CreateConnectWithConfig(tt.varName, ctxExpr, tt.fun)
 
-	// LHS should be config.ConnConfig.Tracer
-	outerSel, ok := got.Lhs[0].(*dst.SelectorExpr)
-	assert.True(t, ok)
-	assert.Equal(t, "Tracer", outerSel.Sel.Name)
+			assert.NotNil(t, got)
+			assert.Equal(t, token.DEFINE, got.Tok)
+			assert.Len(t, got.Lhs, 2)
 
-	innerSel, ok := outerSel.X.(*dst.SelectorExpr)
-	assert.True(t, ok)
-	assert.Equal(t, "ConnConfig", innerSel.Sel.Name)
+			lhsIdent, ok := got.Lhs[0].(*dst.Ident)
+			assert.True(t, ok)
+			assert.Equal(t, tt.varName, lhsIdent.Name)
 
-	configIdent, ok := innerSel.X.(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "config", configIdent.Name)
+			errIdent, ok := got.Lhs[1].(*dst.Ident)
+			assert.True(t, ok)
+			assert.Equal(t, "err", errIdent.Name)
 
-	call, ok := got.Rhs[0].(*dst.CallExpr)
-	assert.True(t, ok)
+			call, ok := got.Rhs[0].(*dst.CallExpr)
+			assert.True(t, ok)
 
-	funIdent, ok := call.Fun.(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "NewTracer", funIdent.Name)
-	assert.Equal(t, nrpgx5.Nrpgx5ImportPath, funIdent.Path)
-}
+			funIdent, ok := call.Fun.(*dst.Ident)
+			assert.True(t, ok)
+			assert.Equal(t, tt.wantMethod, funIdent.Name)
+			assert.Equal(t, tt.wantPath, funIdent.Path)
 
-func TestCreatePgxConnectConfig(t *testing.T) {
-	ctxExpr := &dst.Ident{Name: "ctx"}
-	got := nrpgx5.CreatePgxConnectConfig("conn", ctxExpr, "config")
-
-	assert.NotNil(t, got)
-	assert.Equal(t, token.DEFINE, got.Tok)
-	assert.Len(t, got.Lhs, 2)
-
-	connIdent, ok := got.Lhs[0].(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "conn", connIdent.Name)
-
-	call, ok := got.Rhs[0].(*dst.CallExpr)
-	assert.True(t, ok)
-
-	funIdent, ok := call.Fun.(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "ConnectConfig", funIdent.Name)
-	assert.Equal(t, nrpgx5.PgxImportPath, funIdent.Path)
-
-	assert.Len(t, call.Args, 2)
-	configIdent, ok := call.Args[1].(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "config", configIdent.Name)
-}
-
-func TestCreatePgxPoolNewWithConfig(t *testing.T) {
-	ctxExpr := &dst.Ident{Name: "ctx"}
-	got := nrpgx5.CreatePgxPoolNewWithConfig("pool", ctxExpr, "config")
-
-	assert.NotNil(t, got)
-	assert.Equal(t, token.DEFINE, got.Tok)
-	assert.Len(t, got.Lhs, 2)
-
-	poolIdent, ok := got.Lhs[0].(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "pool", poolIdent.Name)
-
-	call, ok := got.Rhs[0].(*dst.CallExpr)
-	assert.True(t, ok)
-
-	funIdent, ok := call.Fun.(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "NewWithConfig", funIdent.Name)
-	assert.Equal(t, nrpgx5.PgxPoolImportPath, funIdent.Path)
-
-	assert.Len(t, call.Args, 2)
-	configIdent, ok := call.Args[1].(*dst.Ident)
-	assert.True(t, ok)
-	assert.Equal(t, "config", configIdent.Name)
+			assert.Len(t, call.Args, 2)
+			configIdent, ok := call.Args[1].(*dst.Ident)
+			assert.True(t, ok)
+			assert.Equal(t, configVar, configIdent.Name)
+		})
+	}
 }

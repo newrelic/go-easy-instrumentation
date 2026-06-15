@@ -9,6 +9,10 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/parser"
 )
 
+// nrpgx5PackageName is the conventional package alias for the nrpgx5 integration.
+// Used as a fallback when DST has lost type info and represents the call as a SelectorExpr.
+const nrpgx5PackageName = "nrpgx5"
+
 // InstrumentPgxHandler instruments pgx/v5 connections by injecting an nrpgx5 tracer into the
 // connection config. It handles both direct connections (pgx.Connect) and connection pools
 // (pgxpool.New), transforming each into a three-statement ParseConfig + Tracer + Connect sequence.
@@ -63,8 +67,8 @@ func HasExistingPgxTracer(body *dst.BlockStmt) bool {
 			}
 		case *dst.SelectorExpr:
 			// Without full type info, DST uses SelectorExpr instead of Ident with Path.
-			_, ok := fun.X.(*dst.Ident)
-			if ok && fun.Sel.Name == "NewTracer" {
+			x, ok := fun.X.(*dst.Ident)
+			if ok && x.Name == nrpgx5PackageName && fun.Sel.Name == "NewTracer" {
 				return true
 			}
 		}
@@ -75,54 +79,45 @@ func HasExistingPgxTracer(body *dst.BlockStmt) bool {
 // buildPgxReplacement detects a pgx.Connect or pgxpool.New call and returns the three replacement
 // statements that inject the nrpgx5 tracer. Returns nil if the statement is not a recognized call.
 func buildPgxReplacement(stmt dst.Stmt) []dst.Stmt {
-	if connVar, ctxExpr, connStrExpr := DetectPgxConnectCall(stmt); connVar != "" {
+	if connVar, ctxExpr, connStrExpr := detectPgxCallPattern(stmt, PgxImportPath, "Connect"); connVar != "" {
 		return []dst.Stmt{
-			CreatePgxParseConfig("config", connStrExpr),
-			CreateTracerAssignment("config"),
-			CreatePgxConnectConfig(connVar, ctxExpr, "config"),
+			CreateParseConfig(connStrExpr, PgxImportPath),
+			CreateTracerAssignment(dst.NewIdent(configVar)),
+			CreateConnectWithConfig(connVar, ctxExpr, &dst.Ident{Name: "ConnectConfig", Path: PgxImportPath}),
 		}
 	}
 
-	if poolVar, ctxExpr, connStrExpr := DetectPgxPoolNewCall(stmt); poolVar != "" {
+	if poolVar, ctxExpr, connStrExpr := detectPgxCallPattern(stmt, PgxPoolImportPath, "New"); poolVar != "" {
 		return []dst.Stmt{
-			CreatePgxPoolParseConfig("config", connStrExpr),
-			CreatePoolTracerAssignment("config"),
-			CreatePgxPoolNewWithConfig(poolVar, ctxExpr, "config"),
+			CreateParseConfig(connStrExpr, PgxPoolImportPath),
+			CreateTracerAssignment(&dst.SelectorExpr{
+				X:   dst.NewIdent(configVar),
+				Sel: dst.NewIdent("ConnConfig"),
+			}),
+			CreateConnectWithConfig(poolVar, ctxExpr, &dst.Ident{Name: "NewWithConfig", Path: PgxPoolImportPath}),
 		}
 	}
 
 	return nil
 }
 
-// DetectPgxConnectCall checks if a statement is a pgx.Connect(ctx, connStr) call.
-// Returns the connection variable name and the ctx and connStr expressions if found.
-//
-// Example: conn, err := pgx.Connect(ctx, "postgres://...")
-//
-//	^^^^
-func DetectPgxConnectCall(stmt dst.Stmt) (connVar string, ctxExpr dst.Expr, connStrExpr dst.Expr) {
-	return detectPgxCallPattern(stmt, PgxImportPath, "Connect")
-}
-
-// DetectPgxPoolNewCall checks if a statement is a pgxpool.New(ctx, connStr) call.
-// Returns the pool variable name and the ctx and connStr expressions if found.
-//
-// Example: pool, err := pgxpool.New(ctx, "postgres://...")
-//
-//	^^^^
-func DetectPgxPoolNewCall(stmt dst.Stmt) (poolVar string, ctxExpr dst.Expr, connStrExpr dst.Expr) {
-	return detectPgxCallPattern(stmt, PgxPoolImportPath, "New")
-}
-
 // detectPgxCallPattern is the shared detection logic for pgx and pgxpool connection calls.
 // It matches: varName, err := pkg.Method(ctx, connStr)
 // where pkg is identified by importPath (DST sets ident.Path on package-qualified function calls).
+//
+// Returns the bound variable name plus the ctx and connStr expressions, or zero values if the
+// statement does not match.
 func detectPgxCallPattern(stmt dst.Stmt, importPath, methodName string) (varName string, ctxExpr dst.Expr, connStrExpr dst.Expr) {
+	// Require a single-call RHS bound to at least one LHS name. The pgx and pgxpool entry
+	// points we're matching all have the shape `x, err := pkg.Method(...)`, so anything with
+	// multiple RHS expressions or an empty LHS cannot be the call we want.
 	assignStmt, ok := stmt.(*dst.AssignStmt)
 	if !ok || len(assignStmt.Rhs) != 1 || len(assignStmt.Lhs) == 0 {
 		return "", nil, nil
 	}
 
+	// Both pgx.Connect and pgxpool.New take exactly two arguments (ctx, connStr); reject any
+	// arity mismatch up front so we don't index past the args slice below.
 	call, ok := assignStmt.Rhs[0].(*dst.CallExpr)
 	if !ok || len(call.Args) != 2 {
 		return "", nil, nil

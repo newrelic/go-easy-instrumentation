@@ -1,11 +1,10 @@
-package nrpgx5_test
+package nrpgx5
 
 import (
 	"go/token"
 	"testing"
 
 	"github.com/dave/dst"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrpgx5"
 	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/stretchr/testify/assert"
 )
@@ -239,17 +238,19 @@ func main() {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			got := parser.RunStatelessTracingFunction(t, tt.code, nrpgx5.InstrumentPgxHandler)
+			got := parser.RunStatelessTracingFunction(t, tt.code, InstrumentPgxHandler)
 			assert.Equal(t, tt.expect, got)
 		})
 	}
 }
 
-func TestDetectPgxConnectCall(t *testing.T) {
+func TestDetectPgxCallPattern(t *testing.T) {
 	tests := []struct {
-		name        string
-		stmt        dst.Stmt
-		wantConnVar string
+		name       string
+		stmt       dst.Stmt
+		importPath string
+		methodName string
+		wantVar    string
 	}{
 		{
 			name: "detect pgx.Connect call",
@@ -261,7 +262,7 @@ func TestDetectPgxConnectCall(t *testing.T) {
 				Tok: token.DEFINE,
 				Rhs: []dst.Expr{
 					&dst.CallExpr{
-						Fun: &dst.Ident{Name: "Connect", Path: nrpgx5.PgxImportPath},
+						Fun: &dst.Ident{Name: "Connect", Path: PgxImportPath},
 						Args: []dst.Expr{
 							&dst.Ident{Name: "ctx"},
 							&dst.BasicLit{Value: `"postgres://localhost/mydb"`},
@@ -269,7 +270,31 @@ func TestDetectPgxConnectCall(t *testing.T) {
 					},
 				},
 			},
-			wantConnVar: "conn",
+			importPath: PgxImportPath,
+			methodName: "Connect",
+			wantVar:    "conn",
+		},
+		{
+			name: "detect pgxpool.New call",
+			stmt: &dst.AssignStmt{
+				Lhs: []dst.Expr{
+					&dst.Ident{Name: "pool"},
+					&dst.Ident{Name: "err"},
+				},
+				Tok: token.DEFINE,
+				Rhs: []dst.Expr{
+					&dst.CallExpr{
+						Fun: &dst.Ident{Name: "New", Path: PgxPoolImportPath},
+						Args: []dst.Expr{
+							&dst.Ident{Name: "ctx"},
+							&dst.BasicLit{Value: `"postgres://localhost/mydb"`},
+						},
+					},
+				},
+			},
+			importPath: PgxPoolImportPath,
+			methodName: "New",
+			wantVar:    "pool",
 		},
 		{
 			name: "wrong import path is not detected",
@@ -286,7 +311,9 @@ func TestDetectPgxConnectCall(t *testing.T) {
 					},
 				},
 			},
-			wantConnVar: "",
+			importPath: PgxImportPath,
+			methodName: "Connect",
+			wantVar:    "",
 		},
 		{
 			name: "wrong method name is not detected",
@@ -295,7 +322,7 @@ func TestDetectPgxConnectCall(t *testing.T) {
 				Tok: token.DEFINE,
 				Rhs: []dst.Expr{
 					&dst.CallExpr{
-						Fun: &dst.Ident{Name: "ConnectConfig", Path: nrpgx5.PgxImportPath},
+						Fun: &dst.Ident{Name: "ConnectConfig", Path: PgxImportPath},
 						Args: []dst.Expr{
 							&dst.Ident{Name: "ctx"},
 							&dst.BasicLit{Value: `"postgres://localhost/mydb"`},
@@ -303,52 +330,48 @@ func TestDetectPgxConnectCall(t *testing.T) {
 					},
 				},
 			},
-			wantConnVar: "",
+			importPath: PgxImportPath,
+			methodName: "Connect",
+			wantVar:    "",
 		},
 		{
 			name: "not an assignment statement",
 			stmt: &dst.ExprStmt{
 				X: &dst.CallExpr{
-					Fun: &dst.Ident{Name: "Connect", Path: nrpgx5.PgxImportPath},
+					Fun: &dst.Ident{Name: "Connect", Path: PgxImportPath},
 				},
 			},
-			wantConnVar: "",
+			importPath: PgxImportPath,
+			methodName: "Connect",
+			wantVar:    "",
 		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			defer parser.PanicRecovery(t)
-			connVar, ctxExpr, connStrExpr := nrpgx5.DetectPgxConnectCall(tt.stmt)
-			assert.Equal(t, tt.wantConnVar, connVar)
-			if tt.wantConnVar == "" {
-				assert.Nil(t, ctxExpr)
-				assert.Nil(t, connStrExpr)
-			} else {
-				assert.NotNil(t, ctxExpr)
-				assert.NotNil(t, connStrExpr)
-			}
-		})
-	}
-}
-
-func TestDetectPgxPoolNewCall(t *testing.T) {
-	tests := []struct {
-		name        string
-		stmt        dst.Stmt
-		wantPoolVar string
-	}{
 		{
-			name: "detect pgxpool.New call",
+			name: "wrong arg count is not detected",
 			stmt: &dst.AssignStmt{
-				Lhs: []dst.Expr{
-					&dst.Ident{Name: "pool"},
-					&dst.Ident{Name: "err"},
-				},
+				Lhs: []dst.Expr{&dst.Ident{Name: "conn"}, &dst.Ident{Name: "err"}},
 				Tok: token.DEFINE,
 				Rhs: []dst.Expr{
 					&dst.CallExpr{
-						Fun: &dst.Ident{Name: "New", Path: nrpgx5.PgxPoolImportPath},
+						Fun:  &dst.Ident{Name: "Connect", Path: PgxImportPath},
+						Args: []dst.Expr{&dst.Ident{Name: "ctx"}},
+					},
+				},
+			},
+			importPath: PgxImportPath,
+			methodName: "Connect",
+			wantVar:    "",
+		},
+		{
+			name: "selector-form call is not detected",
+			stmt: &dst.AssignStmt{
+				Lhs: []dst.Expr{&dst.Ident{Name: "conn"}, &dst.Ident{Name: "err"}},
+				Tok: token.DEFINE,
+				Rhs: []dst.Expr{
+					&dst.CallExpr{
+						Fun: &dst.SelectorExpr{
+							X:   &dst.Ident{Name: "pgx"},
+							Sel: &dst.Ident{Name: "Connect"},
+						},
 						Args: []dst.Expr{
 							&dst.Ident{Name: "ctx"},
 							&dst.BasicLit{Value: `"postgres://localhost/mydb"`},
@@ -356,50 +379,18 @@ func TestDetectPgxPoolNewCall(t *testing.T) {
 					},
 				},
 			},
-			wantPoolVar: "pool",
-		},
-		{
-			name: "wrong import path is not detected",
-			stmt: &dst.AssignStmt{
-				Lhs: []dst.Expr{&dst.Ident{Name: "pool"}, &dst.Ident{Name: "err"}},
-				Tok: token.DEFINE,
-				Rhs: []dst.Expr{
-					&dst.CallExpr{
-						Fun: &dst.Ident{Name: "New", Path: "github.com/some/other/pool"},
-						Args: []dst.Expr{
-							&dst.Ident{Name: "ctx"},
-							&dst.BasicLit{Value: `"postgres://localhost/mydb"`},
-						},
-					},
-				},
-			},
-			wantPoolVar: "",
-		},
-		{
-			name: "wrong method name is not detected",
-			stmt: &dst.AssignStmt{
-				Lhs: []dst.Expr{&dst.Ident{Name: "pool"}, &dst.Ident{Name: "err"}},
-				Tok: token.DEFINE,
-				Rhs: []dst.Expr{
-					&dst.CallExpr{
-						Fun: &dst.Ident{Name: "NewWithConfig", Path: nrpgx5.PgxPoolImportPath},
-						Args: []dst.Expr{
-							&dst.Ident{Name: "ctx"},
-							&dst.Ident{Name: "config"},
-						},
-					},
-				},
-			},
-			wantPoolVar: "",
+			importPath: PgxImportPath,
+			methodName: "Connect",
+			wantVar:    "",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			defer parser.PanicRecovery(t)
-			poolVar, ctxExpr, connStrExpr := nrpgx5.DetectPgxPoolNewCall(tt.stmt)
-			assert.Equal(t, tt.wantPoolVar, poolVar)
-			if tt.wantPoolVar == "" {
+			gotVar, ctxExpr, connStrExpr := detectPgxCallPattern(tt.stmt, tt.importPath, tt.methodName)
+			assert.Equal(t, tt.wantVar, gotVar)
+			if tt.wantVar == "" {
 				assert.Nil(t, ctxExpr)
 				assert.Nil(t, connStrExpr)
 			} else {
@@ -417,7 +408,7 @@ func TestHasExistingPgxTracer(t *testing.T) {
 		},
 		Tok: token.ASSIGN,
 		Rhs: []dst.Expr{
-			&dst.CallExpr{Fun: &dst.Ident{Name: "NewTracer", Path: nrpgx5.Nrpgx5ImportPath}},
+			&dst.CallExpr{Fun: &dst.Ident{Name: "NewTracer", Path: Nrpgx5ImportPath}},
 		},
 	}
 	tracerAssignSelector := &dst.AssignStmt{
@@ -428,6 +419,18 @@ func TestHasExistingPgxTracer(t *testing.T) {
 		Rhs: []dst.Expr{
 			&dst.CallExpr{
 				Fun: &dst.SelectorExpr{X: dst.NewIdent("nrpgx5"), Sel: dst.NewIdent("NewTracer")},
+			},
+		},
+	}
+	// pgx.NewTracer is a different package's NewTracer — must not match.
+	foreignNewTracer := &dst.AssignStmt{
+		Lhs: []dst.Expr{
+			&dst.SelectorExpr{X: dst.NewIdent("config"), Sel: dst.NewIdent("Tracer")},
+		},
+		Tok: token.ASSIGN,
+		Rhs: []dst.Expr{
+			&dst.CallExpr{
+				Fun: &dst.SelectorExpr{X: dst.NewIdent("pgx"), Sel: dst.NewIdent("NewTracer")},
 			},
 		},
 	}
@@ -472,11 +475,16 @@ func TestHasExistingPgxTracer(t *testing.T) {
 			body: &dst.BlockStmt{List: []dst.Stmt{unrelatedStmt, tracerAssignIdent}},
 			want: true,
 		},
+		{
+			name: "foreign package's NewTracer is not a match",
+			body: &dst.BlockStmt{List: []dst.Stmt{foreignNewTracer}},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := nrpgx5.HasExistingPgxTracer(tt.body)
+			got := HasExistingPgxTracer(tt.body)
 			assert.Equal(t, tt.want, got)
 		})
 	}
