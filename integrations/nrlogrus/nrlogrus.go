@@ -2,6 +2,7 @@ package nrlogrus
 
 import (
 	"fmt"
+	"go/token"
 
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
@@ -10,26 +11,52 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/parser"
 )
 
-// LogrusNewVarName returns the variable name from `name := logrus.New()`,
-// or "" if stmt is not such an assignment.
+// LogrusNewVarName returns the variable name bound to a `logrus.New()` call,
+// supporting both `name := logrus.New()` and `var name = logrus.New()`.
+// Returns "" if stmt is not such an assignment, or if the LHS is `_`.
 func LogrusNewVarName(stmt dst.Stmt) string {
-	assign, ok := stmt.(*dst.AssignStmt)
-	if !ok || len(assign.Lhs) != 1 || len(assign.Rhs) != 1 {
+	name, value := nameAndValue(stmt)
+	if name == "" || name == "_" || !isLogrusNewCall(value) {
 		return ""
 	}
-	call, ok := assign.Rhs[0].(*dst.CallExpr)
+	return name
+}
+
+// nameAndValue extracts a single (name, value) pair from `name := value` or
+// `var name = value`. Returns ("", nil) for any other shape.
+func nameAndValue(stmt dst.Stmt) (string, dst.Expr) {
+	switch s := stmt.(type) {
+	case *dst.AssignStmt:
+		if len(s.Lhs) != 1 || len(s.Rhs) != 1 {
+			return "", nil
+		}
+		lhs, ok := s.Lhs[0].(*dst.Ident)
+		if !ok {
+			return "", nil
+		}
+		return lhs.Name, s.Rhs[0]
+	case *dst.DeclStmt:
+		gen, ok := s.Decl.(*dst.GenDecl)
+		if !ok || gen.Tok != token.VAR || len(gen.Specs) != 1 {
+			return "", nil
+		}
+		spec, ok := gen.Specs[0].(*dst.ValueSpec)
+		if !ok || len(spec.Names) != 1 || len(spec.Values) != 1 {
+			return "", nil
+		}
+		return spec.Names[0].Name, spec.Values[0]
+	}
+	return "", nil
+}
+
+// isLogrusNewCall reports whether expr is a call to logrus.New().
+func isLogrusNewCall(expr dst.Expr) bool {
+	call, ok := expr.(*dst.CallExpr)
 	if !ok {
-		return ""
+		return false
 	}
 	fn, ok := call.Fun.(*dst.Ident)
-	if !ok || fn.Name != "New" || fn.Path != LogrusImportPath {
-		return ""
-	}
-	lhs, ok := assign.Lhs[0].(*dst.Ident)
-	if !ok {
-		return ""
-	}
-	return lhs.Name
+	return ok && fn.Name == "New" && fn.Path == LogrusImportPath
 }
 
 // SetFormatterCall returns the SetFormatter CallExpr in stmt and the receiver
