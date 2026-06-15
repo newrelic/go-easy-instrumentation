@@ -1,0 +1,28 @@
+--- a/main.go
++++ b/main.go
+@@ -1,10 +1,23 @@
+ package main
+ 
+-import "github.com/sirupsen/logrus"
++import (
++	"time"
+ 
++	"github.com/newrelic/go-agent/v3/integrations/logcontext-v2/nrlogrus"
++	"github.com/newrelic/go-agent/v3/newrelic"
++	"github.com/sirupsen/logrus"
++)
++
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	logger := logrus.New()
+-	logger.SetFormatter(&logrus.JSONFormatter{})
++	logger.SetFormatter(nrlogrus.NewFormatter(NewRelicAgent, &logrus.JSONFormatter{}))
+ 	logger.Info("Starting application")
+ 	logger.WithField("key", "value").Warn("a warning")
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

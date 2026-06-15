@@ -63,6 +63,10 @@
     {
       "name": "mysql app",
       "dir": "integrations/nrmysql/example/mysql"
+    },
+    {
+      "name": "logrus app",
+      "dir": "integrations/nrlogrus/example/logrus"
     }
   ]
 }
