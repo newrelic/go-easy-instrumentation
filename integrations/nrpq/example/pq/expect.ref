@@ -1,0 +1,46 @@
+--- a/main.go
++++ b/main.go
+@@ -1,25 +1,40 @@
+ package main
+ 
+ import (
++	"context"
+ 	"database/sql"
+ 	"fmt"
+-	_ "github.com/lib/pq"
++	"time"
++
++	_ "github.com/newrelic/go-agent/v3/integrations/nrpq"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
++
+ 	// Set up a local postgres docker container with:
+ 	// docker run -it -p 5432:5432 -e POSTGRES_PASSWORD=password postgres
+-	db, err := sql.Open("postgres", "postgres://postgres:password@localhost/postgres?sslmode=disable")
++	db, err := sql.Open("nrpq", "postgres://postgres:password@localhost/postgres?sslmode=disable")
+ 	if err != nil {
+ 		panic(err)
+ 	}
+ 	defer db.Close()
+ 
+-	row := db.QueryRow("SELECT version()")
++	nrTxn := NewRelicAgent.StartTransaction("postgres/QueryRow")
++	ctx := newrelic.NewContext(context.Background(), nrTxn)
++
++	row := db.QueryRowContext(ctx, "SELECT version()")
+ 	var version string
+ 	err = row.Scan(&version)
++	nrTxn.End()
+ 	if err != nil {
+ 		panic(err)
+ 	}
+ 	fmt.Println(version)
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

@@ -71,6 +71,10 @@
     {
       "name": "mysql app",
       "dir": "integrations/nrmysql/example/mysql"
+    },
+    {
+      "name": "pq app",
+      "dir": "integrations/nrpq/example/pq"
     }
   ]
 }
