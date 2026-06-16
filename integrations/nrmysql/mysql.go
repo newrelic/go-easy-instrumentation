@@ -4,145 +4,15 @@ import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/sqlhelpers"
 	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
 const (
-	SqlImportPath = "database/sql"
+	mysqlDriverName   = `"mysql"`
+	nrmysqlDriverName = `"nrmysql"`
 )
-
-// detectSQLExecutionCall checks if a statement contains a SQL query operation using the given DB variable.
-// Returns the method name (QueryRow, Query, or Exec) if found, otherwise returns an empty string.
-//
-// Example: row := db.QueryRow("SELECT count(*) from tables")
-//
-//	^^
-func DetectSQLExecutionCall(stmt dst.Stmt, dbName string) string {
-	assignStmt, ok := stmt.(*dst.AssignStmt)
-	if !ok || len(assignStmt.Rhs) != 1 {
-		return ""
-	}
-
-	call, ok := assignStmt.Rhs[0].(*dst.CallExpr)
-	if !ok {
-		return ""
-	}
-
-	selExpr, ok := call.Fun.(*dst.SelectorExpr)
-	if !ok {
-		return ""
-	}
-
-	// Verify the method is called on the correct DB variable
-	dbIdent, ok := selExpr.X.(*dst.Ident)
-	if !ok || dbIdent.Name != dbName {
-		return ""
-	}
-
-	// Check if it's a supported SQL operation method
-	methodName := selExpr.Sel.Name
-	switch methodName {
-	case "QueryRow", "Query", "Exec":
-		return methodName
-	default:
-		return ""
-	}
-}
-
-// replaceSQLMethodWithContext replaces a SQL method with its context-aware version
-// and prepends the context as the first argument.
-//
-// Transformations:
-//   - QueryRow -> QueryRowContext
-//   - Query    -> QueryContext
-//   - Exec     -> ExecContext
-func ReplaceSQLMethodWithContext(stmt dst.Stmt, ctxName string) {
-	assignStmt, ok := stmt.(*dst.AssignStmt)
-	if !ok || len(assignStmt.Rhs) != 1 {
-		return
-	}
-
-	call, ok := assignStmt.Rhs[0].(*dst.CallExpr)
-	if !ok {
-		return
-	}
-
-	selExpr, ok := call.Fun.(*dst.SelectorExpr)
-	if !ok {
-		return
-	}
-
-	// Replace method name with Context version
-	switch selExpr.Sel.Name {
-	case "QueryRow":
-		selExpr.Sel.Name = "QueryRowContext"
-	case "Query":
-		selExpr.Sel.Name = "QueryContext"
-	case "Exec":
-		selExpr.Sel.Name = "ExecContext"
-	default:
-		return
-	}
-
-	// Prepend context as first argument
-	call.Args = append([]dst.Expr{&dst.Ident{Name: ctxName}}, call.Args...)
-}
-
-// detectSQLOpenCall returns the variable name from a sql.Open() call.
-// Returns an empty string if the statement is not a sql.Open() call.
-//
-// Example: db, err := sql.Open("nrmysql", "root@/information_schema")
-//
-//	^^
-func DetectSQLOpenCall(stmt dst.Stmt) string {
-	assignStmt, ok := stmt.(*dst.AssignStmt)
-	if !ok || len(assignStmt.Rhs) != 1 || len(assignStmt.Lhs) == 0 {
-		return ""
-	}
-
-	call, ok := assignStmt.Rhs[0].(*dst.CallExpr)
-	if !ok {
-		return ""
-	}
-
-	ident, ok := call.Fun.(*dst.Ident)
-	if !ok || ident.Name != "Open" || ident.Path != SqlImportPath {
-		return ""
-	}
-
-	// Extract the DB variable name from the left-hand side
-	if dbIdent, ok := assignStmt.Lhs[0].(*dst.Ident); ok {
-		return dbIdent.Name
-	}
-
-	return ""
-}
-
-// findLastUsageOfExecutionResult scans statements starting from startIndex to find the last
-// usage of the given variable name. Returns the index of the last usage, or startIndex
-// if the variable is never used after that point.
-func FindLastUsageOfExecutionResult(stmts []dst.Stmt, varName string, startIndex int) int {
-	lastUsageIndex := startIndex
-
-	for i := startIndex + 1; i < len(stmts); i++ {
-		found := false
-
-		dstutil.Apply(stmts[i], func(c *dstutil.Cursor) bool {
-			if ident, ok := c.Node().(*dst.Ident); ok && ident.Name == varName {
-				found = true
-				return false // Stop traversal once found
-			}
-			return true
-		}, nil)
-
-		if found {
-			lastUsageIndex = i
-		}
-	}
-
-	return lastUsageIndex
-}
 
 // InstrumentSQLHandler instruments SQL database operations in the main function by:
 // 1. Detecting sql.Open() calls to find the DB variable
@@ -167,15 +37,15 @@ func InstrumentSQLHandler(manager *parser.InstrumentationManager, c *dstutil.Cur
 
 	// Scan function body to find SQL operations
 	for i, stmt := range funcDecl.Body.List {
-		// Detect sql.Open() to find the DB variable
-		if dbName := DetectSQLOpenCall(stmt); dbName != "" {
+		// Detect sql.Open() with a MySQL-compatible driver to find the DB variable
+		if dbName, driverArg := sqlhelpers.DetectSQLOpen(stmt); dbName != "" && driverArg != nil && isMySQLDriverArg(driverArg) {
 			sqlDB = dbName
 			continue
 		}
 
 		// Once we have a DB variable, look for SQL execution calls
 		if sqlDB != "" {
-			if methodName := DetectSQLExecutionCall(stmt, sqlDB); methodName != "" {
+			if methodName := sqlhelpers.DetectSQLExecutionCall(stmt, sqlDB); methodName != "" {
 				sqlExecutionIndex = i
 				sqlMethodName = methodName
 
@@ -196,10 +66,7 @@ func InstrumentSQLHandler(manager *parser.InstrumentationManager, c *dstutil.Cur
 	}
 
 	// Find where the SQL result variable is last used to determine where to end the transaction
-	lastUsageIndex := sqlExecutionIndex
-	if sqlResultVar != "" {
-		lastUsageIndex = FindLastUsageOfExecutionResult(funcDecl.Body.List, sqlResultVar, sqlExecutionIndex)
-	}
+	lastUsageIndex := sqlhelpers.FindLastUsageOfExecutionResult(funcDecl.Body.List, sqlResultVar, sqlExecutionIndex)
 
 	// Generate instrumentation code
 	txnName := codegen.DefaultTransactionVariable
@@ -210,7 +77,7 @@ func InstrumentSQLHandler(manager *parser.InstrumentationManager, c *dstutil.Cur
 	txnEnd := CreateTransactionEnd(txnName)
 
 	// Transform the SQL method to use context (e.g., QueryRow -> QueryRowContext)
-	ReplaceSQLMethodWithContext(funcDecl.Body.List[sqlExecutionIndex], ctxName)
+	sqlhelpers.ReplaceSQLMethodWithContext(funcDecl.Body.List[sqlExecutionIndex], ctxName)
 
 	// Insert transaction end after the last usage of the result variable
 	funcDecl.Body.List = append(
@@ -226,9 +93,13 @@ func InstrumentSQLHandler(manager *parser.InstrumentationManager, c *dstutil.Cur
 
 	// Add required imports
 	manager.AddImport(codegen.NewRelicAgentImportPath)
-	manager.AddImport("context")
 
 	// Wrap the main function with New Relic agent initialization
 	tc := tracestate.FunctionBody(txnName)
 	tc.WrapWithTransaction(c, "main", txnName)
+}
+
+// isMySQLDriverArg returns true if the driver-name BasicLit identifies a MySQL-compatible driver.
+func isMySQLDriverArg(driverArg *dst.BasicLit) bool {
+	return driverArg.Value == mysqlDriverName || driverArg.Value == nrmysqlDriverName
 }
