@@ -64,6 +64,7 @@ func scanForPostgresOpen(body *dst.BlockStmt) pqOpenScan {
 // and replaces it with the New Relic nrpq driver wrapper.
 //
 // _ "github.com/lib/pq" -> _ "github.com/newrelic/go-agent/v3/integrations/nrpq"
+// TO-DO: In the future, we may want to make this a shared utility in the manager class as we expand our integration library
 func swapLibpqImportInPackage(manager *parser.InstrumentationManager) {
 	pkg := manager.GetDecoratorPackage()
 	if pkg == nil {
