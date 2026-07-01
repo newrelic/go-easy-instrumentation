@@ -187,6 +187,30 @@ func main() {
 `,
 		},
 		{
+			name: "split_form_var_decl_then_assign",
+			code: `package main
+import "github.com/sirupsen/logrus"
+func main() {
+	var logger *logrus.Logger
+	logger = logrus.New()
+	logger.Info("hi")
+}`,
+			expect: `package main
+
+import (
+	"github.com/newrelic/go-agent/v3/integrations/logcontext-v2/nrlogrus"
+	"github.com/sirupsen/logrus"
+)
+
+func main() {
+	var logger *logrus.Logger
+	logger = logrus.New()
+	logger.SetFormatter(nrlogrus.NewFormatter(NewRelicAgent, &logrus.TextFormatter{}))
+	logger.Info("hi")
+}
+`,
+		},
+		{
 			name: "with_field_chain_does_not_break_pattern_2",
 			code: `package main
 import "github.com/sirupsen/logrus"

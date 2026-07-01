@@ -59,10 +59,11 @@ func isLogrusNewCall(expr dst.Expr) bool {
 	return ok && fn.Name == "New" && fn.Path == LogrusImportPath
 }
 
-// SetFormatterCall returns the SetFormatter CallExpr in stmt and the receiver
-// name. recv is "" for package-level logrus.SetFormatter; otherwise it is the
-// logger var name (only matched against knownLoggers). Returns (nil, "") if
-// stmt is not a SetFormatter call we recognize.
+// SetFormatterCall returns the SetFormatter CallExpr in stmt and the logger
+// var name it was called on. The name is "" for the package-level
+// logrus.SetFormatter; otherwise it is the receiver var (only matched against
+// knownLoggers). Returns (nil, "") if stmt is not a SetFormatter call we
+// recognize.
 func SetFormatterCall(stmt dst.Stmt, knownLoggers map[string]dst.Stmt) (*dst.CallExpr, string) {
 	exprStmt, ok := stmt.(*dst.ExprStmt)
 	if !ok {
@@ -78,9 +79,9 @@ func SetFormatterCall(stmt dst.Stmt, knownLoggers map[string]dst.Stmt) (*dst.Cal
 			return call, ""
 		}
 	case *dst.SelectorExpr:
-		if recv, ok := fn.X.(*dst.Ident); ok {
-			if _, tracked := knownLoggers[recv.Name]; tracked {
-				return call, recv.Name
+		if ident, ok := fn.X.(*dst.Ident); ok {
+			if _, tracked := knownLoggers[ident.Name]; tracked {
+				return call, ident.Name
 			}
 		}
 	}
@@ -132,38 +133,40 @@ func InstrumentLogrusHandler(manager *parser.InstrumentationManager, c *dstutil.
 	appVar := manager.AgentVariableName()
 	body := decl.Body.List
 
-	loggerStmt := map[string]dst.Stmt{}  // logger var name → its `:=` stmt
-	injectAfter := map[dst.Stmt]string{} // stmts still needing a default SetFormatter after them
-	var firstLogrusStmt dst.Stmt
-	pkgSetFormatter := false
-	mutated := false
+	knownLoggers := map[string]dst.Stmt{} // var name → `x := logrus.New()` decl stmt
+	injectAfter := map[dst.Stmt]string{}  // decl stmt → var name; pending default SetFormatter after it
+	var firstLogrusStmt dst.Stmt          // first stmt touching logrus; pattern-4 injection anchor
+	pkgSetFormatter := false              // saw `logrus.SetFormatter(...)`; suppresses pattern 4
+	mutated := false                      // any wrap or inject occurred
 
 	for _, stmt := range body {
-		isLogrus := true
-		if name := LogrusNewVarName(stmt); name != "" {
-			loggerStmt[name] = stmt
-			injectAfter[stmt] = name
-		} else if call, recv := SetFormatterCall(stmt, loggerStmt); call != nil {
+		loggerName := LogrusNewVarName(stmt)
+		call, recvName := SetFormatterCall(stmt, knownLoggers)
+		switch {
+		case loggerName != "": // pattern 1: `x := logrus.New()`
+			knownLoggers[loggerName] = stmt
+			injectAfter[stmt] = loggerName // queue default SetFormatter after this decl
+		case call != nil: // pattern 2 or 3: SetFormatter — wrap arg in place
 			if len(call.Args) >= 1 && !alreadyWrapped(call) {
 				call.Args[0] = wrapWithNewFormatter(appVar, call.Args[0])
 				mutated = true
 			}
-			if recv == "" {
-				pkgSetFormatter = true
+			if recvName == "" {
+				pkgSetFormatter = true // pattern 3 seen — pattern 4 no longer needed
 			} else {
-				delete(injectAfter, loggerStmt[recv])
+				delete(injectAfter, knownLoggers[recvName]) // pattern 2 satisfied — cancel default injection
 			}
-		} else if !referencesLogrus(stmt) {
-			isLogrus = false
+		case !referencesLogrus(stmt):
+			continue // stmt doesn't touch logrus — skip pattern-4 anchor candidacy
 		}
-		if isLogrus && firstLogrusStmt == nil {
+		if firstLogrusStmt == nil {
 			firstLogrusStmt = stmt
 		}
 	}
 
-	standardInject := firstLogrusStmt != nil && len(loggerStmt) == 0 && !pkgSetFormatter
-	if standardInject || len(injectAfter) > 0 {
-		decl.Body.List = insertDefaults(body, injectAfter, firstLogrusStmt, standardInject, appVar)
+	injectPackage := firstLogrusStmt != nil && len(knownLoggers) == 0 && !pkgSetFormatter
+	if injectPackage || len(injectAfter) > 0 {
+		decl.Body.List = insertDefaults(body, injectAfter, firstLogrusStmt, injectPackage, appVar)
 		mutated = true
 	}
 	if !mutated {
@@ -173,17 +176,20 @@ func InstrumentLogrusHandler(manager *parser.InstrumentationManager, c *dstutil.
 	manager.AddImport(NrlogrusImportPath)
 }
 
-// insertDefaults returns a new body with default SetFormatter stmts inserted
-// before standardAnchor (when standard) and after each stmt in injectAfter.
-func insertDefaults(body []dst.Stmt, injectAfter map[dst.Stmt]string, standardAnchor dst.Stmt, standard bool, appVar string) []dst.Stmt {
+// insertDefaults returns a new body with default SetFormatter stmts inserted:
+//   - a package-level `logrus.SetFormatter(...)` before packageAnchor, when
+//     injectPackage is true (pattern 4);
+//   - a `<name>.SetFormatter(...)` after each stmt still in injectAfter
+//     (pattern 2 default).
+func insertDefaults(body []dst.Stmt, injectAfter map[dst.Stmt]string, packageAnchor dst.Stmt, injectPackage bool, appVar string) []dst.Stmt {
 	out := make([]dst.Stmt, 0, len(body)+len(injectAfter)+1)
 	for _, stmt := range body {
-		if standard && stmt == standardAnchor {
-			out = append(out, defaultStandardSetFormatterStmt(appVar))
+		if injectPackage && stmt == packageAnchor {
+			out = append(out, defaultSetFormatterStmt(packageSetFormatterFun(), appVar))
 		}
 		out = append(out, stmt)
 		if name, ok := injectAfter[stmt]; ok {
-			out = append(out, defaultSetFormatterStmt(name, appVar))
+			out = append(out, defaultSetFormatterStmt(loggerSetFormatterFun(name), appVar))
 		}
 	}
 	return out

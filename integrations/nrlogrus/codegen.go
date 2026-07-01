@@ -39,16 +39,13 @@ func defaultTextFormatterExpr() dst.Expr {
 	}
 }
 
-// defaultSetFormatterStmt builds:
-//
-//	loggerName.SetFormatter(nrlogrus.NewFormatter(appVar, &logrus.TextFormatter{}))
-func defaultSetFormatterStmt(loggerName, appVar string) *dst.ExprStmt {
+// defaultSetFormatterStmt builds `<fun>(nrlogrus.NewFormatter(appVar, &logrus.TextFormatter{}))`.
+// Callers construct fun to select either a logger-receiver call
+// (`logger.SetFormatter(...)`) or the package-level call (`logrus.SetFormatter(...)`).
+func defaultSetFormatterStmt(fun dst.Expr, appVar string) *dst.ExprStmt {
 	return &dst.ExprStmt{
 		X: &dst.CallExpr{
-			Fun: &dst.SelectorExpr{
-				X:   &dst.Ident{Name: loggerName},
-				Sel: &dst.Ident{Name: "SetFormatter"},
-			},
+			Fun: fun,
 			Args: []dst.Expr{
 				wrapWithNewFormatter(appVar, defaultTextFormatterExpr()),
 			},
@@ -59,22 +56,18 @@ func defaultSetFormatterStmt(loggerName, appVar string) *dst.ExprStmt {
 	}
 }
 
-// defaultStandardSetFormatterStmt builds:
-//
-//	logrus.SetFormatter(nrlogrus.NewFormatter(appVar, &logrus.TextFormatter{}))
-func defaultStandardSetFormatterStmt(appVar string) *dst.ExprStmt {
-	return &dst.ExprStmt{
-		X: &dst.CallExpr{
-			Fun: &dst.Ident{
-				Name: "SetFormatter",
-				Path: LogrusImportPath,
-			},
-			Args: []dst.Expr{
-				wrapWithNewFormatter(appVar, defaultTextFormatterExpr()),
-			},
-		},
-		Decs: dst.ExprStmtDecorations{
-			NodeDecs: dst.NodeDecs{Before: dst.NewLine},
-		},
+// loggerSetFormatterFun returns the `loggerName.SetFormatter` selector expr.
+func loggerSetFormatterFun(loggerName string) dst.Expr {
+	return &dst.SelectorExpr{
+		X:   &dst.Ident{Name: loggerName},
+		Sel: &dst.Ident{Name: "SetFormatter"},
+	}
+}
+
+// packageSetFormatterFun returns the `logrus.SetFormatter` ident (path-qualified).
+func packageSetFormatterFun() dst.Expr {
+	return &dst.Ident{
+		Name: "SetFormatter",
+		Path: LogrusImportPath,
 	}
 }
