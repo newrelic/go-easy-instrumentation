@@ -55,6 +55,22 @@ func DetectSQLOpen(stmt dst.Stmt) (varName string, driverArg *dst.BasicLit) {
 	return lhsIdent.Name, lit
 }
 
+// contextMethodName maps a SQL execution method to its context-aware variant
+// (QueryRow -> QueryRowContext, etc.), or "" if method isn't a recognized
+// non-context execution call. Context-aware methods (QueryRowContext, etc.) are
+// not recognized and return "".
+func contextMethodName(method string) string {
+	switch method {
+	case "QueryRow":
+		return "QueryRowContext"
+	case "Query":
+		return "QueryContext"
+	case "Exec":
+		return "ExecContext"
+	}
+	return ""
+}
+
 // DetectSQLExecutionCall reports whether stmt is a SQL execution call on dbName.
 // Returns the method name ("QueryRow", "Query", or "Exec") if found, otherwise "".
 //
@@ -80,11 +96,10 @@ func DetectSQLExecutionCall(stmt dst.Stmt, dbName string) string {
 		return ""
 	}
 
-	switch selExpr.Sel.Name {
-	case "QueryRow", "Query", "Exec":
-		return selExpr.Sel.Name
+	if contextMethodName(selExpr.Sel.Name) == "" {
+		return ""
 	}
-	return ""
+	return selExpr.Sel.Name
 }
 
 // ReplaceSQLMethodWithContext rewrites a SQL execution call to its context-aware variant
@@ -111,16 +126,11 @@ func ReplaceSQLMethodWithContext(stmt dst.Stmt, ctxName string) {
 		return
 	}
 
-	switch selExpr.Sel.Name {
-	case "QueryRow":
-		selExpr.Sel.Name = "QueryRowContext"
-	case "Query":
-		selExpr.Sel.Name = "QueryContext"
-	case "Exec":
-		selExpr.Sel.Name = "ExecContext"
-	default:
+	ctxVariant := contextMethodName(selExpr.Sel.Name)
+	if ctxVariant == "" {
 		return
 	}
+	selExpr.Sel.Name = ctxVariant
 
 	call.Args = append([]dst.Expr{&dst.Ident{Name: ctxName}}, call.Args...)
 }

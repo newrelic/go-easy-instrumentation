@@ -8,9 +8,9 @@ import (
 )
 
 // createContextWithTransaction returns: ctx := newrelic.NewContext(context.Background(), nrTxn)
-func createContextWithTransaction(ctxName, txnName string) *dst.AssignStmt {
+func createContextWithTransaction(txnName string) *dst.AssignStmt {
 	return &dst.AssignStmt{
-		Lhs: []dst.Expr{dst.NewIdent(ctxName)},
+		Lhs: []dst.Expr{dst.NewIdent(codegen.DefaultContextParameter)},
 		Tok: token.DEFINE,
 		Rhs: []dst.Expr{
 			codegen.NewContextExpression(
@@ -20,3 +20,4 @@ func createContextWithTransaction(ctxName, txnName string) *dst.AssignStmt {
 		},
 	}
 }
+

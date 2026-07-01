@@ -1,0 +1,35 @@
+--- a/main.go
++++ b/main.go
+@@ -3,15 +3,24 @@
+ import (
+ 	"context"
+ 	"fmt"
++	"time"
+ 
+ 	"github.com/jackc/pgx/v5"
++	"github.com/newrelic/go-agent/v3/integrations/nrpgx5"
++	"github.com/newrelic/go-agent/v3/newrelic"
+ )
+ 
+ func main() {
+ 	// Set up a local postgres docker container with:
+ 	// docker run -it -p 5432:5432 -e POSTGRES_PASSWORD=password postgres
++	NewRelicAgent, agentInitError := newrelic.NewApplication(newrelic.ConfigFromEnvironment())
++	if agentInitError != nil {
++		panic(agentInitError)
++	}
+ 
+-	conn, err := pgx.Connect(context.Background(), "postgres://postgres:password@localhost/postgres")
++	config, err := pgx.ParseConfig("postgres://postgres:password@localhost/postgres")
++	config.Tracer = nrpgx5.NewTracer()
++	conn, err := pgx.ConnectConfig(context.Background(), config)
+ 	if err != nil {
+ 		panic(err)
+ 	}
+@@ -23,4 +24,6 @@
+ 		panic(err)
+ 	}
+ 	fmt.Println(version)
++
++	NewRelicAgent.Shutdown(5 * time.Second)
+ }

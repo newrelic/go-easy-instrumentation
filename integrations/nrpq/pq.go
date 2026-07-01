@@ -32,15 +32,15 @@ const (
 
 // pqOpenScan is the result of a single pass over a function body looking for the postgres open.
 type pqOpenScan struct {
-	state      driverState
-	index      int             // index into body.List of the matching statement (-1 if state == driverNone)
-	dbVar      string          // LHS variable name; "_" if blank identifier
-	driverArg  *dst.BasicLit   // pointer into the AST so callers can mutate the driver name in place
+	state     driverState
+	index     int           // index into body.List of the matching statement (-1 if state == driverNone)
+	dbVar     string        // LHS variable name; "_" if blank identifier
+	driverArg *dst.BasicLit // pointer into the AST so callers can mutate the driver name in place
 }
 
-// scanForPostgresOpen walks body once and returns the first sql.Open call whose driver string is
-// either "postgres" (instrumentable) or "nrpq" (already done). Combines what used to be two
-// separate scans (HasExistingNrpqDriver + findPQOpenStatement) so we don't loop the body twice.
+// scanForPostgresOpen walks body and returns the first sql.Open call whose driver string is
+// either "postgres" (instrumentable) or "nrpq" (already instrumented). The result distinguishes
+// the two states so callers can early-return on either.
 func scanForPostgresOpen(body *dst.BlockStmt) pqOpenScan {
 	if body == nil {
 		return pqOpenScan{state: driverNone, index: -1}
@@ -64,6 +64,7 @@ func scanForPostgresOpen(body *dst.BlockStmt) pqOpenScan {
 // and replaces it with the New Relic nrpq driver wrapper.
 //
 // _ "github.com/lib/pq" -> _ "github.com/newrelic/go-agent/v3/integrations/nrpq"
+// TO-DO: In the future, we may want to make this a shared utility in the manager class as we expand our integration library
 func swapLibpqImportInPackage(manager *parser.InstrumentationManager) {
 	pkg := manager.GetDecoratorPackage()
 	if pkg == nil {
@@ -72,19 +73,18 @@ func swapLibpqImportInPackage(manager *parser.InstrumentationManager) {
 
 	for _, file := range pkg.Syntax {
 		for _, imp := range file.Imports {
-			if imp.Path.Value == `"github.com/lib/pq"` && imp.Name != nil && imp.Name.Name == "_" {
-				imp.Path.Value = `"github.com/newrelic/go-agent/v3/integrations/nrpq"`
+			if imp.Path.Value == `"`+LibpqImportPath+`"` && imp.Name != nil && imp.Name.Name == "_" {
+				imp.Path.Value = `"` + NrpqImportPath + `"`
 				manager.AddImport(NrpqImportPath)
-				return
+				break
 			}
 		}
 	}
 }
 
 // findSQLExecutionStatement scans stmts starting at startIndex for the first SQL execution call
-// on dbName. Returns the index, method name, and result variable, or -1/"" if not found. A result
-// variable of "_" (blank identifier) is reported as an empty string so callers can treat it as
-// "no usable handle" without a separate check.
+// on dbName. Returns the index, method name, and result variable, or -1/"" if not found. A
+// blank-identifier LHS (`_, err := …`) is reported with an empty resultVar.
 func findSQLExecutionStatement(stmts []dst.Stmt, dbName string, startIndex int) (index int, method string, resultVar string) {
 	for i := startIndex; i < len(stmts); i++ {
 		m := sqlhelpers.DetectSQLExecutionCall(stmts[i], dbName)
@@ -103,17 +103,13 @@ func findSQLExecutionStatement(stmts []dst.Stmt, dbName string, startIndex int) 
 
 // InstrumentPQHandler instruments PostgreSQL database operations by swapping the driver name to
 // "nrpq" and, when both the open and a SQL execution call live in the same function body, also
-// wrapping the execution with a New Relic transaction. Driver swap runs in any function (named
-// or literal); the transaction wrap only runs in main, where the agent variable is in scope.
-//
-// We can't (yet) propagate the transaction across function boundaries here — that would require
-// using parser.TraceFunction / tracestate to thread the transaction through callers. Until that's
-// wired in, an `initDB()` helper still gets the driver swap, and queries inside main still get
-// wrapped, but queries reached only via a helper function won't.
+// wrapping the execution with a New Relic transaction. The driver swap runs in any function
+// (named or literal); the transaction wrap only runs in main, where the agent variable is in
+// scope.
 func InstrumentPQHandler(manager *parser.InstrumentationManager, c *dstutil.Cursor) {
 	var (
-		body    *dst.BlockStmt
-		isMain  bool
+		body   *dst.BlockStmt
+		isMain bool
 	)
 	switch node := c.Node().(type) {
 	case *dst.FuncDecl:
@@ -129,25 +125,15 @@ func InstrumentPQHandler(manager *parser.InstrumentationManager, c *dstutil.Curs
 	}
 
 	scan := scanForPostgresOpen(body)
-	switch scan.state {
-	case driverNone:
+	if scan.state != driverPostgres {
 		return
-	case driverAlreadyNRPQ:
-		// Already instrumented — nothing to do for this body. We don't swap the lib/pq import
-		// here because some other body may still need it, and the import-swap is idempotent
-		// (it's a no-op once already swapped).
-		return
-	case driverPostgres:
-		// fall through
 	}
 
-	// Driver swap is safe everywhere: it's a single-arg mutation with no scope dependencies.
 	scan.driverArg.Value = nrpqDriver
 	swapLibpqImportInPackage(manager)
 
-	// Transaction wrap requires the agent variable to be reachable. Without cross-function
-	// transaction propagation, that limits us to main. A blank-identifier DB var (`_, err := …`)
-	// also can't be queried, so there's nothing to wrap.
+	// Transaction wrap only runs in main (agent variable is in scope) and requires a usable
+	// DB handle (a blank-identifier LHS can't be referenced by a later execution call).
 	if !isMain || scan.dbVar == "" || scan.dbVar == "_" {
 		return
 	}
@@ -163,13 +149,10 @@ func wrapWithTransaction(manager *parser.InstrumentationManager, body *dst.Block
 	}
 
 	txnName := codegen.DefaultTransactionVariable
-	ctxName := "ctx"
 
-	// FindLastUsageOfExecutionResult tolerates an empty resultVar (returns startIndex unchanged),
-	// so we can pass it through without an extra guard.
 	lastUsage := sqlhelpers.FindLastUsageOfExecutionResult(body.List, resultVar, execIdx)
 
-	sqlhelpers.ReplaceSQLMethodWithContext(body.List[execIdx], ctxName)
+	sqlhelpers.ReplaceSQLMethodWithContext(body.List[execIdx], codegen.DefaultContextParameter)
 
 	// Insert nrTxn.End() immediately after the last usage of the result variable:
 	//   row.Scan(...)   <- lastUsage
@@ -182,7 +165,7 @@ func wrapWithTransaction(manager *parser.InstrumentationManager, body *dst.Block
 	//   row := db.QueryRowContext(ctx, ...)                            <- execIdx
 	body.List = slices.Concat(body.List[:execIdx], []dst.Stmt{
 		codegen.StartTransaction(manager.AgentVariableName(), txnName, fmt.Sprintf("postgres/%s", methodName), false),
-		createContextWithTransaction(ctxName, txnName),
+		createContextWithTransaction(txnName),
 	}, body.List[execIdx:])
 
 	manager.AddImport(codegen.NewRelicAgentImportPath)

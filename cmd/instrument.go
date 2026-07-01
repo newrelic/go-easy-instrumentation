@@ -20,6 +20,7 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrpq"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrpgx5"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrslog"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/parser"
@@ -64,6 +65,7 @@ func registerIntegrations(manager *parser.InstrumentationManager) {
 		nrslog.InstrumentSlogHandler,
 		nrmysql.InstrumentSQLHandler,
 		nrpq.InstrumentPQHandler,
+		nrpgx5.InstrumentPgxHandler,
 	)
 
 	// Stateful tracing functions (ORDER PRESERVED)
