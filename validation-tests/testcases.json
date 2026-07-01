@@ -73,6 +73,10 @@
       "dir": "integrations/nrmysql/example/mysql"
     },
     {
+      "name": "pq app",
+      "dir": "integrations/nrpq/example/pq"
+    },
+    {
       "name": "pgx app",
       "dir": "integrations/nrpgx5/example/pgx"
     },
