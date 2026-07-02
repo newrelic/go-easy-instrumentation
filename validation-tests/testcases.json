@@ -25,6 +25,14 @@
       "dir": "integrations/nrgin/example/multiple-service"
     },
     {
+      "name": "echo - basic (v4)",
+      "dir": "integrations/nrecho-v4/example/basic"
+    },
+    {
+      "name": "echo - basic (v3)",
+      "dir": "integrations/nrecho-v3/example/basic"
+    },
+    {
       "name": "semi-instrumented - existing transactions",
       "dir": "validation-tests/semi-instrumented/existing-transactions"
     },
@@ -67,6 +75,17 @@
     {
       "name": "logrus app",
       "dir": "integrations/nrlogrus/example/logrus"
+
+      "name": "pq app",
+      "dir": "integrations/nrpq/example/pq"
+    },
+    {
+      "name": "pgx app",
+      "dir": "integrations/nrpgx5/example/pgx"
+    },
+    {
+      "name": "pgxpool app",
+      "dir": "integrations/nrpgx5/example/pgxpool"
     }
   ]
 }

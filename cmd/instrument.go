@@ -12,11 +12,15 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dave/dst/decorator"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nragent"
+	nrecho_v3 "github.com/newrelic/go-easy-instrumentation/integrations/nrecho-v3"
+	nrecho_v4 "github.com/newrelic/go-easy-instrumentation/integrations/nrecho-v4"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgin"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrlogrus"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrpq"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrpgx5"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrslog"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
 	"github.com/newrelic/go-easy-instrumentation/parser"
@@ -42,6 +46,8 @@ func registerIntegrations(manager *parser.InstrumentationManager) {
 		parser.DetectTransactions,
 		parser.DetectErrors,
 		parser.DetectGinInstrumentation,
+		parser.DetectEchoInstrumentation,
+		parser.DetectEchoV3Instrumentation,
 		nrnethttp.DetectWrappedRoutes,
 	)
 
@@ -53,9 +59,13 @@ func registerIntegrations(manager *parser.InstrumentationManager) {
 		nrnethttp.CannotInstrumentHttpMethod,
 		nrgrpc.InstrumentGrpcDial,
 		nrgin.InstrumentGinFunction,
+		nrecho_v4.InstrumentEchoFunction,
+		nrecho_v3.InstrumentEchoFunction,
 		nrgrpc.InstrumentGrpcServerMethod,
 		nrslog.InstrumentSlogHandler,
 		nrlogrus.InstrumentLogrusHandler,
+		nrpq.InstrumentPQHandler,
+		nrpgx5.InstrumentPgxHandler,
 	)
 
 	// Stateful tracing functions (ORDER PRESERVED)
@@ -64,6 +74,8 @@ func registerIntegrations(manager *parser.InstrumentationManager) {
 		nrnethttp.WrapNestedHandleFunction,
 		nrgrpc.InstrumentGrpcServer,
 		nrgin.InstrumentGinMiddleware,
+		nrecho_v4.InstrumentEchoMiddleware,
+		nrecho_v3.InstrumentEchoMiddleware,
 		nrgochi.InstrumentChiMiddleware,
 		nrgochi.InstrumentChiRouterLiteral,
 	)
