@@ -75,7 +75,8 @@
     {
       "name": "logrus app",
       "dir": "integrations/nrlogrus/example/logrus"
-
+    },
+    {
       "name": "pq app",
       "dir": "integrations/nrpq/example/pq"
     },
