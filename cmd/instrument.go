@@ -18,6 +18,7 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrlogrus"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrpq"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrpgx5"
@@ -64,6 +65,7 @@ func registerIntegrations(manager *parser.InstrumentationManager) {
 		nrgrpc.InstrumentGrpcServerMethod,
 		nrslog.InstrumentSlogHandler,
 		nrmysql.InstrumentSQLHandler,
+		nrlogrus.InstrumentLogrusHandler,
 		nrpq.InstrumentPQHandler,
 		nrpgx5.InstrumentPgxHandler,
 	)
