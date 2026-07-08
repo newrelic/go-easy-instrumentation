@@ -1,7 +1,10 @@
 --- a/main.go
 +++ b/main.go
-@@ -6,13 +6,19 @@
+@@ -4,24 +4,38 @@
+ package main
+ 
  import (
++	"context"
  	"database/sql"
  	"fmt"
 +	"time"
@@ -20,9 +23,19 @@
  
  	db, err := sql.Open("mysql", "root@/information_schema")
  	if err != nil {
-@@ -24,4 +23,6 @@
+ 		panic(err)
+ 	}
+ 
+-	row := db.QueryRow("SELECT count(*) from tables")
++	nrTxn := NewRelicAgent.StartTransaction("mySQL/QueryRow")
++	ctx := newrelic.NewContext(context.Background(), nrTxn)
++
++	row := db.QueryRowContext(ctx, "SELECT count(*) from tables")
+ 	var count int
  	row.Scan(&count)
  
++	nrTxn.End()
++
  	fmt.Println("number of tables in information_schema", count)
 +
 +	NewRelicAgent.Shutdown(5 * time.Second)
