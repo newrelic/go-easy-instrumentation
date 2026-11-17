@@ -141,13 +141,10 @@ func TestCreateContextWithTransaction(t *testing.T) {
 			arg0Call, ok := rhsCall.Args[0].(*dst.CallExpr)
 			assert.True(t, ok, "expected Args[0] to be *dst.CallExpr")
 
-			arg0SelExpr, ok := arg0Call.Fun.(*dst.SelectorExpr)
-			assert.True(t, ok, "expected Args[0] Fun to be *dst.SelectorExpr")
-
-			arg0X, ok := arg0SelExpr.X.(*dst.Ident)
-			assert.True(t, ok, "expected Args[0] X to be *dst.Ident")
-			assert.Equal(t, "context", arg0X.Name)
-			assert.Equal(t, "Background", arg0SelExpr.Sel.Name)
+			arg0Ident, ok := arg0Call.Fun.(*dst.Ident)
+			assert.True(t, ok, "expected Args[0] Fun to be *dst.Ident")
+			assert.Equal(t, "Background", arg0Ident.Name)
+			assert.Equal(t, "context", arg0Ident.Path)
 
 			// Second arg: transaction variable
 			arg1Ident, ok := rhsCall.Args[1].(*dst.Ident)
