@@ -4,9 +4,9 @@ go 1.25.0
 
 require (
 	github.com/gin-gonic/gin v1.9.1
-	golang.org/x/net v0.54.0
-	google.golang.org/grpc v1.79.3
-	google.golang.org/protobuf v1.36.10
+	golang.org/x/net v0.55.0
+	google.golang.org/grpc v1.83.1
+	google.golang.org/protobuf v1.36.11
 )
 
 require (
