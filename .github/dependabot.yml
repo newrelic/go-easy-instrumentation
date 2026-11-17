@@ -5,8 +5,15 @@
 
 version: 2
 updates:
-  - package-ecosystem: "gomod" # See documentation for possible values
-    directories: 
-      - "/parser"
+  # "/parser" was listed here but contains no go.mod -- the parser package is
+  # part of the root module -- so no Go dependency was being updated at all.
+  # The example applications are each their own module and drift independently
+  # of the root, which is how one of them ended up pinning a golang.org/x/sync
+  # version too old to build against a current pgx.
+  - package-ecosystem: "gomod"
+    directories:
+      - "/"
+      - "/integrations/**"
+      - "/validation-tests/**"
     schedule:
       interval: "weekly"
