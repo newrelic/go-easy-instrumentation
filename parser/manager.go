@@ -492,6 +492,7 @@ func (m *InstrumentationManager) AddRequiredModules() error {
 			}
 		}
 
+		added := false
 		for module := range state.importsAdded {
 			if module == "" {
 				continue
@@ -502,10 +503,40 @@ func (m *InstrumentationManager) AddRequiredModules() error {
 			if err != nil {
 				return fmt.Errorf("failed to execute \"%s\": %v", goGet.String(), err)
 			}
+
+			added = true
+		}
+
+		if added {
+			completeGoSum(state.pkg.Dir)
 		}
 	}
 
 	return nil
+}
+
+// completeGoSum records the module hashes needed to build the instrumented
+// code.
+//
+// "go get" writes only the hashes it needs to resolve the module graph. When it
+// upgrades an indirect dependency, go.sum can end up with that version's go.mod
+// hash but not its module hash, which is enough to resolve the graph and not
+// enough to compile. The user then applies a diff that does not build, with
+// nothing to indicate that go.sum is what is incomplete.
+//
+// "go mod download all" is used rather than "go mod tidy" on purpose. Tidy
+// prunes requirements that the files on disk do not import, and the
+// instrumented code exists only in the generated diff, so tidying would remove
+// the very modules "go get" was just asked to add.
+//
+// Failure is not fatal: an incomplete go.sum is worth a warning, not worth
+// discarding instrumentation the user asked for.
+func completeGoSum(dir string) {
+	goModDownload := exec.Command("go", "mod", "download", "all")
+
+	if out, err := goModDownload.CombinedOutput(); err != nil {
+		log.Printf("could not complete go.sum in %s; the instrumented code may need \"go mod tidy\" before it builds: %v: %s", dir, err, out)
+	}
 }
 
 func (m *InstrumentationManager) TracePackageCalls() error {
