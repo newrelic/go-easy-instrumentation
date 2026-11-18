@@ -18,13 +18,23 @@ What shipped, and where it differs from the spike:
 - **Synchronous send, 3s timeout, no retry.** A detached goroutine never sends, because the
   process exits first. The send runs after the completion message, so a slow endpoint only delays
   process exit. `Send` takes `RunData` with no context.
-- **Not sent yet:** comment counts, files changed, and error type. Cancelled runs report a single
-  `Go/Pipeline/Cancelled` result.
+- **The payload is tuned to four questions:** how many runs, how often and why they fail, which
+  libraries applications use, and where instrumentation has gaps. Flag usage, diff size and the
+  duplicate `interactive` attribute were dropped as not answering any of them.
+- **Libraries are reported as `Go/Library/<name>` results,** matched from the application's
+  direct imports against a fixed list in `internal/usage/libraries.go`. Status is `Success` when
+  instrumented, `Warning` when supported but not instrumented, `Info` when no integration
+  exists, and `None` when the outcome cannot be observed. Unlisted import paths are never sent.
+- **Load failures carry `loadErrorKinds`,** the go/packages error kinds seen, so a toolchain
+  problem can be told apart from code that does not build.
+- **Not sent:** comment counts, files changed, and a failure category beyond the failed step.
+  Cancelled runs report a single `Go/Pipeline/Cancelled` result.
 - **`Go/Integration/newrelic` carries little signal.** The agent-injection step adds the base
   agent import on almost every run, so it means "something was instrumented", not a specific
   integration.
 - **CI runs of this repo do not report.** The end-to-end workflow sets the opt-out env var. The
   tool does not auto-disable when `CI` is set, because CI usage by others is worth measuring.
+
 **Drafted with:** Claude Code, from the linked nrdiag and help-agnostic-service source. Endpoint
 behavior and schema claims come from reading that source, not model recall. Effort estimates and
 the option-B recommendation are mine.

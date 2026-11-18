@@ -153,23 +153,28 @@ func TestPrepareResultsIdentifiersHaveThreeSegments(t *testing.T) {
 	}
 }
 
-// TestPrepareConfigurationOmitsUserPaths is the privacy guarantee this package
-// makes: a custom output path and excluded directories are reported as a boolean
-// and a count, never as the values themselves.
-func TestPrepareConfigurationOmitsUserPaths(t *testing.T) {
+// TestPrepareConfigurationAttributes pins the exact set of run-level
+// attributes. Adding one is a deliberate decision: each must answer a question
+// this data exists for, and none may carry a value from the user's code.
+func TestPrepareConfigurationAttributes(t *testing.T) {
 	config := prepareConfiguration(RunData{
-		OutputPathSet: true,
-		ExcludeCount:  2,
+		Mode:           ModeText,
+		LoadErrorKinds: []string{"TypeError", "ListError", "/home/someone/app", "TypeError"},
 	})
 
 	byName := map[string]any{}
+	names := []string{}
 	for _, flag := range config {
 		byName[flag.Name] = flag.Value
+		names = append(names, flag.Name)
 	}
 
-	assert.Equal(t, true, byName["outputPath"], "output path should be a boolean")
-	assert.Equal(t, 2, byName["exclude"], "exclusions should be a count")
+	assert.Equal(t, []string{
+		"product", "mode", "goVersion", "os", "arch", "devBuild",
+		"packagesLoaded", "packagesWithErrors", "loadErrorKinds", "durationMs",
+	}, names)
 	assert.Equal(t, "go-easy-instrumentation", byName["product"], "the marker attribute must be present")
+	assert.Equal(t, "ListError,TypeError", byName["loadErrorKinds"], "only known kinds, sorted and deduplicated")
 }
 
 // TestPrepareMetaOmitsIdentifyingData covers the fields the diagnostics CLI

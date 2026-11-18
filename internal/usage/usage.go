@@ -7,10 +7,13 @@
 // shape and the request headers match newrelic-diagnostics-cli, because the same
 // endpoint serves both tools.
 //
+// A run reports which integrations it applied, which known libraries the
+// application imports and what happened to each, how the run failed if it did,
+// and enough about the environment to explain failures.
+//
 // Nothing describing the user's code is reported: no source, no identifiers from
 // their program, no file paths, no module path, no hostname, and no user name.
-// Flags whose values could carry any of those are reduced to whether they were
-// set.
+// Library names are only ever taken from a fixed list in this package.
 package usage
 
 import (
@@ -21,6 +24,7 @@ import (
 	"net/http"
 	"runtime"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"time"
 
@@ -53,6 +57,8 @@ const (
 const (
 	statusSuccess = "Success"
 	statusError   = "Error"
+	statusWarning = "Warning"
+	statusInfo    = "Info"
 	// statusNone reports an outcome that is genuinely unknown, rather than
 	// claiming one that was never observed.
 	statusNone = "None"
@@ -65,9 +71,10 @@ const (
 	ModeInteractive = "interactive"
 )
 
-// RunData describes one instrumentation run. Every field is either a count, a
-// boolean, or a value fixed by this tool: none of them can carry information
-// about the code being instrumented.
+// RunData describes one instrumentation run. Every field that is sent is either
+// a count, a boolean, or a value from a fixed vocabulary in this tool.
+// DirectImports is the one field holding application data, and it is filtered
+// through a fixed list before anything is sent.
 type RunData struct {
 	// AddedImports is every import path the run added across all packages.
 	// Integration names are derived from it.
@@ -86,8 +93,14 @@ type RunData struct {
 	// Duration is how long the run took.
 	Duration time.Duration
 
-	// DiffBytes is the size of the generated diff file.
-	DiffBytes int64
+	// DirectImports is every import path the application's non-test packages
+	// import directly. It is never sent: only the names of known libraries
+	// matched from it are.
+	DirectImports []string
+
+	// LoadErrorKinds lists the kinds of package load error seen, such as
+	// "TypeError". Only kinds in loadErrorKinds are sent.
+	LoadErrorKinds []string
 
 	// PackagesLoaded is how many packages were loaded for instrumentation.
 	PackagesLoaded int
@@ -95,16 +108,17 @@ type RunData struct {
 	// PackagesWithErrors is how many packages, including dependencies, failed to
 	// load cleanly.
 	PackagesWithErrors int
+}
 
-	// ExcludeCount is how many directories were excluded, never which ones.
-	ExcludeCount int
-
-	// OutputPathSet records whether a custom output path was given, never the
-	// path itself.
-	OutputPathSet bool
-
-	// Verbose records whether debug output was enabled.
-	Verbose bool
+// loadErrorKinds is the fixed vocabulary for RunData.LoadErrorKinds. It matches
+// the kinds in golang.org/x/tools/go/packages: a list error usually means a
+// missing module or a toolchain problem, a parse or type error means the
+// application does not build.
+var loadErrorKinds = map[string]bool{
+	"ListError":    true,
+	"ParseError":   true,
+	"TypeError":    true,
+	"UnknownError": true,
 }
 
 // payload is the request body. It mirrors the endpoint's expected shape.
@@ -231,8 +245,9 @@ func prepareMeta(runID string) metaData {
 
 // prepareConfiguration builds the run-level attributes.
 //
-// Names reuse those already reported by newrelic-diagnostics-cli wherever the
-// two tools mean the same thing, so that a single dashboard can read both.
+// Each attribute answers one of the questions this data exists for: how the
+// tool is run, how often and why runs fail, and the environment that explains a
+// failure. The endpoint prefixes each name with "config".
 func prepareConfiguration(data RunData) []configFlag {
 	_, devBuild := toolVersion()
 
@@ -241,26 +256,38 @@ func prepareConfiguration(data RunData) []configFlag {
 		// which share the same event types. Every query needs it.
 		{Name: "product", Value: common.ApplicationName},
 		{Name: "mode", Value: data.Mode},
-		{Name: "interactive", Value: data.Mode == ModeInteractive},
-		{Name: "verbose", Value: data.Verbose},
-		// outputPath is a boolean, never the path itself.
-		{Name: "outputPath", Value: data.OutputPathSet},
-		// exclude is a count, never the directory names: those describe the
-		// layout of the user's source tree.
-		{Name: "exclude", Value: data.ExcludeCount},
 		{Name: "goVersion", Value: runtime.Version()},
 		{Name: "os", Value: runtime.GOOS},
 		{Name: "arch", Value: runtime.GOARCH},
 		{Name: "devBuild", Value: devBuild},
 		{Name: "packagesLoaded", Value: data.PackagesLoaded},
 		{Name: "packagesWithErrors", Value: data.PackagesWithErrors},
-		{Name: "diffBytes", Value: data.DiffBytes},
+		{Name: "loadErrorKinds", Value: knownLoadErrorKinds(data.LoadErrorKinds)},
 		{Name: "durationMs", Value: data.Duration.Milliseconds()},
 	}
 }
 
-// prepareResults builds one result per integration applied, plus one for a
-// failed pipeline step.
+// knownLoadErrorKinds returns the recognised kinds, sorted, deduplicated and
+// joined with commas. Unrecognised values are dropped rather than sent.
+func knownLoadErrorKinds(kinds []string) string {
+	seen := map[string]bool{}
+	known := []string{}
+
+	for _, kind := range kinds {
+		if !loadErrorKinds[kind] || seen[kind] {
+			continue
+		}
+		seen[kind] = true
+		known = append(known, kind)
+	}
+
+	sort.Strings(known)
+
+	return strings.Join(known, ",")
+}
+
+// prepareResults builds one result per integration applied, one per known
+// library the application imports, and one for a failed pipeline step.
 //
 // The endpoint derives its per-status totals from these, so no counts are sent
 // directly.
@@ -292,6 +319,21 @@ func prepareResults(data RunData) []taskResult {
 		})
 	}
 
+	instrumented := map[string]bool{}
+	for _, path := range data.AddedImports {
+		instrumented[path] = true
+	}
+	for _, path := range data.DirectImports {
+		instrumented[path] = true
+	}
+
+	for _, lib := range detectedLibraries(data.DirectImports) {
+		results = append(results, taskResult{
+			Identifier: "Go/Library/" + lib.name,
+			Status:     libraryStatus(lib, instrumented, data.FailedStep != ""),
+		})
+	}
+
 	if data.FailedStep != "" {
 		results = append(results, taskResult{
 			Identifier: "Go/Pipeline/" + identifierSegment(data.FailedStep),
@@ -306,9 +348,9 @@ func prepareResults(data RunData) []taskResult {
 // paths, in the order they appear.
 //
 // An integration calls AddImport only when it has matched and injected code, so
-// its import path appearing here means it was applied. Note that the net/http
-// and database/sql instrumentation add only the base agent import and so cannot
-// be told apart from each other; both are reported as "newrelic".
+// its import path appearing here means it was applied. "newrelic" is the base
+// agent import, which agent setup in main adds on almost every run; it means
+// that something was instrumented, not any particular library.
 func IntegrationNames(addedImports []string) []string {
 	names := []string{}
 	seen := map[string]bool{}

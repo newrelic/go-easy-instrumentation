@@ -271,6 +271,8 @@ func instrumentPackages(packagePath string, patterns []string, outputFile string
 
 	data.PackagesLoaded = len(pkgs)
 	data.PackagesWithErrors = len(packageLoadIssues(pkgs))
+	data.LoadErrorKinds = loadErrorKinds(pkgs)
+	data.DirectImports = directImports(pkgs)
 
 	loadWarning, err := checkPackageLoad(pkgs)
 	if err != nil {
@@ -313,7 +315,6 @@ func instrumentPackages(packagePath string, patterns []string, outputFile string
 	}
 
 	data.AddedImports = manager.AddedImports()
-	data.DiffBytes = fileSize(outputFile)
 	data.Duration = time.Since(start)
 
 	return data, nil
@@ -345,6 +346,8 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 
 		data.PackagesLoaded = len(pkgs)
 		data.PackagesWithErrors = len(packageLoadIssues(pkgs))
+		data.LoadErrorKinds = loadErrorKinds(pkgs)
+		data.DirectImports = directImports(pkgs)
 
 		loadWarning, err := checkPackageLoad(pkgs)
 		if err != nil {
@@ -407,7 +410,6 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 		}
 
 		data.AddedImports = manager.AddedImports()
-		data.DiffBytes = fileSize(outputFile)
 		data.Duration = time.Since(start)
 
 		updates <- usageMsg(data)
