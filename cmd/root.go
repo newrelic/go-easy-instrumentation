@@ -21,6 +21,14 @@ var rootCmd = &cobra.Command{
 
 var debug bool
 
+// usageOptOut declines anonymous usage reporting for this run. The flag name
+// matches the diagnostics CLI's -usage-opt-out so that the two behave alike.
+var usageOptOut bool
+
+// interactiveMode records that the tool was driven interactively rather than
+// invoked with a path.
+var interactiveMode bool
+
 func Execute() {
 	if err := rootCmd.Execute(); err != nil {
 		cobra.CheckErr(err)
@@ -29,4 +37,5 @@ func Execute() {
 
 func init() {
 	rootCmd.PersistentFlags().BoolVarP(&debug, "debug", "d", false, "enable debugging output")
+	rootCmd.PersistentFlags().BoolVar(&usageOptOut, "usage-opt-out", false, "decline to send anonymous usage data to New Relic for this run")
 }

@@ -1194,3 +1194,62 @@ func TestInstrumentApplication(t *testing.T) {
 		})
 	}
 }
+
+func TestAddedImports(t *testing.T) {
+	tests := []struct {
+		name  string
+		state map[string]map[string]bool
+		want  []string
+	}{
+		{
+			name:  "no packages",
+			state: map[string]map[string]bool{},
+			want:  []string{},
+		},
+		{
+			name: "imports from a single package",
+			state: map[string]map[string]bool{
+				"a": {"github.com/newrelic/go-agent/v3/integrations/nrgin": true},
+			},
+			want: []string{"github.com/newrelic/go-agent/v3/integrations/nrgin"},
+		},
+		{
+			name: "imports are unioned across packages and sorted",
+			state: map[string]map[string]bool{
+				"a": {"github.com/newrelic/go-agent/v3/integrations/nrgin": true},
+				"b": {"context": true, "github.com/newrelic/go-agent/v3/newrelic": true},
+			},
+			want: []string{
+				"context",
+				"github.com/newrelic/go-agent/v3/integrations/nrgin",
+				"github.com/newrelic/go-agent/v3/newrelic",
+			},
+		},
+		{
+			name: "duplicates across packages are collapsed",
+			state: map[string]map[string]bool{
+				"a": {"github.com/newrelic/go-agent/v3/newrelic": true},
+				"b": {"github.com/newrelic/go-agent/v3/newrelic": true},
+			},
+			want: []string{"github.com/newrelic/go-agent/v3/newrelic"},
+		},
+		{
+			name: "empty paths are skipped",
+			state: map[string]map[string]bool{
+				"a": {"": true, "context": true},
+			},
+			want: []string{"context"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manager := &InstrumentationManager{}
+			for pkgID, imports := range tt.state {
+				manager.SetPackageState(pkgID, &PackageState{ImportsAdded: imports})
+			}
+
+			assert.Equal(t, tt.want, manager.AddedImports())
+		})
+	}
+}

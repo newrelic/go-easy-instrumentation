@@ -18,6 +18,9 @@ jobs:
     runs-on: ubuntu-latest
     env:
       GOTOOLCHAIN: auto
+      # Keep CI runs out of the usage data. Set here rather than in the tool, so
+      # real CI usage by others is still reported.
+      NEW_RELIC_USAGE_REPORTING_ENABLED: false
 
     steps:
     - uses: actions/checkout@v4

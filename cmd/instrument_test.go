@@ -316,7 +316,7 @@ func TestInstrumentPackages_BasicGin(t *testing.T) {
 
 	outputFile := filepath.Join(t.TempDir(), "output.diff")
 
-	err := instrumentPackages(packagePath, nil, outputFile)
+	_, err := instrumentPackages(packagePath, nil, outputFile)
 	if err != nil {
 		t.Fatalf("instrumentPackages failed: %v", err)
 	}
@@ -339,7 +339,7 @@ func TestInstrumentPackages_HttpApp(t *testing.T) {
 
 	outputFile := filepath.Join(t.TempDir(), "output.diff")
 
-	err := instrumentPackages(packagePath, nil, outputFile)
+	_, err := instrumentPackages(packagePath, nil, outputFile)
 	if err != nil {
 		t.Fatalf("instrumentPackages failed: %v", err)
 	}
@@ -362,7 +362,7 @@ func TestInstrumentPackages_CustomPatterns(t *testing.T) {
 	outputFile := filepath.Join(t.TempDir(), "output.diff")
 
 	// Use explicit patterns instead of the default "./..."
-	err := instrumentPackages(packagePath, []string{"./..."}, outputFile)
+	_, err := instrumentPackages(packagePath, []string{"./..."}, outputFile)
 	if err != nil {
 		t.Fatalf("instrumentPackages with custom patterns failed: %v", err)
 	}
@@ -379,7 +379,7 @@ func TestInstrumentPackages_CustomPatterns(t *testing.T) {
 func TestInstrumentPackages_InvalidPackagePath(t *testing.T) {
 	outputFile := filepath.Join(t.TempDir(), "output.diff")
 
-	err := instrumentPackages("/nonexistent/path/to/package", nil, outputFile)
+	_, err := instrumentPackages("/nonexistent/path/to/package", nil, outputFile)
 	if err == nil {
 		t.Fatal("expected error for invalid package path, got nil")
 	}

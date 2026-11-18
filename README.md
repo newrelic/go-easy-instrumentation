@@ -48,6 +48,7 @@ sudo mv go-easy-instrumentation /usr/local/bin/   # or anywhere on your PATH
 | `--debug` | `-d` | Enable debug logging with text-mode output (no TUI) |
 | `--exclude` | `-e` | Comma-separated list of folders to exclude |
 | `--output` | `-o` | Custom diff output file path (must be `.diff`) |
+| `--usage-opt-out` | | Decline to send anonymous usage data for this run (see [Usage Data](#usage-data)) |
 
 ```sh
 go-easy-instrumentation instrument --debug /path/to/your/app
@@ -137,6 +138,40 @@ To modify which tests get run, modify the `end-to-end-tests/testcases.json` file
 ## Generate instrumentation suggestions
 
 For detailed instructions on how to generate instrumentation suggestions, see our documentation at [docs.newrelic.com](https://docs.newrelic.com/docs/apm/agents/go-agent/installation/install-automation-new-relic-go/#generate-suggestions).
+
+## Usage Data
+
+Go Easy Instrumentation reports anonymous data about each run to New Relic, so we know
+which integrations are worth maintaining and where the tool fails on real code.
+
+**What is reported:** the tool version, your Go version, OS and architecture, whether the
+run used the TUI, text or interactive mode, whether each flag was set, how many packages
+were loaded and how many packages, including dependencies, failed to load, which New Relic integrations were applied, the
+size of the generated diff, how long the run took, whether it was a development build, the
+name of the pipeline step if the run failed, and whether the run was cancelled. Each run also
+carries a random run ID and a timestamp, which do not identify you.
+
+**What is never reported:** your source code, any identifier from your program, file paths,
+your module path, your repository, your hostname, your username, and your environment
+variables. Flags whose values could contain any of those — such as `--output` and
+`--exclude` — are reported only as whether they were set and how many entries they had.
+No New Relic license key is involved; the tool does not have one.
+
+Reporting happens once, at the end of a run, including runs that fail and runs cancelled
+with Ctrl+C in the TUI. A process killed by a signal is not reported. Reporting cannot
+change the outcome or exit code of a run, and is never retried.
+
+To turn it off, either pass the flag:
+
+```sh
+go-easy-instrumentation instrument --usage-opt-out /path/to/your/app
+```
+
+or set the environment variable, which is useful for turning it off across CI:
+
+```sh
+export NEW_RELIC_USAGE_REPORTING_ENABLED=false
+```
 
 ## Support
 Should you need assistance with New Relic products, you are in good hands with several support channels.  

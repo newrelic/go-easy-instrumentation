@@ -184,6 +184,31 @@ func (m *InstrumentationManager) TransactionCache() *transactioncache.Transactio
 	return &m.transactionCache
 }
 
+// AddedImports returns the deduplicated set of import paths this run added
+// across every package, sorted for stability.
+//
+// An integration adds its import only when it has matched and injected code, so
+// this is the closest available record of which integrations were actually
+// applied.
+func (m *InstrumentationManager) AddedImports() []string {
+	seen := map[string]bool{}
+	for _, state := range m.packages {
+		for path := range state.importsAdded {
+			if path != "" {
+				seen[path] = true
+			}
+		}
+	}
+
+	paths := make([]string, 0, len(seen))
+	for path := range seen {
+		paths = append(paths, path)
+	}
+	slices.Sort(paths)
+
+	return paths
+}
+
 func (m *InstrumentationManager) getImports() []string {
 	i := 0
 	state, ok := m.packages[m.currentPackage]
