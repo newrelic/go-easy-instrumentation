@@ -40,7 +40,9 @@ func main() {
 			expect: `package main
 
 import (
+	"context"
 	"database/sql"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -94,7 +96,9 @@ func main() {
 			expect: `package main
 
 import (
+	"context"
 	"database/sql"
+
 	_ "github.com/go-sql-driver/mysql"
 )
 
@@ -123,6 +127,125 @@ func main() {
 		}
 	}
 	nrTxn.End()
+}
+`,
+		},
+		{
+			name: "instrument plain mysql driver",
+			code: `package main
+
+import (
+	"database/sql"
+	_ "github.com/go-sql-driver/mysql"
+)
+
+func main() {
+	db, err := sql.Open("mysql", "root@/information_schema")
+	if err != nil {
+		panic(err)
+	}
+
+	row := db.QueryRow("SELECT count(*) from tables")
+	var count int
+	row.Scan(&count)
+}
+`,
+			expect: `package main
+
+import (
+	"context"
+	"database/sql"
+
+	_ "github.com/go-sql-driver/mysql"
+)
+
+func main() {
+	db, err := sql.Open("mysql", "root@/information_schema")
+	if err != nil {
+		panic(err)
+	}
+
+	nrTxn := NewRelicAgent.StartTransaction("mySQL/QueryRow")
+	ctx := newrelic.NewContext(context.Background(), nrTxn)
+
+	row := db.QueryRowContext(ctx, "SELECT count(*) from tables")
+	var count int
+	row.Scan(&count)
+	nrTxn.End()
+}
+`,
+		},
+		{
+			name: "skip postgres driver",
+			code: `package main
+
+import (
+	"database/sql"
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	db, err := sql.Open("postgres", "postgres://localhost/postgres")
+	if err != nil {
+		panic(err)
+	}
+
+	row := db.QueryRow("SELECT version()")
+	var version string
+	row.Scan(&version)
+}
+`,
+			expect: `package main
+
+import (
+	"database/sql"
+	_ "github.com/lib/pq"
+)
+
+func main() {
+	db, err := sql.Open("postgres", "postgres://localhost/postgres")
+	if err != nil {
+		panic(err)
+	}
+
+	row := db.QueryRow("SELECT version()")
+	var version string
+	row.Scan(&version)
+}
+`,
+		},
+		{
+			name: "skip nrpq driver",
+			code: `package main
+
+import (
+	"database/sql"
+	_ "github.com/newrelic/go-agent/v3/integrations/nrpq"
+)
+
+func main() {
+	db, err := sql.Open("nrpq", "postgres://localhost/postgres")
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = db.Exec("DELETE FROM users")
+}
+`,
+			expect: `package main
+
+import (
+	"database/sql"
+	_ "github.com/newrelic/go-agent/v3/integrations/nrpq"
+)
+
+func main() {
+	db, err := sql.Open("nrpq", "postgres://localhost/postgres")
+	if err != nil {
+		panic(err)
+	}
+
+	_, err = db.Exec("DELETE FROM users")
 }
 `,
 		},

@@ -7,6 +7,10 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dave/dst"
+	"github.com/dave/dst/decorator"
+	"github.com/newrelic/go-easy-instrumentation/parser"
+	"golang.org/x/tools/go/packages"
 )
 
 func TestValidateOutputFile(t *testing.T) {
@@ -385,5 +389,110 @@ func TestInstrumentPackages_InvalidPackagePath(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "loading packages") {
 		t.Errorf("expected error about loading packages, got: %v", err)
+	}
+}
+
+// instrumentMainSource writes src as main.go in a dependency-free temp module, runs the
+// registered integrations over it, and returns the names of every function called and every
+// string literal in the instrumented main function. It skips the steps that touch the network
+// (adding required modules) or write files, so it only exercises registerIntegrations and the
+// tracing passes.
+func instrumentMainSource(t *testing.T, src string) (calls map[string]bool, literals map[string]bool) {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module example\n\ngo 1.24\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte(src), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	pkgs, err := decorator.Load(&packages.Config{Dir: dir, Mode: LoadMode, Tests: true}, defaultPackageName)
+	if err != nil {
+		t.Fatalf("loading packages: %v", err)
+	}
+	manager := parser.NewInstrumentationManager(pkgs, defaultAppName, defaultAgentVariableName, filepath.Join(dir, "out.diff"), dir)
+	registerIntegrations(manager)
+	for _, step := range []func() error{manager.TracePackageCalls, manager.ScanApplication, manager.InstrumentApplication} {
+		if err := step(); err != nil {
+			t.Fatalf("instrumenting: %v", err)
+		}
+	}
+
+	calls, literals = map[string]bool{}, map[string]bool{}
+	for _, pkg := range pkgs {
+		for _, file := range pkg.Syntax {
+			for _, decl := range file.Decls {
+				fn, ok := decl.(*dst.FuncDecl)
+				if !ok || fn.Name.Name != "main" {
+					continue
+				}
+				dst.Inspect(fn, func(n dst.Node) bool {
+					switch node := n.(type) {
+					case *dst.CallExpr:
+						switch fun := node.Fun.(type) {
+						case *dst.SelectorExpr:
+							calls[fun.Sel.Name] = true
+						case *dst.Ident:
+							calls[fun.Name] = true
+						}
+					case *dst.BasicLit:
+						literals[node.Value] = true
+					}
+					return true
+				})
+			}
+		}
+	}
+	return calls, literals
+}
+
+func TestRegisterIntegrations_MySQL(t *testing.T) {
+	calls, literals := instrumentMainSource(t, `package main
+
+import "database/sql"
+
+func main() {
+	db, err := sql.Open("mysql", "root@/information_schema")
+	if err != nil {
+		panic(err)
+	}
+
+	row := db.QueryRow("SELECT count(*) from tables")
+	var count int
+	row.Scan(&count)
+}
+`)
+
+	if !literals[`"mySQL/QueryRow"`] {
+		t.Error("expected the MySQL integration to start a mySQL/QueryRow transaction; is nrmysql.InstrumentSQLHandler registered?")
+	}
+	if !calls["QueryRowContext"] || calls["QueryRow"] {
+		t.Error("expected db.QueryRow to be rewritten to db.QueryRowContext")
+	}
+}
+
+func TestRegisterIntegrations_PostgresNotClaimedByMySQL(t *testing.T) {
+	_, literals := instrumentMainSource(t, `package main
+
+import "database/sql"
+
+func main() {
+	db, err := sql.Open("postgres", "postgres://localhost/postgres")
+	if err != nil {
+		panic(err)
+	}
+
+	row := db.QueryRow("SELECT version()")
+	var version string
+	row.Scan(&version)
+}
+`)
+
+	if literals[`"mySQL/QueryRow"`] {
+		t.Error("the MySQL integration instrumented a postgres app")
+	}
+	if !literals[`"postgres/QueryRow"`] {
+		t.Error("expected the pq integration to start a postgres/QueryRow transaction")
 	}
 }
