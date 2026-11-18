@@ -90,6 +90,11 @@ type RunData struct {
 	// Cancelled reports that the user interrupted the run before it finished.
 	Cancelled bool
 
+	// CrashKind classifies a panic in FailedStep, such as "nilPointer", or is
+	// empty when the run did not crash. Only kinds in crashKinds are sent; the
+	// panic value and stack never are.
+	CrashKind string
+
 	// Duration is how long the run took.
 	Duration time.Duration
 
@@ -108,6 +113,25 @@ type RunData struct {
 	// PackagesWithErrors is how many packages, including dependencies, failed to
 	// load cleanly.
 	PackagesWithErrors int
+}
+
+// crashKinds is the fixed vocabulary for RunData.CrashKind.
+var crashKinds = map[string]bool{
+	"nilPointer":      true,
+	"indexOutOfRange": true,
+	"sliceBounds":     true,
+	"typeAssertion":   true,
+	"nilMap":          true,
+	"runtime":         true,
+	"panic":           true,
+}
+
+// knownCrashKind returns kind if it is in the fixed vocabulary, and "" otherwise.
+func knownCrashKind(kind string) string {
+	if crashKinds[kind] {
+		return kind
+	}
+	return ""
 }
 
 // loadErrorKinds is the fixed vocabulary for RunData.LoadErrorKinds. It matches
@@ -263,6 +287,7 @@ func prepareConfiguration(data RunData) []configFlag {
 		{Name: "packagesLoaded", Value: data.PackagesLoaded},
 		{Name: "packagesWithErrors", Value: data.PackagesWithErrors},
 		{Name: "loadErrorKinds", Value: knownLoadErrorKinds(data.LoadErrorKinds)},
+		{Name: "crashKind", Value: knownCrashKind(data.CrashKind)},
 		{Name: "durationMs", Value: data.Duration.Milliseconds()},
 	}
 }

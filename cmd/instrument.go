@@ -234,6 +234,7 @@ func runTextMode(packagePath string, patterns []string, outputFile string) {
 	data, err := instrumentPackages(packagePath, patterns, outputFile)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
+		printCrash(os.Stderr, err)
 		// Report the failed run before exiting: these are the runs most worth
 		// knowing about.
 		reportUsage(data)
@@ -261,24 +262,35 @@ func instrumentPackages(packagePath string, patterns []string, outputFile string
 		loadPatterns = []string{defaultPackageName}
 	}
 
-	fmt.Println(" -> Loading packages...")
-	pkgs, err := decorator.Load(&packages.Config{Dir: packagePath, Mode: LoadMode, Tests: true}, loadPatterns...)
-	if err != nil {
-		data.FailedStep = "Loading packages"
-		data.Duration = time.Since(start)
-		return data, fmt.Errorf("loading packages: %w", err)
-	}
-
-	data.PackagesLoaded = len(pkgs)
-	data.PackagesWithErrors = len(packageLoadIssues(pkgs))
-	data.LoadErrorKinds = loadErrorKinds(pkgs)
-	data.DirectImports = directImports(pkgs)
-
-	loadWarning, err := checkPackageLoad(pkgs)
-	if err != nil {
-		data.FailedStep = "Loading packages"
+	fail := func(step string, err error) (usage.RunData, error) {
+		data.FailedStep = step
+		data.CrashKind = crashKind(err)
 		data.Duration = time.Since(start)
 		return data, err
+	}
+
+	fmt.Println(" -> Loading packages...")
+	var (
+		pkgs        []*decorator.Package
+		loadWarning string
+	)
+	err := runStep("Loading packages", func() error {
+		var err error
+		pkgs, err = decorator.Load(&packages.Config{Dir: packagePath, Mode: LoadMode, Tests: true}, loadPatterns...)
+		if err != nil {
+			return fmt.Errorf("loading packages: %w", err)
+		}
+
+		data.PackagesLoaded = len(pkgs)
+		data.PackagesWithErrors = len(packageLoadIssues(pkgs))
+		data.LoadErrorKinds = loadErrorKinds(pkgs)
+		data.DirectImports = directImports(pkgs)
+
+		loadWarning, err = checkPackageLoad(pkgs)
+		return err
+	})
+	if err != nil {
+		return fail("Loading packages", err)
 	}
 	if loadWarning != "" {
 		fmt.Print(loadWarning)
@@ -287,7 +299,9 @@ func instrumentPackages(packagePath string, patterns []string, outputFile string
 	manager := parser.NewInstrumentationManager(pkgs, defaultAppName, defaultAgentVariableName, outputFile, packagePath)
 
 	// Register all integrations
-	registerIntegrations(manager)
+	if err := runStep("Detecting dependencies", func() error { registerIntegrations(manager); return nil }); err != nil {
+		return fail("Detecting dependencies", err)
+	}
 
 	steps := []struct {
 		desc string
@@ -306,11 +320,9 @@ func instrumentPackages(packagePath string, patterns []string, outputFile string
 	}
 
 	for _, step := range steps {
-		if err := step.fn(); err != nil {
-			data.FailedStep = step.desc
+		if err := runStep(step.desc, step.fn); err != nil {
 			data.AddedImports = manager.AddedImports()
-			data.Duration = time.Since(start)
-			return data, fmt.Errorf("%s: %w", step.desc, err)
+			return fail(step.desc, fmt.Errorf("%s: %w", step.desc, err))
 		}
 	}
 
@@ -335,26 +347,35 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 			loadPatterns = []string{defaultPackageName}
 		}
 
-		pkgs, err := decorator.Load(&packages.Config{Dir: packagePath, Mode: LoadMode, Tests: true}, loadPatterns...)
-		if err != nil {
-			data.FailedStep = "Loading packages"
+		fail := func(step string, err error) {
+			data.FailedStep = step
+			data.CrashKind = crashKind(err)
 			data.Duration = time.Since(start)
 			updates <- usageMsg(data)
 			updates <- errMsg(err)
-			return
 		}
 
-		data.PackagesLoaded = len(pkgs)
-		data.PackagesWithErrors = len(packageLoadIssues(pkgs))
-		data.LoadErrorKinds = loadErrorKinds(pkgs)
-		data.DirectImports = directImports(pkgs)
+		var (
+			pkgs        []*decorator.Package
+			loadWarning string
+		)
+		err := runStep("Loading packages", func() error {
+			var err error
+			pkgs, err = decorator.Load(&packages.Config{Dir: packagePath, Mode: LoadMode, Tests: true}, loadPatterns...)
+			if err != nil {
+				return err
+			}
 
-		loadWarning, err := checkPackageLoad(pkgs)
+			data.PackagesLoaded = len(pkgs)
+			data.PackagesWithErrors = len(packageLoadIssues(pkgs))
+			data.LoadErrorKinds = loadErrorKinds(pkgs)
+			data.DirectImports = directImports(pkgs)
+
+			loadWarning, err = checkPackageLoad(pkgs)
+			return err
+		})
 		if err != nil {
-			data.FailedStep = "Loading packages"
-			data.Duration = time.Since(start)
-			updates <- usageMsg(data)
-			updates <- errMsg(err)
+			fail("Loading packages", err)
 			return
 		}
 		if loadWarning != "" {
@@ -399,12 +420,9 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 				return
 			default:
 			}
-			if err := step.fn(); err != nil {
-				data.FailedStep = step.desc
+			if err := runStep(step.desc, step.fn); err != nil {
 				data.AddedImports = manager.AddedImports()
-				data.Duration = time.Since(start)
-				updates <- usageMsg(data)
-				updates <- errMsg(err)
+				fail(step.desc, err)
 				return
 			}
 		}
@@ -443,6 +461,9 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 			return
 		}
 		if m.err != nil {
+			// The worker's stack trace can only be printed now, once the TUI
+			// has released the terminal.
+			printCrash(os.Stderr, m.err)
 			// Report the failed run before exiting: these are the runs most
 			// worth knowing about.
 			reportUsage(m.usageData)

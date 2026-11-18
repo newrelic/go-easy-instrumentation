@@ -157,6 +157,8 @@ which integrations are worth maintaining and where the tool fails on real code.
   tool, so a library is only ever reported if it is on that list.
 - how long the run took, the name of the pipeline step if the run failed, and whether the
   run was cancelled
+- if the tool crashed, the kind of crash, such as a nil pointer. The crash message and
+  stack trace are printed for you to report, and are never sent.
 - a random run ID and a timestamp, which do not identify you
 
 **What is never reported:** your source code, any identifier from your program, file paths,

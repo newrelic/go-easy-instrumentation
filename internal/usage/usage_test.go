@@ -160,6 +160,7 @@ func TestPrepareConfigurationAttributes(t *testing.T) {
 	config := prepareConfiguration(RunData{
 		Mode:           ModeText,
 		LoadErrorKinds: []string{"TypeError", "ListError", "/home/someone/app", "TypeError"},
+		CrashKind:      "nilPointer",
 	})
 
 	byName := map[string]any{}
@@ -171,10 +172,21 @@ func TestPrepareConfigurationAttributes(t *testing.T) {
 
 	assert.Equal(t, []string{
 		"product", "mode", "goVersion", "os", "arch", "devBuild",
-		"packagesLoaded", "packagesWithErrors", "loadErrorKinds", "durationMs",
+		"packagesLoaded", "packagesWithErrors", "loadErrorKinds", "crashKind", "durationMs",
 	}, names)
 	assert.Equal(t, "go-easy-instrumentation", byName["product"], "the marker attribute must be present")
 	assert.Equal(t, "ListError,TypeError", byName["loadErrorKinds"], "only known kinds, sorted and deduplicated")
+	assert.Equal(t, "nilPointer", byName["crashKind"])
+}
+
+// TestCrashKindNeverCarriesPanicText guards the crash attribute: a panic
+// message can name types or functions from the user's code, so anything
+// outside the fixed vocabulary is dropped.
+func TestCrashKindNeverCarriesPanicText(t *testing.T) {
+	for _, kind := range []string{"", "runtime error: invalid memory address", "main.ProcessOrder", "NilPointer"} {
+		assert.Empty(t, knownCrashKind(kind), kind)
+	}
+	assert.Equal(t, "typeAssertion", knownCrashKind("typeAssertion"))
 }
 
 // TestPrepareMetaOmitsIdentifyingData covers the fields the diagnostics CLI
