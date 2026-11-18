@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
@@ -19,10 +20,11 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrlogrus"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
-	"github.com/newrelic/go-easy-instrumentation/integrations/nrpq"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrpgx5"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrpq"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrslog"
 	"github.com/newrelic/go-easy-instrumentation/internal/comment"
+	"github.com/newrelic/go-easy-instrumentation/internal/usage"
 	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
@@ -148,6 +150,13 @@ type model struct {
 	pkgPath     string
 	sub         chan tea.Msg
 	outputFile  string
+	loadWarning string
+	usageData   usage.RunData
+	cancelled   bool
+	// stop is closed on Ctrl+C so the worker starts no further pipeline
+	// steps. Without it, steps such as `go get` keep running while the
+	// cancelled run is being reported.
+	stop chan struct{}
 }
 
 // Messages
@@ -159,6 +168,14 @@ type pkgLoadedMsg []*decorator.Package
 type errMsg error
 type completedMsg struct{}
 
+// loadWarningMsg carries a package-load warning out of the worker goroutine so
+// it can be printed after the TUI has released the terminal.
+type loadWarningMsg string
+
+// usageMsg carries the run data out of the worker goroutine, which is the only
+// place the instrumentation manager is in scope.
+type usageMsg usage.RunData
+
 func initialModel(pkgPath, outputFile string) model {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
@@ -169,6 +186,10 @@ func initialModel(pkgPath, outputFile string) model {
 		totalSteps: 8,
 		pkgPath:    pkgPath,
 		outputFile: outputFile,
+		// Seeded so that a run cancelled before the worker reports anything
+		// still describes itself correctly rather than looking like an empty
+		// successful run.
+		usageData: newRunData(usage.ModeTUI),
 	}
 }
 
@@ -210,34 +231,77 @@ func runTextMode(packagePath string, patterns []string, outputFile string) {
 	fmt.Printf("Instrumentation started for %s\n", packagePath)
 	fmt.Printf("Output file: %s\n\n", outputFile)
 
-	if err := instrumentPackages(packagePath, patterns, outputFile); err != nil {
+	data, err := instrumentPackages(packagePath, patterns, outputFile)
+	if err != nil {
 		fmt.Printf("Error: %v\n", err)
+		printCrash(os.Stderr, err)
+		// Report the failed run before exiting: these are the runs most worth
+		// knowing about.
+		reportUsage(data)
 		os.Exit(1)
 	}
 
 	fmt.Printf("\nDone! Changes written to: %s\nTip: Apply these changes with: git apply %s\n", outputFile, outputFile)
+
+	reportUsage(data)
 }
 
 // instrumentPackages loads Go packages from packagePath, runs the full
 // instrumentation pipeline, and writes the resulting diff to outputFile.
 // It returns an error rather than exiting the process, making it safe to
 // call from both runTextMode (which handles os.Exit) and from tests.
-func instrumentPackages(packagePath string, patterns []string, outputFile string) error {
+//
+// The returned usage.RunData describes the run for usage reporting, and is
+// populated on both the success and failure paths.
+func instrumentPackages(packagePath string, patterns []string, outputFile string) (usage.RunData, error) {
+	start := time.Now()
+	data := newRunData(usage.ModeText)
+
 	loadPatterns := patterns
 	if len(loadPatterns) == 0 {
 		loadPatterns = []string{defaultPackageName}
 	}
 
+	fail := func(step string, err error) (usage.RunData, error) {
+		data.FailedStep = step
+		data.CrashKind = crashKind(err)
+		data.Duration = time.Since(start)
+		return data, err
+	}
+
 	fmt.Println(" -> Loading packages...")
-	pkgs, err := decorator.Load(&packages.Config{Dir: packagePath, Mode: LoadMode, Tests: true}, loadPatterns...)
+	var (
+		pkgs        []*decorator.Package
+		loadWarning string
+	)
+	err := runStep("Loading packages", func() error {
+		var err error
+		pkgs, err = decorator.Load(&packages.Config{Dir: packagePath, Mode: LoadMode, Tests: true}, loadPatterns...)
+		if err != nil {
+			return fmt.Errorf("loading packages: %w", err)
+		}
+
+		data.PackagesLoaded = len(pkgs)
+		data.PackagesWithErrors = len(packageLoadIssues(pkgs))
+		data.LoadErrorKinds = loadErrorKinds(pkgs)
+		data.DirectImports = directImports(pkgs)
+
+		loadWarning, err = checkPackageLoad(pkgs)
+		return err
+	})
 	if err != nil {
-		return fmt.Errorf("loading packages: %w", err)
+		return fail("Loading packages", err)
+	}
+	if loadWarning != "" {
+		fmt.Print(loadWarning)
 	}
 
 	manager := parser.NewInstrumentationManager(pkgs, defaultAppName, defaultAgentVariableName, outputFile, packagePath)
 
 	// Register all integrations
-	registerIntegrations(manager)
+	if err := runStep("Detecting dependencies", func() error { registerIntegrations(manager); return nil }); err != nil {
+		return fail("Detecting dependencies", err)
+	}
 
 	steps := []struct {
 		desc string
@@ -256,31 +320,71 @@ func instrumentPackages(packagePath string, patterns []string, outputFile string
 	}
 
 	for _, step := range steps {
-		if err := step.fn(); err != nil {
-			return fmt.Errorf("%s: %w", step.desc, err)
+		if err := runStep(step.desc, step.fn); err != nil {
+			data.AddedImports = manager.AddedImports()
+			return fail(step.desc, fmt.Errorf("%s: %w", step.desc, err))
 		}
 	}
 
-	return nil
+	data.AddedImports = manager.AddedImports()
+	data.Duration = time.Since(start)
+
+	return data, nil
 }
 
 func runTUIMode(packagePath string, patterns []string, outputFile string) {
 	// Channel to receive updates from the worker
 	updates := make(chan tea.Msg)
+	stop := make(chan struct{})
+	start := time.Now()
 
 	// Worker goroutine
 	go func() {
+		data := newRunData(usage.ModeTUI)
+
 		loadPatterns := patterns
 		if len(loadPatterns) == 0 {
 			loadPatterns = []string{defaultPackageName}
 		}
 
-		pkgs, err := decorator.Load(&packages.Config{Dir: packagePath, Mode: LoadMode, Tests: true}, loadPatterns...)
-		if err != nil {
+		fail := func(step string, err error) {
+			data.FailedStep = step
+			data.CrashKind = crashKind(err)
+			data.Duration = time.Since(start)
+			updates <- usageMsg(data)
 			updates <- errMsg(err)
-			return
 		}
 
+		var (
+			pkgs        []*decorator.Package
+			loadWarning string
+		)
+		err := runStep("Loading packages", func() error {
+			var err error
+			pkgs, err = decorator.Load(&packages.Config{Dir: packagePath, Mode: LoadMode, Tests: true}, loadPatterns...)
+			if err != nil {
+				return err
+			}
+
+			data.PackagesLoaded = len(pkgs)
+			data.PackagesWithErrors = len(packageLoadIssues(pkgs))
+			data.LoadErrorKinds = loadErrorKinds(pkgs)
+			data.DirectImports = directImports(pkgs)
+
+			loadWarning, err = checkPackageLoad(pkgs)
+			return err
+		})
+		if err != nil {
+			fail("Loading packages", err)
+			return
+		}
+		if loadWarning != "" {
+			updates <- loadWarningMsg(loadWarning)
+		}
+
+		// Send the package counts now, so a run cancelled mid-pipeline still
+		// reports them.
+		updates <- usageMsg(data)
 		updates <- pkgLoadedMsg(pkgs)
 
 		manager := parser.NewInstrumentationManager(pkgs, defaultAppName, defaultAgentVariableName, outputFile, packagePath)
@@ -309,18 +413,31 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 
 		for _, step := range steps {
 			updates <- progressMsg{desc: step.desc}
-			if err := step.fn(); err != nil {
-				updates <- errMsg(err)
+			select {
+			case <-stop:
+				// Cancelled: start nothing new. A step already running
+				// cannot be interrupted and finishes on its own.
+				return
+			default:
+			}
+			if err := runStep(step.desc, step.fn); err != nil {
+				data.AddedImports = manager.AddedImports()
+				fail(step.desc, err)
 				return
 			}
 		}
 
+		data.AddedImports = manager.AddedImports()
+		data.Duration = time.Since(start)
+
+		updates <- usageMsg(data)
 		updates <- completedMsg{}
 		close(updates)
 	}()
 
 	initialM := initialModel(packagePath, outputFile)
 	initialM.sub = updates
+	initialM.stop = stop
 
 	finalModel, err := tea.NewProgram(initialM).Run()
 	if err != nil {
@@ -329,12 +446,34 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 	}
 
 	if m, ok := finalModel.(model); ok {
+		// Safe to print now: the TUI has released the terminal.
+		if m.loadWarning != "" {
+			fmt.Print(m.loadWarning)
+		}
+		if m.cancelled {
+			// Without this, an interrupted run reports as a successful one that
+			// happened to instrument nothing.
+			data := m.usageData
+			data.Cancelled = true
+			data.Duration = time.Since(start)
+			reportUsage(data)
+
+			return
+		}
 		if m.err != nil {
+			// The worker's stack trace can only be printed now, once the TUI
+			// has released the terminal.
+			printCrash(os.Stderr, m.err)
+			// Report the failed run before exiting: these are the runs most
+			// worth knowing about.
+			reportUsage(m.usageData)
 			os.Exit(1)
 		}
 		if m.done {
 			fmt.Printf("\nDone! Changes written to: %s\nTip: Apply these changes with: git apply %s\n", m.outputFile, m.outputFile)
 		}
+
+		reportUsage(m.usageData)
 	}
 }
 
@@ -342,6 +481,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyCtrlC {
+			if !m.cancelled && m.stop != nil {
+				close(m.stop)
+			}
+			m.cancelled = true
 			return m, tea.Quit
 		}
 	case spinner.TickMsg:
@@ -356,6 +499,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentStep++
 		m.stepDesc = msg.desc
 		// We just update the description, no progress bar to update
+		return m, waitForNext(m.sub)
+	case loadWarningMsg:
+		m.loadWarning = string(msg)
+		return m, waitForNext(m.sub)
+	case usageMsg:
+		m.usageData = usage.RunData(msg)
 		return m, waitForNext(m.sub)
 	case errMsg:
 		m.err = msg

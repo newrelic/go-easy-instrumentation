@@ -11,6 +11,8 @@ import (
 )
 
 func runInteractiveMode(cmd *cobra.Command, args []string) {
+	interactiveMode = true
+
 	// Parse exclusions from the --exclude flag if provided
 	var exclusions []string
 	if excludeDirs != "" {
