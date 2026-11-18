@@ -46,10 +46,7 @@ func CreateContextWithTransaction(ctxName, txnName string) *dst.AssignStmt {
 				},
 				Args: []dst.Expr{
 					&dst.CallExpr{
-						Fun: &dst.SelectorExpr{
-							X:   &dst.Ident{Name: "context"},
-							Sel: &dst.Ident{Name: "Background"},
-						},
+						Fun: &dst.Ident{Name: "Background", Path: "context"},
 					},
 					&dst.Ident{Name: txnName},
 				},

@@ -4,13 +4,23 @@ import (
 	"github.com/dave/dst"
 	"github.com/dave/dst/dstutil"
 	"github.com/newrelic/go-easy-instrumentation/internal/codegen"
+	"github.com/newrelic/go-easy-instrumentation/internal/sqlhelpers"
 	"github.com/newrelic/go-easy-instrumentation/parser"
 	"github.com/newrelic/go-easy-instrumentation/parser/tracestate"
 )
 
 const (
 	SqlImportPath = "database/sql"
+
+	mysqlDriverName   = `"mysql"`
+	nrmysqlDriverName = `"nrmysql"`
 )
+
+// isMySQLDriverArg reports whether the sql.Open driver-name literal identifies a MySQL driver.
+// Other drivers (e.g. "postgres", handled by nrpq) must be left alone.
+func isMySQLDriverArg(driverArg *dst.BasicLit) bool {
+	return driverArg.Value == mysqlDriverName || driverArg.Value == nrmysqlDriverName
+}
 
 // detectSQLExecutionCall checks if a statement contains a SQL query operation using the given DB variable.
 // Returns the method name (QueryRow, Query, or Exec) if found, otherwise returns an empty string.
@@ -167,8 +177,8 @@ func InstrumentSQLHandler(manager *parser.InstrumentationManager, c *dstutil.Cur
 
 	// Scan function body to find SQL operations
 	for i, stmt := range funcDecl.Body.List {
-		// Detect sql.Open() to find the DB variable
-		if dbName := DetectSQLOpenCall(stmt); dbName != "" {
+		// Detect sql.Open() with a MySQL driver to find the DB variable
+		if dbName, driverArg := sqlhelpers.DetectSQLOpen(stmt); dbName != "" && driverArg != nil && isMySQLDriverArg(driverArg) {
 			sqlDB = dbName
 			continue
 		}

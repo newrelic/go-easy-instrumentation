@@ -18,6 +18,7 @@ import (
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgochi"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrgrpc"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrlogrus"
+	"github.com/newrelic/go-easy-instrumentation/integrations/nrmysql"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrnethttp"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrpq"
 	"github.com/newrelic/go-easy-instrumentation/integrations/nrpgx5"
@@ -63,6 +64,7 @@ func registerIntegrations(manager *parser.InstrumentationManager) {
 		nrecho_v3.InstrumentEchoFunction,
 		nrgrpc.InstrumentGrpcServerMethod,
 		nrslog.InstrumentSlogHandler,
+		nrmysql.InstrumentSQLHandler,
 		nrlogrus.InstrumentLogrusHandler,
 		nrpq.InstrumentPQHandler,
 		nrpgx5.InstrumentPgxHandler,
@@ -148,6 +150,7 @@ type model struct {
 	pkgPath     string
 	sub         chan tea.Msg
 	outputFile  string
+	loadWarning string
 }
 
 // Messages
@@ -158,6 +161,10 @@ type progressMsg struct {
 type pkgLoadedMsg []*decorator.Package
 type errMsg error
 type completedMsg struct{}
+
+// loadWarningMsg carries a package-load warning out of the worker goroutine so
+// it can be printed after the TUI has released the terminal.
+type loadWarningMsg string
 
 func initialModel(pkgPath, outputFile string) model {
 	s := spinner.New()
@@ -234,6 +241,14 @@ func instrumentPackages(packagePath string, patterns []string, outputFile string
 		return fmt.Errorf("loading packages: %w", err)
 	}
 
+	loadWarning, err := checkPackageLoad(pkgs)
+	if err != nil {
+		return err
+	}
+	if loadWarning != "" {
+		fmt.Print(loadWarning)
+	}
+
 	manager := parser.NewInstrumentationManager(pkgs, defaultAppName, defaultAgentVariableName, outputFile, packagePath)
 
 	// Register all integrations
@@ -279,6 +294,15 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 		if err != nil {
 			updates <- errMsg(err)
 			return
+		}
+
+		loadWarning, err := checkPackageLoad(pkgs)
+		if err != nil {
+			updates <- errMsg(err)
+			return
+		}
+		if loadWarning != "" {
+			updates <- loadWarningMsg(loadWarning)
 		}
 
 		updates <- pkgLoadedMsg(pkgs)
@@ -329,6 +353,10 @@ func runTUIMode(packagePath string, patterns []string, outputFile string) {
 	}
 
 	if m, ok := finalModel.(model); ok {
+		// Safe to print now: the TUI has released the terminal.
+		if m.loadWarning != "" {
+			fmt.Print(m.loadWarning)
+		}
 		if m.err != nil {
 			os.Exit(1)
 		}
@@ -356,6 +384,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentStep++
 		m.stepDesc = msg.desc
 		// We just update the description, no progress bar to update
+		return m, waitForNext(m.sub)
+	case loadWarningMsg:
+		m.loadWarning = string(msg)
 		return m, waitForNext(m.sub)
 	case errMsg:
 		m.err = msg
