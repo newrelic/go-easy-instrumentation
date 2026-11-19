@@ -243,6 +243,19 @@ func (m *InstrumentationManager) updateFunctionDeclaration(decl *dst.FuncDecl) {
 	}
 }
 
+// markFunctionTraced records that tracing of decl has started, so that
+// shouldInstrumentFunction reports it as traced while its body is still being
+// walked.
+func (m *InstrumentationManager) markFunctionTraced(decl *dst.FuncDecl) {
+	state, ok := m.packages[m.currentPackage]
+	if !ok {
+		return
+	}
+	if t, ok := state.tracedFuncs[decl.Name.Name]; ok {
+		t.traced = true
+	}
+}
+
 type invocationInfo struct {
 	functionName string
 	packageName  string

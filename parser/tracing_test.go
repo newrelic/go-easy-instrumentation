@@ -429,8 +429,9 @@ func test() {}`
 	}
 }
 
-// TestTraceFunction_RecursiveCallTracing tests that downstream function calls are traced
-func TestTraceFunction_RecursiveCallTracing(t *testing.T) {
+// TestTraceFunction_DownstreamCallTracing tests that downstream function calls are traced.
+// Recursion itself is covered by TestTraceFunction_Recursion.
+func TestTraceFunction_DownstreamCallTracing(t *testing.T) {
 	code := `package main
 func main() {}
 func caller() {
