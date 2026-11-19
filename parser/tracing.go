@@ -33,6 +33,13 @@ func TraceFunction(manager *InstrumentationManager, node dst.Node, tracing *trac
 	decl, isFuncDecl := node.(*dst.FuncDecl)
 	lit, isFuncLit := node.(*dst.FuncLit)
 
+	// Mark the function as traced before walking its body. A recursive call,
+	// direct or through other functions, then sees it as already traced instead
+	// of tracing it again from the top, which recursed until the stack overflowed.
+	if isFuncDecl {
+		manager.markFunctionTraced(decl)
+	}
+
 	if isFuncDecl {
 		comment.Debug(manager.getDecoratorPackage(), node, fmt.Sprintf("TraceFunction called for function decl: %s", decl.Name.Name))
 		funcType = decl.Type

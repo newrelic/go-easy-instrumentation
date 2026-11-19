@@ -10,12 +10,24 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      # Report every version's result; one failing toolchain should not hide
+      # whether the others pass.
+      fail-fast: false
+      matrix:
+        # This tool loads and type-checks user code through
+        # golang.org/x/tools/go/packages, so a new Go release can break it
+        # without any change on our side: the compiler's export data format
+        # moves ahead of what x/tools can decode. Testing the latest release
+        # catches that here rather than on a contributor's machine.
+        go-version: [ 'stable', 'oldstable' ]
+    name: Go ${{ matrix.go-version }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.23'
+        go-version: ${{ matrix.go-version }}
         check-latest: true
     - name: Test
       run: go test -v --race ./...
